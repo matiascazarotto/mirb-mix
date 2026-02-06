@@ -800,6 +800,9 @@
     <button class="nav-btn" onclick="showPage('admin')">
         <span class="icon">🔒</span> Admin
     </button>
+    <button class="nav-btn" onclick="showPage('stats')">
+        <span class="icon">📊</span> Stats GC
+    </button>
 </nav>
 
 <div class="container">
@@ -836,6 +839,27 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- ════════════ PAGE: STATS GC ════════════ -->
+    <div id="page-stats" class="page">
+        <div class="card">
+            <div class="card-title">📊 Stats Gamers Club — Calculadora</div>
+            <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;">
+                Abra a partida no Gamers Club, selecione a tabela de stats (Ctrl+A na tabela), copie (Ctrl+C) e cole abaixo (Ctrl+V). Pode colar múltiplas partidas para agregar os dados.
+            </p>
+            <div class="form-group">
+                <label>Cole os dados da partida aqui</label>
+                <textarea id="gcPasteInput" rows="6" placeholder="Cole aqui o Ctrl+V da tabela de stats do Gamers Club..."
+                    style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;resize:vertical;"></textarea>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="parseGCStats()">📊 Processar</button>
+                <button class="btn btn-secondary" onclick="clearGCStats()">🗑️ Limpar Tudo</button>
+            </div>
+        </div>
+
+        <div id="gcStatsResult"></div>
     </div>
 </div>
 
@@ -1710,6 +1734,284 @@ async function loadMatchesPage() {
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
     }
+}
+
+// ╔══════════════════════════════════╗
+// ║     GAMERS CLUB STATS PARSER    ║
+// ╚══════════════════════════════════╝
+let gcAggregated = {}; // accumulated stats across multiple pastes
+
+function parseGCStats() {
+    const raw = document.getElementById('gcPasteInput').value.trim();
+    if (!raw) {
+        toast('Cole os dados da partida primeiro!', 'error');
+        return;
+    }
+
+    const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+    // Find player data lines
+    // Pattern: after header rows (KADDIFF...), each player block is:
+    //   Name
+    //   Level (number)
+    //   Stats line: K A D DIFF ADR KDR KAST% - SF AMK FK RP DROP
+    // We skip team headers, "vs", probability lines, and the header row
+
+    const skipPatterns = [
+        /^vs$/i,
+        /^KADDIFF/,
+        /^K\s*A\s*D\s*DIFF/,
+        /Probabilidade/i,
+        /^\d+Time\s/,  // "6Time rAAngel" or "13Time O DraudE"
+        /^Time\s/,
+        /DROP$/,
+    ];
+
+    const isSkipLine = (line) => skipPatterns.some(p => p.test(line));
+    const isLevelLine = (line) => /^\d{1,2}$/.test(line);
+    const isStatsLine = (line) => {
+        // Stats line: multiple numbers, possibly with - signs, % signs
+        // e.g. "195172118.051.1274%-038-6"
+        // or "20 4 11 9 109.95 1.82 74% - 0 62 14"
+        // Match: starts with digits and has at least 5 number groups
+        const cleaned = line.replace(/%/g, '').replace(/-/g, ' ').trim();
+        const nums = cleaned.split(/\s+/).filter(t => !isNaN(parseFloat(t)));
+        return nums.length >= 8;
+    };
+
+    // Parse the pasted data - try to extract player blocks
+    let parsed = [];
+    let i = 0;
+
+    while (i < lines.length) {
+        const line = lines[i];
+
+        if (isSkipLine(line)) {
+            i++;
+            continue;
+        }
+
+        // Check if this might be a player name
+        // A name line is followed by a level line (1-2 digit number)
+        if (i + 2 < lines.length && isLevelLine(lines[i + 1])) {
+            const name = line;
+            const level = parseInt(lines[i + 1]);
+            
+            // Next line(s) should be stats - might be on one line or split
+            let statsRaw = '';
+            let j = i + 2;
+            
+            // Collect stats lines until we hit next player name or skip line
+            while (j < lines.length) {
+                if (isSkipLine(lines[j]) || (j + 1 < lines.length && isLevelLine(lines[j + 1]) && !isStatsLine(lines[j]))) {
+                    break;
+                }
+                statsRaw += ' ' + lines[j];
+                j++;
+                if (isStatsLine(statsRaw.trim())) break;
+            }
+
+            const playerData = parseStatsLine(name, level, statsRaw.trim());
+            if (playerData) {
+                parsed.push(playerData);
+            }
+            i = j;
+        } else {
+            i++;
+        }
+    }
+
+    if (parsed.length === 0) {
+        toast('Não foi possível identificar jogadores nos dados colados. Verifique o formato.', 'error');
+        return;
+    }
+
+    // Aggregate into gcAggregated
+    parsed.forEach(p => {
+        if (gcAggregated[p.name]) {
+            const e = gcAggregated[p.name];
+            e.kills += p.kills;
+            e.assists += p.assists;
+            e.deaths += p.deaths;
+            e.diff += p.diff;
+            e.adrSum += p.adr;
+            e.kdrSum += p.kdr;
+            e.kastSum += p.kast;
+            e.firstKills += p.firstKills;
+            e.rp += p.rp;
+            e.matches += 1;
+            e.wins += (p.rp >= 0 ? 1 : 0);
+            e.losses += (p.rp < 0 ? 1 : 0);
+        } else {
+            gcAggregated[p.name] = {
+                name: p.name,
+                level: p.level,
+                kills: p.kills,
+                assists: p.assists,
+                deaths: p.deaths,
+                diff: p.diff,
+                adrSum: p.adr,
+                kdrSum: p.kdr,
+                kastSum: p.kast,
+                firstKills: p.firstKills,
+                rp: p.rp,
+                matches: 1,
+                wins: p.rp >= 0 ? 1 : 0,
+                losses: p.rp < 0 ? 1 : 0
+            };
+        }
+    });
+
+    toast(`${parsed.length} jogadores processados!`, 'success');
+    document.getElementById('gcPasteInput').value = '';
+    renderGCStats();
+}
+
+function parseStatsLine(name, level, raw) {
+    // Normalize: remove %, replace multiple spaces, handle the "-" separator
+    let cleaned = raw.replace(/%/g, '').replace(/\t/g, ' ');
+    
+    // Split by whitespace
+    let tokens = cleaned.split(/\s+/).filter(t => t !== '' && t !== '-');
+    
+    // Filter to only numeric tokens
+    let nums = tokens.map(t => parseFloat(t)).filter(n => !isNaN(n));
+
+    // We expect at minimum: K A D DIFF ADR KDR KAST ... FK RP
+    // The full line has: K A D DIFF ADR KDR KAST SF AMK FK RP DROP
+    // That's 12 numbers. But sometimes less columns are visible.
+    
+    if (nums.length < 8) return null;
+
+    // Map based on expected column order from the pasted data:
+    // K(0) A(1) D(2) DIFF(3) ADR(4) KDR(5) KAST(6) SF(7) AMK(8) FK(9) RP(10) DROP(11)
+    return {
+        name,
+        level,
+        kills: nums[0] || 0,
+        assists: nums[1] || 0,
+        deaths: nums[2] || 0,
+        diff: nums[3] || 0,
+        adr: nums[4] || 0,
+        kdr: nums[5] || 0,
+        kast: nums[6] || 0,
+        firstKills: nums.length > 9 ? nums[9] : 0,
+        rp: nums.length > 10 ? nums[10] : 0,
+    };
+}
+
+function renderGCStats() {
+    const el = document.getElementById('gcStatsResult');
+    const entries = Object.values(gcAggregated);
+
+    if (entries.length === 0) {
+        el.innerHTML = '';
+        return;
+    }
+
+    // Sort by kills descending
+    entries.sort((a, b) => b.kills - a.kills);
+
+    const totalMatches = Math.max(...entries.map(e => e.matches));
+
+    let html = `
+        <div class="card" style="overflow-x:auto;">
+            <div class="card-title">🏆 Ranking — ${entries[0].matches > 1 ? entries[0].matches + ' partida(s) agregadas' : '1 partida'}</div>
+            
+            <!-- Podium Top 3 -->
+            ${entries.length >= 3 ? `
+            <div style="display:flex;justify-content:center;align-items:flex-end;gap:20px;margin:20px 0 30px;padding:20px 0;">
+                ${renderPodiumSlot(entries[1], 2, '🥈', 'var(--text-dim)', '100px')}
+                ${renderPodiumSlot(entries[0], 1, '🥇', 'var(--yellow)', '130px')}
+                ${renderPodiumSlot(entries[2], 3, '🥉', '#cd7f32', '80px')}
+            </div>
+            ` : ''}
+
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
+                        <th style="padding:10px 8px;text-align:left;">#</th>
+                        <th style="padding:10px 8px;text-align:left;">Jogador</th>
+                        <th style="padding:10px 8px;text-align:center;">Nv</th>
+                        <th style="padding:10px 8px;text-align:center;">K</th>
+                        <th style="padding:10px 8px;text-align:center;">A</th>
+                        <th style="padding:10px 8px;text-align:center;">D</th>
+                        <th style="padding:10px 8px;text-align:center;">Diff</th>
+                        <th style="padding:10px 8px;text-align:center;">ADR</th>
+                        <th style="padding:10px 8px;text-align:center;">KDR</th>
+                        <th style="padding:10px 8px;text-align:center;">KAST</th>
+                        <th style="padding:10px 8px;text-align:center;">FK</th>
+                        <th style="padding:10px 8px;text-align:center;">RP</th>
+                        <th style="padding:10px 8px;text-align:center;">W/L</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    entries.forEach((p, idx) => {
+        const avgAdr = (p.adrSum / p.matches).toFixed(1);
+        const avgKdr = (p.kdrSum / p.matches).toFixed(2);
+        const avgKast = (p.kastSum / p.matches).toFixed(0);
+        const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
+        const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
+        const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+
+        html += `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${idx < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
+                <td style="padding:10px 8px;color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-weight:700;">
+                    ${idx < 3 ? ['🥇','🥈','🥉'][idx] : idx + 1}
+                </td>
+                <td style="padding:10px 8px;">
+                    <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>
+                    ${p.matches > 1 ? `<span style="color:var(--text-dim);font-size:11px;margin-left:4px;">(${p.matches}p)</span>` : ''}
+                </td>
+                <td style="padding:10px 8px;text-align:center;color:var(--text-dim);">${p.level}</td>
+                <td style="padding:10px 8px;text-align:center;color:var(--green);font-weight:700;font-family:'Rajdhani',sans-serif;font-size:16px;">${p.kills}</td>
+                <td style="padding:10px 8px;text-align:center;color:var(--text);">${p.assists}</td>
+                <td style="padding:10px 8px;text-align:center;color:var(--red);">${p.deaths}</td>
+                <td style="padding:10px 8px;text-align:center;color:${diffColor};font-weight:600;">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                <td style="padding:10px 8px;text-align:center;">${avgAdr}</td>
+                <td style="padding:10px 8px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
+                <td style="padding:10px 8px;text-align:center;">${avgKast}%</td>
+                <td style="padding:10px 8px;text-align:center;">${p.firstKills}</td>
+                <td style="padding:10px 8px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rp > 0 ? '+' : ''}${p.rp}</td>
+                <td style="padding:10px 8px;text-align:center;">
+                    <span style="color:var(--green);">${p.wins}W</span> <span style="color:var(--red);">${p.losses}L</span>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+
+    el.innerHTML = html;
+}
+
+function renderPodiumSlot(player, position, medal, color, height) {
+    const avgAdr = (player.adrSum / player.matches).toFixed(1);
+    return `
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px;${position === 1 ? 'margin-bottom:20px;' : ''}">
+            <span style="font-size:28px;">${medal}</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-size:${position === 1 ? '20px' : '16px'};font-weight:700;color:${color};">${player.name}</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--green);">${player.kills} K</span>
+            <div style="display:flex;gap:8px;font-size:12px;color:var(--text-dim);">
+                <span>ADR ${avgAdr}</span>
+                <span>${player.wins}W ${player.losses}L</span>
+            </div>
+            <div style="width:80px;height:${height};background:linear-gradient(180deg,${color}22,transparent);border-radius:6px 6px 0 0;margin-top:4px;"></div>
+        </div>
+    `;
+}
+
+function clearGCStats() {
+    gcAggregated = {};
+    document.getElementById('gcPasteInput').value = '';
+    document.getElementById('gcStatsResult').innerHTML = '';
+    toast('Dados limpos!', 'success');
 }
 
 // ╔══════════════════════════════════╗
