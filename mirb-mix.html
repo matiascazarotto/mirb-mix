@@ -1,0 +1,1737 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIRB - MIX</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --green: #00c853;
+            --green-dim: #00843D;
+            --yellow: #ffd600;
+            --blue: #2979ff;
+            --dark: #0a0e17;
+            --darker: #060a11;
+            --card: rgba(12, 18, 30, 0.85);
+            --card-border: rgba(255,255,255,0.06);
+            --text: #e8eaf0;
+            --text-dim: #8892a4;
+            --red: #ff3d3d;
+            --ct-blue: #4fc3f7;
+            --tr-gold: #ffd740;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--darker);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background:
+                radial-gradient(ellipse 80% 60% at 20% 10%, rgba(0,200,83,0.07) 0%, transparent 60%),
+                radial-gradient(ellipse 60% 50% at 80% 90%, rgba(41,121,255,0.05) 0%, transparent 60%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        /* ── Header ── */
+        .header {
+            position: relative;
+            padding: 28px 20px 18px;
+            text-align: center;
+            background: linear-gradient(180deg, rgba(0,200,83,0.08) 0%, transparent 100%);
+            border-bottom: 1px solid rgba(0,200,83,0.15);
+        }
+
+        .header h1 {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 2.8em;
+            font-weight: 700;
+            letter-spacing: 6px;
+            text-transform: uppercase;
+            background: linear-gradient(135deg, var(--yellow) 0%, var(--green) 50%, var(--blue) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            color: var(--text-dim);
+            font-size: 0.85em;
+            margin-top: 4px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+
+        /* ── Navigation ── */
+        .nav {
+            display: flex;
+            justify-content: center;
+            gap: 6px;
+            padding: 12px 10px;
+            background: rgba(0,0,0,0.3);
+            flex-wrap: wrap;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .nav-btn {
+            font-family: 'Rajdhani', sans-serif;
+            padding: 10px 20px;
+            background: transparent;
+            border: 1px solid rgba(255,255,255,0.08);
+            color: var(--text-dim);
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: all 0.25s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-btn:hover {
+            background: rgba(0,200,83,0.08);
+            color: var(--text);
+            border-color: rgba(0,200,83,0.2);
+        }
+
+        .nav-btn.active {
+            background: rgba(0,200,83,0.12);
+            color: var(--green);
+            border-color: var(--green);
+            box-shadow: 0 0 20px rgba(0,200,83,0.1);
+        }
+
+        .nav-btn .icon { font-size: 16px; }
+
+        /* ── Container ── */
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px 16px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* ── Pages ── */
+        .page { display: none; animation: pageIn 0.35s ease; }
+        .page.active { display: block; }
+
+        @keyframes pageIn {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Cards ── */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(8px);
+        }
+
+        .card-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--yellow);
+            margin-bottom: 16px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255,223,0,0.12);
+        }
+
+        /* ── Buttons ── */
+        .btn {
+            font-family: 'Rajdhani', sans-serif;
+            padding: 12px 28px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            transition: all 0.25s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--green-dim), var(--green));
+            color: #000;
+            box-shadow: 0 4px 16px rgba(0,200,83,0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(0,200,83,0.35);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #c62828, var(--red));
+            color: #fff;
+        }
+
+        .btn-secondary {
+            background: rgba(255,255,255,0.08);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255,255,255,0.14);
+        }
+
+        .btn-small { padding: 8px 16px; font-size: 13px; }
+
+        /* ── Forms ── */
+        .form-group { margin-bottom: 14px; }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: var(--text-dim);
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--green);
+            background: rgba(255,255,255,0.08);
+        }
+
+        .form-group select option {
+            background: #1a1f2e;
+            color: var(--text);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        /* ── Player Items ── */
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 14px 16px;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid transparent;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+        }
+
+        .player-item:hover {
+            background: rgba(255,255,255,0.06);
+            border-color: rgba(0,200,83,0.15);
+        }
+
+        .player-name {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--yellow);
+        }
+
+        .player-meta {
+            display: flex;
+            gap: 8px;
+            margin-top: 3px;
+            flex-wrap: wrap;
+        }
+
+        .badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-level { background: rgba(41,121,255,0.2); color: var(--blue); }
+        .badge-role { background: rgba(0,200,83,0.15); color: var(--green); }
+        .badge-duo { background: rgba(255,214,0,0.15); color: var(--yellow); }
+
+        .player-actions { display: flex; gap: 6px; }
+
+        /* ── Player Selector (Match) ── */
+        .player-selector {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .player-selector:hover { background: rgba(255,255,255,0.06); }
+
+        .player-selector.selected {
+            border-color: var(--green);
+            background: rgba(0,200,83,0.08);
+        }
+
+        .player-selector input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--green);
+            cursor: pointer;
+        }
+
+        .selection-counter {
+            text-align: center;
+            padding: 16px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 10px;
+            margin: 16px 0;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 2px;
+        }
+
+        .selection-counter .count {
+            color: var(--green);
+            font-size: 28px;
+        }
+
+        /* ── Vote Grid ── */
+        .vote-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .vote-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 16px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+        }
+
+        .vote-row .player-label {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 16px;
+            color: var(--yellow);
+            min-width: 100px;
+        }
+
+        .vote-row .role-label {
+            color: var(--text-dim);
+            font-size: 12px;
+            min-width: 60px;
+        }
+
+        .vote-row input[type="range"] {
+            flex: 1;
+            accent-color: var(--green);
+            cursor: pointer;
+        }
+
+        .vote-row .level-display {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--green);
+            min-width: 36px;
+            text-align: center;
+        }
+
+        /* ── Match Cards ── */
+        .match-card {
+            background: var(--card);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .match-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--green), var(--yellow));
+        }
+
+        .match-card.closed::before {
+            background: linear-gradient(90deg, var(--red), #ff6d3d);
+        }
+
+        .match-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .match-title {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1.3em;
+            font-weight: 700;
+            color: var(--text);
+        }
+
+        .match-status {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .match-status.voting {
+            background: rgba(0,200,83,0.15);
+            color: var(--green);
+            border: 1px solid rgba(0,200,83,0.3);
+        }
+
+        .match-status.closed {
+            background: rgba(255,61,61,0.15);
+            color: var(--red);
+            border: 1px solid rgba(255,61,61,0.3);
+        }
+
+        .match-players {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin: 10px 0;
+        }
+
+        .match-player-tag {
+            padding: 4px 10px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 4px;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .vote-count-info {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin: 8px 0;
+        }
+
+        /* ── Teams Result ── */
+        .teams-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .team-card {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid;
+        }
+
+        .team-card.ct {
+            border-color: var(--ct-blue);
+            box-shadow: 0 0 30px rgba(79,195,247,0.08);
+        }
+
+        .team-card.tr {
+            border-color: var(--tr-gold);
+            box-shadow: 0 0 30px rgba(255,215,64,0.08);
+        }
+
+        .team-label {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 22px;
+            font-weight: 700;
+            text-align: center;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .team-card.ct .team-label { color: var(--ct-blue); }
+        .team-card.tr .team-label { color: var(--tr-gold); }
+
+        .team-player {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.04);
+            border-radius: 6px;
+            margin-bottom: 6px;
+        }
+
+        .team-player-name {
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .team-player-info {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+
+        .team-total {
+            text-align: center;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .diff-display {
+            text-align: center;
+            padding: 16px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            margin: 16px 0;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 20px;
+        }
+
+        .diff-display .diff-value {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .diff-display.balanced .diff-value { color: var(--green); }
+        .diff-display.unbalanced .diff-value { color: var(--yellow); }
+
+        /* ── Admin Login ── */
+        .admin-lock {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .admin-lock .lock-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        .admin-lock p {
+            color: var(--text-dim);
+            margin-bottom: 20px;
+        }
+
+        .password-input-group {
+            display: flex;
+            gap: 10px;
+            max-width: 320px;
+            margin: 0 auto;
+        }
+
+        .password-input-group input {
+            flex: 1;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+            color: var(--text);
+            font-family: 'Outfit', sans-serif;
+            font-size: 14px;
+        }
+
+        .password-input-group input:focus {
+            outline: none;
+            border-color: var(--green);
+        }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            z-index: 9999;
+            transform: translateX(500px);
+            transition: transform 0.3s ease;
+            max-width: 350px;
+        }
+
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: var(--green-dim); color: #fff; }
+        .toast.error { background: var(--red); color: #fff; }
+
+        /* ── Modal ── */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 500;
+            justify-content: center;
+            align-items: center;
+            animation: fadeIn 0.2s;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal-box {
+            background: #0f1525;
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 28px;
+            max-width: 520px;
+            width: 92%;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .modal-box .card-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-close {
+            cursor: pointer;
+            font-size: 24px;
+            color: var(--text-dim);
+            transition: color 0.2s;
+            background: none;
+            border: none;
+        }
+
+        .modal-close:hover { color: var(--red); }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* ── Average display ── */
+        .avg-grid {
+            display: grid;
+            gap: 8px;
+            margin: 14px 0;
+        }
+
+        .avg-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 6px;
+        }
+
+        .avg-row .name {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            color: var(--yellow);
+        }
+
+        .avg-row .avg-val {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--green);
+        }
+
+        .avg-row .vote-count-small {
+            color: var(--text-dim);
+            font-size: 12px;
+        }
+
+        /* ── Loading ── */
+        .loading-spinner {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-dim);
+        }
+
+        .loading-spinner::after {
+            content: '';
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            border: 3px solid rgba(0,200,83,0.2);
+            border-top-color: var(--green);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ── Responsive ── */
+        @media (max-width: 640px) {
+            .header h1 { font-size: 2em; letter-spacing: 3px; }
+            .form-row { grid-template-columns: 1fr; }
+            .teams-grid { grid-template-columns: 1fr; }
+            .nav-btn { padding: 8px 12px; font-size: 12px; }
+            .vote-row { flex-wrap: wrap; }
+            .vote-row .player-label { min-width: 80px; }
+            .container { padding: 12px 10px; }
+        }
+
+        /* ── Scrollbar ── */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+
+        /* ── Firebase Config Section ── */
+        .config-warning {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-dim);
+        }
+
+        .config-warning h2 {
+            color: var(--yellow);
+            font-family: 'Rajdhani', sans-serif;
+            margin-bottom: 16px;
+        }
+
+        .config-warning code {
+            display: block;
+            text-align: left;
+            background: rgba(0,0,0,0.4);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px auto;
+            max-width: 500px;
+            font-size: 13px;
+            color: var(--green);
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+
+        /* ── Empty state ── */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--text-dim);
+        }
+
+        .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>⚔️ MIRB MIX</h1>
+    <p>Sistema de Votação & Balanceamento</p>
+</div>
+
+<nav class="nav">
+    <button class="nav-btn active" onclick="showPage('vote')">
+        <span class="icon">🗳️</span> Votar
+    </button>
+    <button class="nav-btn" onclick="showPage('matches')">
+        <span class="icon">📋</span> Partidas
+    </button>
+    <button class="nav-btn" onclick="showPage('admin')">
+        <span class="icon">🔒</span> Admin
+    </button>
+</nav>
+
+<div class="container">
+    <!-- ════════════ PAGE: VOTE ════════════ -->
+    <div id="page-vote" class="page active">
+        <div id="voteContent">
+            <div class="empty-state">
+                <div class="icon">🗳️</div>
+                <p>Nenhuma partida aberta para votação.</p>
+                <p style="font-size:13px; margin-top:8px;">O admin precisa criar uma partida primeiro.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ PAGE: MATCHES ════════════ -->
+    <div id="page-matches" class="page">
+        <div id="matchesList">
+            <div class="empty-state">
+                <div class="icon">📋</div>
+                <p>Nenhuma partida encontrada.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ════════════ PAGE: ADMIN ════════════ -->
+    <div id="page-admin" class="page">
+        <div id="adminContent">
+            <div class="admin-lock">
+                <div class="lock-icon">🔒</div>
+                <p>Acesso restrito. Digite a senha de administrador.</p>
+                <div class="password-input-group">
+                    <input type="password" id="adminPassword" placeholder="Senha" onkeydown="if(event.key==='Enter')adminLogin()">
+                    <button class="btn btn-primary btn-small" onclick="adminLogin()">Entrar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════ MODAL: Edit Player ════════════ -->
+<div id="editModal" class="modal-overlay">
+    <div class="modal-box">
+        <div class="card-title">
+            <span>Editar Jogador</span>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <form id="editForm" onsubmit="savePlayerEdit(event)" style="margin-top:16px;">
+            <input type="hidden" id="editPlayerId">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nome</label>
+                    <input type="text" id="editName" required>
+                </div>
+                <div class="form-group">
+                    <label>Nível Base (1-20)</label>
+                    <input type="number" id="editLevel" min="1" max="20" required>
+                </div>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Função</label>
+                    <select id="editRole">
+                        <option value="Entry">Entry Fragger</option>
+                        <option value="AWPer">AWPer</option>
+                        <option value="Suporte">Suporte</option>
+                        <option value="Lurker">Lurker</option>
+                        <option value="IGL">IGL/Capitão</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Dupla</label>
+                    <select id="editDuo">
+                        <option value="">Nenhuma</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Salvar</button>
+        </form>
+    </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast success"></div>
+
+<!-- ════════════ FIREBASE SDK ════════════ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<script>
+// ╔══════════════════════════════════════════════════════════╗
+// ║  🔧 FIREBASE CONFIG — Substitua com suas credenciais    ║
+// ╚══════════════════════════════════════════════════════════╝
+const firebaseConfig = {
+  apiKey: "AIzaSyAEXaBPQ7hggW1iqK8-tCMD7dfV8kPahUw",
+  authDomain: "mirb-mix.firebaseapp.com",
+  projectId: "mirb-mix",
+  storageBucket: "mirb-mix.firebasestorage.app",
+  messagingSenderId: "488557105379",
+  appId: "1:488557105379:web:c35c30be0dd0ff27d875d6"
+};
+
+// ─── Admin password (change this!) ───
+const ADMIN_PASSWORD = "mirb1337";
+
+// ─── Init Firebase ───
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// ─── App State ───
+let isAdmin = false;
+let currentMatchVoting = null; // match id being voted on
+let players = []; // cached players
+let unsubscribers = []; // firestore listeners
+
+// ╔══════════════════════════════════╗
+// ║         NAVIGATION              ║
+// ╚══════════════════════════════════╝
+function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`page-${name}`).classList.add('active');
+    document.querySelector(`.nav-btn[onclick*="${name}"]`).classList.add('active');
+
+    if (name === 'vote') loadVotePage();
+    if (name === 'matches') loadMatchesPage();
+    if (name === 'admin' && isAdmin) renderAdminPanel();
+}
+
+// ╔══════════════════════════════════╗
+// ║         ADMIN AUTH              ║
+// ╚══════════════════════════════════╝
+function adminLogin() {
+    const pw = document.getElementById('adminPassword').value;
+    if (pw === ADMIN_PASSWORD) {
+        isAdmin = true;
+        toast('Login de admin realizado!', 'success');
+        renderAdminPanel();
+    } else {
+        toast('Senha incorreta!', 'error');
+    }
+}
+
+function adminLogout() {
+    isAdmin = false;
+    document.getElementById('adminContent').innerHTML = `
+        <div class="admin-lock">
+            <div class="lock-icon">🔒</div>
+            <p>Acesso restrito. Digite a senha de administrador.</p>
+            <div class="password-input-group">
+                <input type="password" id="adminPassword" placeholder="Senha" onkeydown="if(event.key==='Enter')adminLogin()">
+                <button class="btn btn-primary btn-small" onclick="adminLogin()">Entrar</button>
+            </div>
+        </div>
+    `;
+    toast('Logout realizado', 'success');
+}
+
+// ╔══════════════════════════════════╗
+// ║       ADMIN PANEL               ║
+// ╚══════════════════════════════════╝
+function renderAdminPanel() {
+    const container = document.getElementById('adminContent');
+    container.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+            <span style="color:var(--green);font-weight:600;">✅ Logado como Admin</span>
+            <button class="btn btn-secondary btn-small" onclick="adminLogout()">Sair</button>
+        </div>
+
+        <!-- Add Player -->
+        <div class="card">
+            <div class="card-title">Cadastrar Jogador</div>
+            <form id="addPlayerForm" onsubmit="addPlayer(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input type="text" id="newPlayerName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Nível Base (1-20)</label>
+                        <input type="number" id="newPlayerLevel" min="1" max="20" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Função</label>
+                        <select id="newPlayerRole">
+                            <option value="Entry">Entry Fragger</option>
+                            <option value="AWPer">AWPer</option>
+                            <option value="Suporte">Suporte</option>
+                            <option value="Lurker">Lurker</option>
+                            <option value="IGL">IGL/Capitão</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Dupla</label>
+                        <select id="newPlayerDuo">
+                            <option value="">Nenhuma</option>
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">Adicionar</button>
+            </form>
+        </div>
+
+        <!-- Players List -->
+        <div class="card">
+            <div class="card-title">Jogadores Cadastrados</div>
+            <div id="adminPlayersList"><div class="loading-spinner">Carregando</div></div>
+        </div>
+
+        <!-- Create Match -->
+        <div class="card">
+            <div class="card-title">Criar Nova Partida</div>
+            <div class="form-group">
+                <label>Nome da Partida (opcional)</label>
+                <input type="text" id="matchName" placeholder="Ex: Mix Quinta-Feira">
+            </div>
+            <div class="selection-counter">
+                <span class="count" id="adminSelectedCount">0</span> / 10 jogadores
+            </div>
+            <div id="adminPlayerSelection"></div>
+            <button class="btn btn-primary" id="createMatchBtn" onclick="createMatch()" disabled style="margin-top:16px;">
+                Criar Partida
+            </button>
+        </div>
+
+        <!-- Active Matches Management -->
+        <div class="card">
+            <div class="card-title">Gerenciar Partidas</div>
+            <div id="adminMatchesList"><div class="loading-spinner">Carregando</div></div>
+        </div>
+    `;
+
+    loadAdminPlayers();
+    loadAdminMatches();
+}
+
+// ╔══════════════════════════════════╗
+// ║       PLAYERS CRUD              ║
+// ╚══════════════════════════════════╝
+async function loadAdminPlayers() {
+    try {
+        const snap = await db.collection('players').orderBy('name').get();
+        players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderAdminPlayersList();
+        renderPlayerSelectionForMatch();
+        updateDuoSelects();
+    } catch (e) {
+        console.error(e);
+        document.getElementById('adminPlayersList').innerHTML = '<p style="color:var(--red)">Erro ao carregar jogadores. Verifique o Firebase config.</p>';
+    }
+}
+
+function renderAdminPlayersList() {
+    const el = document.getElementById('adminPlayersList');
+    if (!players.length) {
+        el.innerHTML = '<div class="empty-state"><p>Nenhum jogador cadastrado.</p></div>';
+        return;
+    }
+    el.innerHTML = players.map(p => `
+        <div class="player-item">
+            <div>
+                <div class="player-name">${p.name}</div>
+                <div class="player-meta">
+                    <span class="badge badge-level">Nv. ${p.level}</span>
+                    <span class="badge badge-role">${p.role}</span>
+                    ${p.duo ? `<span class="badge badge-duo">Duo: ${getPlayerName(p.duo)}</span>` : ''}
+                </div>
+            </div>
+            <div class="player-actions">
+                <button class="btn btn-secondary btn-small" onclick="openEditPlayer('${p.id}')">✏️</button>
+                <button class="btn btn-danger btn-small" onclick="deletePlayer('${p.id}')">🗑️</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function getPlayerName(id) {
+    const p = players.find(pl => pl.id === id);
+    return p ? p.name : '?';
+}
+
+async function addPlayer(e) {
+    e.preventDefault();
+    const data = {
+        name: document.getElementById('newPlayerName').value.trim(),
+        level: parseInt(document.getElementById('newPlayerLevel').value),
+        role: document.getElementById('newPlayerRole').value,
+        duo: document.getElementById('newPlayerDuo').value,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    try {
+        await db.collection('players').add(data);
+        document.getElementById('addPlayerForm').reset();
+        toast('Jogador adicionado!', 'success');
+        await loadAdminPlayers();
+    } catch (e) {
+        toast('Erro ao adicionar: ' + e.message, 'error');
+    }
+}
+
+async function deletePlayer(id) {
+    if (!confirm('Excluir este jogador?')) return;
+    try {
+        await db.collection('players').doc(id).delete();
+        toast('Jogador excluído!', 'success');
+        await loadAdminPlayers();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function openEditPlayer(id) {
+    const p = players.find(pl => pl.id === id);
+    if (!p) return;
+    document.getElementById('editPlayerId').value = id;
+    document.getElementById('editName').value = p.name;
+    document.getElementById('editLevel').value = p.level;
+    document.getElementById('editRole').value = p.role;
+
+    // Populate duo select
+    const duoSelect = document.getElementById('editDuo');
+    duoSelect.innerHTML = '<option value="">Nenhuma</option>' +
+        players.filter(pl => pl.id !== id).map(pl =>
+            `<option value="${pl.id}" ${p.duo === pl.id ? 'selected' : ''}>${pl.name}</option>`
+        ).join('');
+
+    document.getElementById('editModal').classList.add('active');
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').classList.remove('active');
+}
+
+async function savePlayerEdit(e) {
+    e.preventDefault();
+    const id = document.getElementById('editPlayerId').value;
+    try {
+        await db.collection('players').doc(id).update({
+            name: document.getElementById('editName').value.trim(),
+            level: parseInt(document.getElementById('editLevel').value),
+            role: document.getElementById('editRole').value,
+            duo: document.getElementById('editDuo').value
+        });
+        closeEditModal();
+        toast('Jogador atualizado!', 'success');
+        await loadAdminPlayers();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function updateDuoSelects() {
+    const selects = ['newPlayerDuo'];
+    selects.forEach(selId => {
+        const sel = document.getElementById(selId);
+        if (!sel) return;
+        const current = sel.value;
+        sel.innerHTML = '<option value="">Nenhuma</option>' +
+            players.map(p => `<option value="${p.id}" ${p.id === current ? 'selected' : ''}>${p.name}</option>`).join('');
+    });
+}
+
+// ╔══════════════════════════════════╗
+// ║   MATCH CREATION (Admin)        ║
+// ╚══════════════════════════════════╝
+let selectedForMatch = [];
+
+function renderPlayerSelectionForMatch() {
+    const el = document.getElementById('adminPlayerSelection');
+    if (!el) return;
+    selectedForMatch = [];
+    updateMatchSelectionCount();
+
+    el.innerHTML = players.map(p => `
+        <div class="player-selector" id="sel-${p.id}" onclick="toggleMatchPlayer('${p.id}')">
+            <input type="checkbox" id="chk-${p.id}">
+            <div>
+                <div class="player-name">${p.name}</div>
+                <div class="player-meta">
+                    <span class="badge badge-level">Nv. ${p.level}</span>
+                    <span class="badge badge-role">${p.role}</span>
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+function toggleMatchPlayer(id) {
+    const idx = selectedForMatch.indexOf(id);
+    if (idx === -1) {
+        if (selectedForMatch.length >= 10) {
+            toast('Máximo 10 jogadores!', 'error');
+            return;
+        }
+        selectedForMatch.push(id);
+    } else {
+        selectedForMatch.splice(idx, 1);
+    }
+
+    const el = document.getElementById(`sel-${id}`);
+    const chk = document.getElementById(`chk-${id}`);
+    if (el) el.classList.toggle('selected', selectedForMatch.includes(id));
+    if (chk) chk.checked = selectedForMatch.includes(id);
+    updateMatchSelectionCount();
+}
+
+function updateMatchSelectionCount() {
+    const countEl = document.getElementById('adminSelectedCount');
+    const btn = document.getElementById('createMatchBtn');
+    if (countEl) countEl.textContent = selectedForMatch.length;
+    if (btn) btn.disabled = selectedForMatch.length !== 10;
+}
+
+async function createMatch() {
+    if (selectedForMatch.length !== 10) return;
+
+    const matchPlayers = selectedForMatch.map(id => {
+        const p = players.find(pl => pl.id === id);
+        return { id: p.id, name: p.name, role: p.role, duo: p.duo || '' };
+    });
+
+    const name = document.getElementById('matchName').value.trim() || `Mix ${new Date().toLocaleDateString('pt-BR')}`;
+
+    try {
+        await db.collection('matches').add({
+            name,
+            players: matchPlayers,
+            status: 'voting',
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        toast('Partida criada! Jogadores já podem votar.', 'success');
+        selectedForMatch = [];
+        renderPlayerSelectionForMatch();
+        document.getElementById('matchName').value = '';
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║   ADMIN MATCHES MANAGEMENT      ║
+// ╚══════════════════════════════════╝
+async function loadAdminMatches() {
+    const el = document.getElementById('adminMatchesList');
+    if (!el) return;
+
+    try {
+        const snap = await db.collection('matches').orderBy('createdAt', 'desc').get();
+        if (snap.empty) {
+            el.innerHTML = '<div class="empty-state"><p>Nenhuma partida criada.</p></div>';
+            return;
+        }
+
+        let html = '';
+        for (const doc of snap.docs) {
+            const m = doc.data();
+            const matchId = doc.id;
+
+            // Count votes
+            const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+            const voteCount = votesSnap.size;
+
+            html += `
+                <div class="match-card ${m.status}">
+                    <div class="match-header">
+                        <div class="match-title">${m.name}</div>
+                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Votação Aberta' : '🔴 Encerrada'}</span>
+                    </div>
+                    <div class="match-players">
+                        ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
+                    </div>
+                    <div class="vote-count-info">📊 ${voteCount} voto(s) recebido(s)</div>
+                    <div class="btn-group">
+                        ${m.status === 'voting' ? `
+                            <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
+                            <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
+                        ` : `
+                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Resultado</button>
+                            <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
+                        `}
+                        <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
+                    </div>
+                </div>
+            `;
+        }
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = `<p style="color:var(--red)">Erro: ${e.message}</p>`;
+    }
+}
+
+async function deleteMatch(matchId) {
+    if (!confirm('Excluir esta partida e todos os votos?')) return;
+    try {
+        // Delete votes subcollection
+        const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+        const batch = db.batch();
+        votesSnap.docs.forEach(d => batch.delete(d.ref));
+        batch.delete(db.collection('matches').doc(matchId));
+        await batch.commit();
+        toast('Partida excluída!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function reopenVoting(matchId) {
+    try {
+        await db.collection('matches').doc(matchId).update({ status: 'voting', result: firebase.firestore.FieldValue.delete() });
+        toast('Votação reaberta!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function viewVoteDetails(matchId) {
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+        const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+
+        if (votesSnap.empty) {
+            toast('Nenhum voto ainda.', 'error');
+            return;
+        }
+
+        const averages = computeAverages(match.players, votesSnap.docs);
+
+        let html = '<div class="card-title">Médias Atuais</div><div class="avg-grid">';
+        match.players.forEach(p => {
+            const info = averages[p.id] || { avg: 0, count: 0 };
+            html += `
+                <div class="avg-row">
+                    <div>
+                        <span class="name">${p.name}</span>
+                        <span class="vote-count-small">(${info.count} votos)</span>
+                    </div>
+                    <span class="avg-val">${info.avg.toFixed(1)}</span>
+                </div>
+            `;
+        });
+        html += '</div>';
+
+        // Show in a simple modal
+        const overlay = document.getElementById('editModal');
+        overlay.querySelector('.modal-box').innerHTML = `
+            <div class="card-title">
+                <span>Detalhes dos Votos — ${match.name}</span>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            ${html}
+        `;
+        overlay.classList.add('active');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║    CLOSE VOTING & BALANCE       ║
+// ╚══════════════════════════════════╝
+async function closeVotingAndBalance(matchId) {
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+        const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+
+        if (votesSnap.empty) {
+            toast('Nenhum voto recebido ainda!', 'error');
+            return;
+        }
+
+        const averages = computeAverages(match.players, votesSnap.docs);
+
+        // Build players with averaged levels
+        const playersWithLevels = match.players.map(p => ({
+            ...p,
+            currentLevel: averages[p.id] ? Math.round(averages[p.id].avg) : 10
+        }));
+
+        // Balance teams
+        const teams = balanceTeams(playersWithLevels);
+
+        // Save result
+        await db.collection('matches').doc(matchId).update({
+            status: 'closed',
+            result: teams
+        });
+
+        toast('Votação encerrada! Times balanceados.', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function computeAverages(matchPlayers, voteDocs) {
+    const sums = {};
+    const counts = {};
+
+    matchPlayers.forEach(p => {
+        sums[p.id] = 0;
+        counts[p.id] = 0;
+    });
+
+    voteDocs.forEach(voteDoc => {
+        const votes = voteDoc.data();
+        matchPlayers.forEach(p => {
+            if (votes[p.id] !== undefined) {
+                sums[p.id] += votes[p.id];
+                counts[p.id]++;
+            }
+        });
+    });
+
+    const result = {};
+    matchPlayers.forEach(p => {
+        result[p.id] = {
+            avg: counts[p.id] > 0 ? sums[p.id] / counts[p.id] : 0,
+            count: counts[p.id]
+        };
+    });
+    return result;
+}
+
+function balanceTeams(players) {
+    let bestTeams = null;
+    let bestDiff = Infinity;
+
+    for (let attempt = 0; attempt < 2000; attempt++) {
+        const shuffled = [...players].sort(() => Math.random() - 0.5);
+        const teamA = shuffled.slice(0, 5);
+        const teamB = shuffled.slice(5);
+
+        const sumA = teamA.reduce((s, p) => s + p.currentLevel, 0);
+        const sumB = teamB.reduce((s, p) => s + p.currentLevel, 0);
+        const diff = Math.abs(sumA - sumB);
+
+        // Duo bonus
+        let bonus = 0;
+        teamA.forEach(p => {
+            if (p.duo && teamA.some(t => t.id === p.duo)) bonus -= 1;
+        });
+        teamB.forEach(p => {
+            if (p.duo && teamB.some(t => t.id === p.duo)) bonus -= 1;
+        });
+
+        const score = diff + bonus;
+
+        if (score < bestDiff) {
+            bestDiff = score;
+            bestTeams = { teamA, teamB, sumA, sumB };
+        }
+    }
+
+    return bestTeams || {
+        teamA: players.slice(0, 5),
+        teamB: players.slice(5),
+        sumA: players.slice(0, 5).reduce((s, p) => s + p.currentLevel, 0),
+        sumB: players.slice(5).reduce((s, p) => s + p.currentLevel, 0)
+    };
+}
+
+// ╔══════════════════════════════════╗
+// ║        VIEW MATCH RESULT        ║
+// ╚══════════════════════════════════╝
+async function viewMatchResult(matchId) {
+    try {
+        const doc = await db.collection('matches').doc(matchId).get();
+        const match = doc.data();
+        if (!match.result) {
+            toast('Resultado não disponível.', 'error');
+            return;
+        }
+        showResultModal(match.name, match.result);
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function showResultModal(title, teams) {
+    const diff = Math.abs(teams.sumA - teams.sumB);
+    const overlay = document.getElementById('editModal');
+    overlay.querySelector('.modal-box').innerHTML = `
+        <div class="card-title">
+            <span>🏆 ${title}</span>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="diff-display ${diff <= 2 ? 'balanced' : 'unbalanced'}">
+            Diferença: <span class="diff-value">${diff}</span> ponto(s)
+            ${diff <= 2 ? '<br><span style="color:var(--green);font-size:14px;">✅ Times Balanceados!</span>' : ''}
+        </div>
+        <div class="teams-grid">
+            <div class="team-card ct">
+                <div class="team-label">Time CT</div>
+                ${teams.teamA.map(p => `
+                    <div class="team-player">
+                        <span class="team-player-name">${p.name}</span>
+                        <div class="team-player-info">
+                            <span class="badge badge-role">${p.role}</span>
+                            <span class="badge badge-level">Nv.${p.currentLevel}</span>
+                        </div>
+                    </div>
+                `).join('')}
+                <div class="team-total" style="color:var(--ct-blue)">Total: ${teams.sumA}</div>
+            </div>
+            <div class="team-card tr">
+                <div class="team-label">Time TR</div>
+                ${teams.teamB.map(p => `
+                    <div class="team-player">
+                        <span class="team-player-name">${p.name}</span>
+                        <div class="team-player-info">
+                            <span class="badge badge-role">${p.role}</span>
+                            <span class="badge badge-level">Nv.${p.currentLevel}</span>
+                        </div>
+                    </div>
+                `).join('')}
+                <div class="team-total" style="color:var(--tr-gold)">Total: ${teams.sumB}</div>
+            </div>
+        </div>
+        <div style="text-align:center;margin-top:16px;">
+            <button class="btn btn-primary btn-small" onclick="copyResultWhatsApp('${encodeURIComponent(JSON.stringify({name:title,teams}))}')">📱 Copiar p/ WhatsApp</button>
+        </div>
+    `;
+    overlay.classList.add('active');
+}
+
+function copyResultWhatsApp(encoded) {
+    const { name, teams } = JSON.parse(decodeURIComponent(encoded));
+    let text = `🎮 *${name}* 🎮\n\n`;
+    text += `💙 *TIME CT* (${teams.sumA} pts)\n`;
+    teams.teamA.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
+    text += `\n🧡 *TIME TR* (${teams.sumB} pts)\n`;
+    teams.teamB.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
+    text += `\n📊 Diferença: ${Math.abs(teams.sumA - teams.sumB)} pts`;
+    text += `\n\n_Bom jogo! GLHF!_ 🎯`;
+
+    navigator.clipboard.writeText(text).then(() => toast('Copiado!', 'success'));
+}
+
+// ╔══════════════════════════════════╗
+// ║       VOTING PAGE (Public)      ║
+// ╚══════════════════════════════════╝
+async function loadVotePage() {
+    const el = document.getElementById('voteContent');
+    el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
+
+    try {
+        const snap = await db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get();
+
+        if (snap.empty) {
+            el.innerHTML = `
+                <div class="empty-state">
+                    <div class="icon">🗳️</div>
+                    <p>Nenhuma partida aberta para votação.</p>
+                    <p style="font-size:13px;margin-top:8px;">O admin precisa criar uma partida primeiro.</p>
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        snap.docs.forEach(doc => {
+            const m = doc.data();
+            const matchId = doc.id;
+            const hasVoted = localStorage.getItem(`voted_${matchId}`);
+
+            if (hasVoted) {
+                html += `
+                    <div class="match-card">
+                        <div class="match-header">
+                            <div class="match-title">${m.name}</div>
+                            <span class="match-status voting">🟢 Aberta</span>
+                        </div>
+                        <div style="text-align:center;padding:20px;color:var(--green);">
+                            ✅ Você já votou nesta partida!
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="match-card">
+                        <div class="match-header">
+                            <div class="match-title">${m.name}</div>
+                            <span class="match-status voting">🟢 Aberta</span>
+                        </div>
+                        <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;">
+                            Dê uma nota de 1 a 20 para cada jogador. Você só pode votar 1 vez.
+                        </p>
+                        <div class="vote-grid" id="voteGrid-${matchId}">
+                            ${m.players.map(p => `
+                                <div class="vote-row">
+                                    <span class="player-label">${p.name}</span>
+                                    <span class="role-label">${p.role}</span>
+                                    <input type="range" min="1" max="20" value="10"
+                                        id="vote-${matchId}-${p.id}"
+                                        oninput="document.getElementById('disp-${matchId}-${p.id}').textContent=this.value">
+                                    <span class="level-display" id="disp-${matchId}-${p.id}">10</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="submitVote('${matchId}')">
+                            ✅ Confirmar Voto
+                        </button>
+                    </div>
+                `;
+            }
+        });
+
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Erro ao carregar: ${e.message}</p>`;
+    }
+}
+
+async function submitVote(matchId) {
+    // Check if already voted
+    if (localStorage.getItem(`voted_${matchId}`)) {
+        toast('Você já votou nesta partida!', 'error');
+        return;
+    }
+
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+
+        if (match.status !== 'voting') {
+            toast('Votação já encerrada!', 'error');
+            return;
+        }
+
+        // Collect votes
+        const voteData = {};
+        let allFilled = true;
+        match.players.forEach(p => {
+            const input = document.getElementById(`vote-${matchId}-${p.id}`);
+            if (input) {
+                voteData[p.id] = parseInt(input.value);
+            } else {
+                allFilled = false;
+            }
+        });
+
+        if (!allFilled) {
+            toast('Preencha todos os votos!', 'error');
+            return;
+        }
+
+        // Save vote with a unique random ID
+        const voterId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        await db.collection('matches').doc(matchId).collection('votes').doc(voterId).set(voteData);
+
+        // Mark as voted in localStorage
+        localStorage.setItem(`voted_${matchId}`, 'true');
+
+        toast('Voto registrado com sucesso!', 'success');
+        loadVotePage();
+    } catch (e) {
+        toast('Erro ao votar: ' + e.message, 'error');
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║       MATCHES PAGE (Public)     ║
+// ╚══════════════════════════════════╝
+async function loadMatchesPage() {
+    const el = document.getElementById('matchesList');
+    el.innerHTML = '<div class="loading-spinner">Carregando</div>';
+
+    try {
+        const snap = await db.collection('matches').orderBy('createdAt', 'desc').get();
+        if (snap.empty) {
+            el.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nenhuma partida encontrada.</p></div>';
+            return;
+        }
+
+        let html = '';
+        for (const doc of snap.docs) {
+            const m = doc.data();
+            const matchId = doc.id;
+            const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+
+            html += `
+                <div class="match-card ${m.status}">
+                    <div class="match-header">
+                        <div class="match-title">${m.name}</div>
+                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Votação Aberta' : '🔴 Encerrada'}</span>
+                    </div>
+                    <div class="match-players">
+                        ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
+                    </div>
+                    <div class="vote-count-info">📊 ${votesSnap.size} voto(s)</div>
+                    ${m.status === 'closed' && m.result ? `
+                        <button class="btn btn-secondary btn-small" style="margin-top:10px;" onclick="viewMatchResult('${matchId}')">
+                            🏆 Ver Resultado
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        }
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║           TOAST                 ║
+// ╚══════════════════════════════════╝
+function toast(msg, type = 'success') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = `toast ${type} show`;
+    setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+// ╔══════════════════════════════════╗
+// ║           INIT                  ║
+// ╚══════════════════════════════════╝
+document.addEventListener('DOMContentLoaded', () => {
+    loadVotePage();
+});
+
+// Close modal on overlay click
+document.getElementById('editModal').addEventListener('click', function(e) {
+    if (e.target === this) closeEditModal();
+});
+</script>
+
+</body>
+</html>
