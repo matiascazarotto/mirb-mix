@@ -1314,8 +1314,8 @@ async function loadAdminMatches() {
                             <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ` : `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Resultado</button>
-                            <button class="btn btn-primary btn-small" onclick="reSortTeams('${matchId}')">🔄 Re-sortear</button>
-                            <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🗳️ Reabrir Votação</button>
+                            ${!m.score ? `<button class="btn btn-primary btn-small" onclick="reSortTeams('${matchId}')">🔄 Re-sortear</button>` : ''}
+                            ${!m.score ? `<button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🗳️ Reabrir Votação</button>` : ''}
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
@@ -1565,7 +1565,7 @@ function showResultModal(title, teams, map, score, matchId) {
         </div>
         <div style="text-align:center;margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
             <button class="btn btn-primary btn-small" onclick="copyResultWhatsApp('${matchId}')">📱 Copiar p/ WhatsApp</button>
-            ${isAdmin && matchId ? `<button class="btn btn-secondary btn-small" onclick="closeEditModal();reSortTeams('${matchId}')">🔄 Re-sortear</button>` : ''}
+            ${isAdmin && matchId && !score ? `<button class="btn btn-secondary btn-small" onclick="closeEditModal();reSortTeams('${matchId}')">🔄 Re-sortear</button>` : ''}
         </div>
     `;
     overlay.classList.add('active');
