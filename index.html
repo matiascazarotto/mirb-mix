@@ -858,7 +858,7 @@
                     Abra a partida no Gamers Club → F12 → Console → cole o comando abaixo e aperte Enter. Vai abrir uma janela — use Ctrl+A e Ctrl+C pra copiar o conteúdo.
                 </p>
                 <div style="position:relative;">
-                    <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((()=>{const d=[];document.querySelectorAll('.PlayerStatsTable').forEach(t=>{t.querySelectorAll('tr.PlayerStatsLine').forEach(r=>{const n=r.querySelector('.PlayerStatsProfile__nickname')?.textContent?.trim();if(!n)return;const c=[...r.querySelectorAll('td.PlayerStatsLine__col')].map(c=>c.textContent.trim());d.push({name:n,avatar:r.querySelector('.gc-avatar-image')?.src||'',k:+c[1]||0,a:+c[2]||0,d:+c[3]||0,diff:+c[4]||0,adr:+(c[5])||0,kdr:+(c[6])||0,kast:parseInt(c[7])||0,fk:+c[11]||0,rp:+c[12]||0})})});const j=JSON.stringify(d);prompt('✅ '+d.length+' jogadores! Ctrl+A depois Ctrl+C:',j)})())</pre>
+                    <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((()=>{const d=[];document.querySelectorAll('.PlayerStatsTable').forEach(t=>{t.querySelectorAll('tr.PlayerStatsLine').forEach(r=>{const n=r.querySelector('.PlayerStatsProfile__nickname')?.textContent?.trim();if(!n)return;const c=[...r.querySelectorAll('td.PlayerStatsLine__col')].map(c=>c.textContent.trim());const av=r.querySelector('.gc-avatar-image')?.src||'';const m=av.match(/players\/avatar\/(\d+)/);d.push({name:n,gcId:m?m[1]:'',avatar:av,k:+c[1]||0,a:+c[2]||0,d:+c[3]||0,diff:+c[4]||0,adr:+(c[5])||0,kdr:+(c[6])||0,kast:parseInt(c[7])||0,fk:+c[11]||0,rp:+c[12]||0})})});const j=JSON.stringify(d);prompt('✅ '+d.length+' jogadores! Ctrl+A depois Ctrl+C:',j)})())</pre>
                     <button class="btn btn-secondary btn-small" onclick="copySnippet()" style="position:absolute;top:8px;right:8px;padding:4px 10px;font-size:11px;">📋 Copiar</button>
                 </div>
             </div>
@@ -1109,9 +1109,9 @@ function renderAdminPlayersList() {
             <div>
                 <div class="player-name">${p.name}</div>
                 <div class="player-meta">
-                    <span class="badge badge-level">Nv. ${p.level}</span>
                     <span class="badge badge-role">${p.role}</span>
                     ${p.duo ? `<span class="badge badge-duo">Duo: ${getPlayerName(p.duo)}</span>` : ''}
+                    ${p.gcId ? `<span class="badge" style="background:rgba(0,200,83,0.15);color:var(--green);">GC: ${p.gcId}</span>` : `<span class="badge" style="background:rgba(255,61,61,0.15);color:var(--red);font-size:10px;">Sem GC</span>`}
                 </div>
             </div>
             <div class="player-actions">
@@ -1325,6 +1325,7 @@ async function loadAdminMatches() {
                             <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ` : `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Resultado</button>
+                            ${!m.gcStats ? `<button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Importar Stats GC</button>` : `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Stats GC</button>`}
                             <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
@@ -1753,6 +1754,255 @@ async function loadMatchesPage() {
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
     }
+}
+
+// ╔══════════════════════════════════╗
+// ║     GC IMPORT INTO MATCH        ║
+// ╚══════════════════════════════════╝
+let gcImportMatchId = null;
+let gcImportData = [];
+
+function openGCImport(matchId) {
+    gcImportMatchId = matchId;
+    const overlay = document.getElementById('editModal');
+    overlay.querySelector('.modal-box').innerHTML = `
+        <div class="card-title">
+            <span>📊 Importar Stats Gamers Club</span>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <p style="color:var(--text-dim);font-size:13px;margin:10px 0;">
+            Cole o JSON extraído do Gamers Club (use o snippet da aba Stats GC).
+        </p>
+        <div class="form-group">
+            <textarea id="gcImportJson" rows="4" placeholder='Cole o JSON aqui...'
+                style="width:100%;padding:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;resize:vertical;"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="processGCImport()">Processar</button>
+        <div id="gcImportResult" style="margin-top:16px;"></div>
+    `;
+    overlay.classList.add('active');
+}
+
+async function processGCImport() {
+    const raw = document.getElementById('gcImportJson').value.trim();
+    if (!raw) { toast('Cole o JSON primeiro!', 'error'); return; }
+
+    try {
+        gcImportData = JSON.parse(raw);
+        if (!Array.isArray(gcImportData) || !gcImportData.length) throw new Error('vazio');
+    } catch (e) {
+        toast('JSON inválido!', 'error');
+        return;
+    }
+
+    // Refresh players to get latest gcId mappings
+    const snap = await db.collection('players').orderBy('name').get();
+    players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Try auto-match by gcId
+    const matched = [];
+    const unmatched = [];
+
+    gcImportData.forEach(gc => {
+        const gcId = gc.gcId || '';
+        // Try to find player by gcId
+        const byGcId = gcId ? players.find(p => p.gcId === gcId) : null;
+        if (byGcId) {
+            matched.push({ gc, player: byGcId });
+        } else {
+            // Try by exact name match
+            const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
+            if (byName) {
+                matched.push({ gc, player: byName, needsLink: true });
+            } else {
+                unmatched.push(gc);
+            }
+        }
+    });
+
+    renderGCImportResult(matched, unmatched);
+}
+
+function renderGCImportResult(matched, unmatched) {
+    const el = document.getElementById('gcImportResult');
+
+    let html = '';
+
+    if (matched.length) {
+        html += `<div style="margin-bottom:12px;color:var(--green);font-size:13px;font-weight:600;">✅ ${matched.length} jogador(es) vinculados automaticamente</div>`;
+        html += matched.map(m => `
+            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">
+                ${m.gc.avatar ? `<img src="${m.gc.avatar}" style="width:24px;height:24px;border-radius:50%;">` : ''}
+                <span style="color:var(--yellow);">${m.gc.name}</span>
+                <span style="color:var(--text-dim);">→</span>
+                <span style="color:var(--green);">${m.player.name}</span>
+                ${m.needsLink ? `<span style="color:var(--blue);font-size:11px;">(vincular GC ID)</span>` : ''}
+            </div>
+        `).join('');
+    }
+
+    if (unmatched.length) {
+        html += `<div style="margin:16px 0 8px;color:var(--yellow);font-size:13px;font-weight:600;">⚠️ ${unmatched.length} jogador(es) sem vínculo — associe abaixo:</div>`;
+        unmatched.forEach((gc, idx) => {
+            html += `
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:13px;flex-wrap:wrap;">
+                    ${gc.avatar ? `<img src="${gc.avatar}" style="width:24px;height:24px;border-radius:50%;">` : ''}
+                    <span style="color:var(--yellow);min-width:100px;">${gc.name}</span>
+                    <span style="color:var(--text-dim);">→</span>
+                    <select id="gcLink-${idx}" style="flex:1;min-width:140px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text);font-size:13px;">
+                        <option value="">— Selecionar jogador —</option>
+                        ${players.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        });
+    }
+
+    html += `<button class="btn btn-primary" style="margin-top:16px;" onclick="saveGCImport()">💾 Salvar Stats na Partida</button>`;
+
+    el.innerHTML = html;
+}
+
+async function saveGCImport() {
+    // Refresh players
+    const snap = await db.collection('players').orderBy('name').get();
+    players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    const matched = [];
+    const unmatched = [];
+
+    gcImportData.forEach(gc => {
+        const gcId = gc.gcId || '';
+        const byGcId = gcId ? players.find(p => p.gcId === gcId) : null;
+        if (byGcId) {
+            matched.push({ gc, player: byGcId });
+        } else {
+            const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
+            if (byName) {
+                matched.push({ gc, player: byName, needsLink: true });
+            } else {
+                unmatched.push(gc);
+            }
+        }
+    });
+
+    // Resolve unmatched from selects
+    const allLinked = [...matched];
+    for (let i = 0; i < unmatched.length; i++) {
+        const sel = document.getElementById(`gcLink-${i}`);
+        if (!sel || !sel.value) {
+            toast(`Associe o jogador "${unmatched[i].name}" antes de salvar!`, 'error');
+            return;
+        }
+        const player = players.find(p => p.id === sel.value);
+        if (player) {
+            allLinked.push({ gc: unmatched[i], player, needsLink: true });
+        }
+    }
+
+    try {
+        // Save gcId on players that need linking
+        const batch = db.batch();
+        for (const entry of allLinked) {
+            if (entry.needsLink && entry.gc.gcId) {
+                batch.update(db.collection('players').doc(entry.player.id), { gcId: entry.gc.gcId });
+            }
+        }
+
+        // Build gcStats array
+        const gcStats = allLinked.map(e => ({
+            playerId: e.player.id,
+            playerName: e.player.name,
+            gcName: e.gc.name,
+            gcId: e.gc.gcId || '',
+            avatar: e.gc.avatar || '',
+            k: e.gc.k,
+            a: e.gc.a,
+            d: e.gc.d,
+            diff: e.gc.diff,
+            adr: e.gc.adr,
+            kdr: e.gc.kdr,
+            kast: e.gc.kast,
+            fk: e.gc.fk,
+            rp: e.gc.rp
+        }));
+
+        // Save gcStats on match
+        batch.update(db.collection('matches').doc(gcImportMatchId), { gcStats });
+        await batch.commit();
+
+        toast('✅ Stats GC salvas e jogadores vinculados!', 'success');
+        closeEditModal();
+        await loadAdminPlayers();
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function viewGCStats(matchId) {
+    db.collection('matches').doc(matchId).get().then(doc => {
+        const m = doc.data();
+        if (!m.gcStats) { toast('Sem stats GC.', 'error'); return; }
+
+        const stats = m.gcStats.sort((a, b) => b.k - a.k);
+        const overlay = document.getElementById('editModal');
+
+        let html = `
+            <div class="card-title">
+                <span>📊 Stats GC — ${m.name}</span>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;">
+                        <th style="padding:8px 6px;text-align:left;">#</th>
+                        <th style="padding:8px 6px;text-align:left;">Jogador</th>
+                        <th style="padding:8px 6px;text-align:center;">K</th>
+                        <th style="padding:8px 6px;text-align:center;">A</th>
+                        <th style="padding:8px 6px;text-align:center;">D</th>
+                        <th style="padding:8px 6px;text-align:center;">Diff</th>
+                        <th style="padding:8px 6px;text-align:center;">ADR</th>
+                        <th style="padding:8px 6px;text-align:center;">KDR</th>
+                        <th style="padding:8px 6px;text-align:center;">KAST</th>
+                        <th style="padding:8px 6px;text-align:center;">FK</th>
+                        <th style="padding:8px 6px;text-align:center;">RP</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        stats.forEach((p, idx) => {
+            const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
+            const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
+            const kdrColor = p.kdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${idx < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
+                    <td style="padding:8px 6px;color:var(--text-dim);">${idx < 3 ? ['🥇','🥈','🥉'][idx] : idx+1}</td>
+                    <td style="padding:8px 6px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
+                            <div>
+                                <span style="font-weight:600;color:var(--yellow);font-size:14px;">${p.playerName}</span>
+                                ${p.gcName !== p.playerName ? `<span style="color:var(--text-dim);font-size:11px;margin-left:4px;">(${p.gcName})</span>` : ''}
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding:8px 6px;text-align:center;color:var(--green);font-weight:700;">${p.k}</td>
+                    <td style="padding:8px 6px;text-align:center;">${p.a}</td>
+                    <td style="padding:8px 6px;text-align:center;color:var(--red);">${p.d}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${diffColor};font-weight:600;">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                    <td style="padding:8px 6px;text-align:center;">${p.adr}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${kdrColor};font-weight:600;">${p.kdr}</td>
+                    <td style="padding:8px 6px;text-align:center;">${p.kast}%</td>
+                    <td style="padding:8px 6px;text-align:center;">${p.fk}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${rpColor};font-weight:700;">${p.rp > 0 ? '+' : ''}${p.rp}</td>
+                </tr>`;
+        });
+
+        html += '</tbody></table>';
+        overlay.querySelector('.modal-box').innerHTML = html;
+        overlay.classList.add('active');
+    });
 }
 
 // ╔══════════════════════════════════╗
