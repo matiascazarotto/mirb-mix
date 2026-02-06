@@ -851,7 +851,7 @@
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
                 <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px;">
                     <label style="font-size:11px;">Filtrar por data</label>
-                    <input type="date" id="dashFilterDate" style="padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;width:100%;">
+                    <input type="text" id="dashFilterDate" placeholder="dd/mm/aaaa" maxlength="10" oninput="dashDateMask(this)" style="padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;width:100%;">
                 </div>
                 <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px;">
                     <label style="font-size:11px;">Filtrar por jogador</label>
@@ -881,7 +881,13 @@
                     <input type="checkbox" class="dashModule" value="shame" checked onchange="renderDashModules()"> Mural da Vergonha
                 </label>
                 <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="worstStats" checked onchange="renderDashModules()"> Piores Stats
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
                     <input type="checkbox" class="dashModule" value="records" checked onchange="renderDashModules()"> Recordes
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="worstRecords" checked onchange="renderDashModules()"> Piores Recordes
                 </label>
                 <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
                     <input type="checkbox" class="dashModule" value="history" checked onchange="renderDashModules()"> Histórico
@@ -1852,10 +1858,11 @@ async function loadDashboard() {
         let matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
 
         // Apply date filter
-        const dateFilter = document.getElementById('dashFilterDate').value;
-        if (dateFilter) {
-            const fd = new Date(dateFilter + 'T00:00:00');
-            const fdEnd = new Date(dateFilter + 'T23:59:59');
+        const dateFilter = document.getElementById('dashFilterDate').value.trim();
+        if (dateFilter && dateFilter.length === 10) {
+            const [dd, mm, yyyy] = dateFilter.split('/');
+            const fd = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), 0, 0, 0);
+            const fdEnd = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd), 23, 59, 59);
             matches = matches.filter(m => {
                 if (!m.createdAt) return false;
                 const d = m.createdAt.toDate();
@@ -1873,7 +1880,7 @@ async function loadDashboard() {
 
         // Build player stats
         const ps = {};
-        const records = { bestKills: null, bestAdr: null, bestKdr: null, bestRp: null, worstRp: null, bestDiff: null, worstDiff: null, bestFk: null };
+        const records = { bestKills: null, bestAdr: null, bestKdr: null, bestRp: null, worstRp: null, bestDiff: null, worstDiff: null, bestFk: null, worstKills: null, worstAdr: null, worstKdr: null, worstKast: null, worstFk: null };
 
         matches.forEach(m => {
             const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
@@ -1908,6 +1915,11 @@ async function loadDashboard() {
                 if (!records.bestDiff || g.diff > records.bestDiff.val) records.bestDiff = { val: g.diff, name: g.playerName, match: m.name, date };
                 if (!records.worstDiff || g.diff < records.worstDiff.val) records.worstDiff = { val: g.diff, name: g.playerName, match: m.name, date };
                 if (!records.bestFk || g.fk > records.bestFk.val) records.bestFk = { val: g.fk, name: g.playerName, match: m.name, date };
+                if (!records.worstKills || g.k < records.worstKills.val) records.worstKills = { val: g.k, name: g.playerName, match: m.name, date };
+                if (!records.worstAdr || g.adr < records.worstAdr.val) records.worstAdr = { val: g.adr, name: g.playerName, match: m.name, date };
+                if (!records.worstKdr || g.kdr < records.worstKdr.val) records.worstKdr = { val: g.kdr, name: g.playerName, match: m.name, date };
+                if (!records.worstKast || g.kast < records.worstKast.val) records.worstKast = { val: g.kast, name: g.playerName, match: m.name, date };
+                if (g.fk === 0 && (!records.worstFk || true)) records.worstFk = { val: 0, name: g.playerName, match: m.name, date };
             });
         });
 
@@ -2064,8 +2076,57 @@ function renderDashModules() {
         </div>`;
     }
 
-    // ═══ SHAME WALL ═══
+    // ═══ SHAME WALL (single worst ADR player spotlight) ═══
     if (modules.includes('shame') && entries.length > 1) {
+        const worstAdrPlayer = [...entries].sort((a, b) => (a.adrSum/a.matches) - (b.adrSum/b.matches))[0];
+        const wp = worstAdrPlayer;
+        const avgAdr = (wp.adrSum / wp.matches).toFixed(1);
+        const avgKdr = (wp.kdrSum / wp.matches).toFixed(2);
+        const avgKast = (wp.kastSum / wp.matches).toFixed(0);
+        const wr = wp.matches > 0 ? ((wp.wins / wp.matches) * 100).toFixed(0) : 0;
+
+        html += `
+        <div class="card" style="border:1px solid rgba(255,61,61,0.2);background:linear-gradient(135deg,rgba(255,61,61,0.05),transparent);">
+            <div class="card-title">💀 Mural da Vergonha</div>
+            <div style="display:flex;align-items:center;gap:20px;padding:16px 0;flex-wrap:wrap;justify-content:center;">
+                <div style="text-align:center;">
+                    ${wp.avatar ? `<img src="${wp.avatar}" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--red);box-shadow:0 0 20px rgba(255,61,61,0.3);">` : ''}
+                    <div style="font-size:40px;margin:8px 0;">🗑️</div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;color:var(--red);">${wp.name}</div>
+                    <div style="color:var(--text-dim);font-size:13px;margin-top:2px;">Pior ADR média do grupo</div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;flex:1;min-width:200px;">
+                    <div style="padding:10px;background:rgba(255,61,61,0.08);border-radius:8px;text-align:center;">
+                        <div style="font-size:11px;color:var(--text-dim);">ADR Média</div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--red);">${avgAdr}</div>
+                    </div>
+                    <div style="padding:10px;background:rgba(255,61,61,0.08);border-radius:8px;text-align:center;">
+                        <div style="font-size:11px;color:var(--text-dim);">K/D</div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--red);">${avgKdr}</div>
+                    </div>
+                    <div style="padding:10px;background:rgba(255,61,61,0.08);border-radius:8px;text-align:center;">
+                        <div style="font-size:11px;color:var(--text-dim);">Win Rate</div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--red);">${wr}%</div>
+                    </div>
+                    <div style="padding:10px;background:rgba(255,61,61,0.08);border-radius:8px;text-align:center;">
+                        <div style="font-size:11px;color:var(--text-dim);">RP Total</div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--red);">${wp.rpTotal}</div>
+                    </div>
+                    <div style="padding:10px;background:rgba(255,61,61,0.08);border-radius:8px;text-align:center;">
+                        <div style="font-size:11px;color:var(--text-dim);">KAST</div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--red);">${avgKast}%</div>
+                    </div>
+                    <div style="padding:10px;background:rgba(255,61,61,0.08);border-radius:8px;text-align:center;">
+                        <div style="font-size:11px;color:var(--text-dim);">Partidas</div>
+                        <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--text);">${wp.matches} (${wp.wins}V ${wp.losses}D)</div>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    }
+
+    // ═══ WORST STATS ═══
+    if (modules.includes('worstStats') && entries.length > 1) {
         const byLosses = [...entries].sort((a, b) => b.losses - a.losses);
         const byDeaths = [...entries].sort((a, b) => b.deaths - a.deaths);
         const byRpLoss = [...entries].sort((a, b) => a.rpTotal - b.rpTotal);
@@ -2075,7 +2136,7 @@ function renderDashModules() {
 
         html += `
         <div class="card">
-            <div class="card-title">💀 Mural da Vergonha</div>
+            <div class="card-title">📉 Piores Stats</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
                 ${dashHighlight('😭 Mais Derrotas', byLosses[0], byLosses[0].losses + ' derrota(s)', 'var(--red)')}
                 ${dashHighlight('💀 Mais Mortes', byDeaths[0], byDeaths[0].deaths + ' deaths', 'var(--red)')}
@@ -2097,10 +2158,24 @@ function renderDashModules() {
                 ${dashRecord('💥 Maior ADR', records.bestAdr)}
                 ${dashRecord('🎯 Maior KDR', records.bestKdr)}
                 ${dashRecord('📈 Mais RP Ganhos', records.bestRp)}
-                ${dashRecord('📉 Mais RP Perdidos', records.worstRp)}
                 ${dashRecord('➕ Melhor Diff', records.bestDiff)}
-                ${dashRecord('➖ Pior Diff', records.worstDiff)}
                 ${dashRecord('⚡ Mais First Kills', records.bestFk)}
+            </div>
+        </div>`;
+    }
+
+    // ═══ WORST RECORDS ═══
+    if (modules.includes('worstRecords') && records.worstKills) {
+        html += `
+        <div class="card">
+            <div class="card-title">🗑️ Piores Recordes (pior partida individual)</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                ${dashRecord('😴 Menos Kills', records.worstKills)}
+                ${dashRecord('🐌 Menor ADR', records.worstAdr)}
+                ${dashRecord('📉 Menor KDR', records.worstKdr)}
+                ${dashRecord('🧊 Menor KAST', records.worstKast)}
+                ${dashRecord('📉 Mais RP Perdidos', records.worstRp)}
+                ${dashRecord('➖ Pior Diff', records.worstDiff)}
             </div>
         </div>`;
     }
@@ -2599,6 +2674,13 @@ function clearGCStats() {
     document.getElementById('gcJsonInput').value = '';
     document.getElementById('gcStatsResult').innerHTML = '';
     toast('Dados limpos!', 'success');
+}
+
+function dashDateMask(input) {
+    let v = input.value.replace(/\D/g, '');
+    if (v.length > 2) v = v.slice(0, 2) + '/' + v.slice(2);
+    if (v.length > 5) v = v.slice(0, 5) + '/' + v.slice(5, 9);
+    input.value = v;
 }
 
 // ╔══════════════════════════════════╗
