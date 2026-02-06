@@ -897,14 +897,15 @@
                     <input type="text" id="editName" required>
                 </div>
                 <div class="form-group">
-                    <label>Nível Base (1-20)</label>
-                    <input type="number" id="editLevel" min="1" max="20" required>
+                    <label>ID Gamers Club</label>
+                    <input type="text" id="editGcId" placeholder="Ex: 1138165">
                 </div>
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label>Função</label>
                     <select id="editRole">
+                        <option value="Rifler">Rifler</option>
                         <option value="Entry">Entry Fragger</option>
                         <option value="AWPer">AWPer</option>
                         <option value="Suporte">Suporte</option>
@@ -1023,14 +1024,15 @@ function renderAdminPanel() {
                         <input type="text" id="newPlayerName" required>
                     </div>
                     <div class="form-group">
-                        <label>Nível Base (1-20)</label>
-                        <input type="number" id="newPlayerLevel" min="1" max="20" required>
+                        <label>ID Gamers Club (opcional)</label>
+                        <input type="text" id="newPlayerGcId" placeholder="Ex: 1138165">
                     </div>
                 </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Função</label>
                         <select id="newPlayerRole">
+                            <option value="Rifler">Rifler</option>
                             <option value="Entry">Entry Fragger</option>
                             <option value="AWPer">AWPer</option>
                             <option value="Suporte">Suporte</option>
@@ -1131,7 +1133,7 @@ async function addPlayer(e) {
     e.preventDefault();
     const data = {
         name: document.getElementById('newPlayerName').value.trim(),
-        level: parseInt(document.getElementById('newPlayerLevel').value),
+        gcId: document.getElementById('newPlayerGcId').value.trim(),
         role: document.getElementById('newPlayerRole').value,
         duo: document.getElementById('newPlayerDuo').value,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -1162,7 +1164,7 @@ function openEditPlayer(id) {
     if (!p) return;
     document.getElementById('editPlayerId').value = id;
     document.getElementById('editName').value = p.name;
-    document.getElementById('editLevel').value = p.level;
+    document.getElementById('editGcId').value = p.gcId || '';
     document.getElementById('editRole').value = p.role;
 
     // Populate duo select
@@ -1185,7 +1187,7 @@ async function savePlayerEdit(e) {
     try {
         await db.collection('players').doc(id).update({
             name: document.getElementById('editName').value.trim(),
-            level: parseInt(document.getElementById('editLevel').value),
+            gcId: document.getElementById('editGcId').value.trim(),
             role: document.getElementById('editRole').value,
             duo: document.getElementById('editDuo').value
         });
@@ -1225,7 +1227,6 @@ function renderPlayerSelectionForMatch() {
             <div>
                 <div class="player-name">${p.name}</div>
                 <div class="player-meta">
-                    <span class="badge badge-level">Nv. ${p.level}</span>
                     <span class="badge badge-role">${p.role}</span>
                 </div>
             </div>
@@ -1853,7 +1854,7 @@ function renderGCImportResult(matched, unmatched) {
                     ${gc.avatar ? `<img src="${gc.avatar}" style="width:24px;height:24px;border-radius:50%;">` : ''}
                     <span style="color:var(--yellow);min-width:100px;">${gc.name}</span>
                     <span style="color:var(--text-dim);">→</span>
-                    <select id="gcLink-${idx}" style="flex:1;min-width:140px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text);font-size:13px;">
+                    <select id="gcLink-${idx}" style="flex:1;min-width:140px;padding:6px 8px;background:#0a0e17;border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#e8eaf0;font-size:13px;">
                         <option value="">— Selecionar jogador —</option>
                         ${players.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
                     </select>
