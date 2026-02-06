@@ -800,8 +800,11 @@
     <button class="nav-btn" onclick="showPage('admin')">
         <span class="icon">🔒</span> Admin
     </button>
+    <button class="nav-btn" onclick="showPage('dashboard')">
+        <span class="icon">🏆</span> Stats
+    </button>
     <button class="nav-btn" onclick="showPage('stats')">
-        <span class="icon">📊</span> Stats GC
+        <span class="icon">🎮</span> GC
     </button>
 </nav>
 
@@ -839,6 +842,54 @@
                 </div>
             </div>
         </div>
+    </div>
+
+    <!-- ════════════ PAGE: DASHBOARD ════════════ -->
+    <div id="page-dashboard" class="page">
+        <div class="card">
+            <div class="card-title">🏆 Dashboard de Estatísticas</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+                <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px;">
+                    <label style="font-size:11px;">Filtrar por data</label>
+                    <input type="date" id="dashFilterDate" style="padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;width:100%;">
+                </div>
+                <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px;">
+                    <label style="font-size:11px;">Filtrar por jogador</label>
+                    <select id="dashFilterPlayer" style="padding:8px 10px;background:#0a0e17;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;font-size:13px;width:100%;">
+                        <option value="">Todos</option>
+                    </select>
+                </div>
+                <button class="btn btn-primary btn-small" onclick="loadDashboard()" style="height:38px;">Filtrar</button>
+                <button class="btn btn-secondary btn-small" onclick="document.getElementById('dashFilterDate').value='';document.getElementById('dashFilterPlayer').value='';loadDashboard()" style="height:38px;">Limpar</button>
+            </div>
+        </div>
+
+        <!-- Modules selector -->
+        <div class="card" style="padding:12px 16px;">
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                <span style="color:var(--text-dim);font-size:12px;margin-right:4px;">Mostrar:</span>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="overview" checked onchange="renderDashModules()"> Resumo
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="ranking" checked onchange="renderDashModules()"> Ranking
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="highlights" checked onchange="renderDashModules()"> Destaques
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="shame" checked onchange="renderDashModules()"> Mural da Vergonha
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="records" checked onchange="renderDashModules()"> Recordes
+                </label>
+                <label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);cursor:pointer;padding:4px 10px;background:rgba(255,255,255,0.04);border-radius:20px;">
+                    <input type="checkbox" class="dashModule" value="history" checked onchange="renderDashModules()"> Histórico
+                </label>
+            </div>
+        </div>
+
+        <div id="dashContent"><div class="empty-state"><div class="icon">🏆</div><p>Carregando estatísticas...</p></div></div>
     </div>
 
     <!-- ════════════ PAGE: STATS GC ════════════ -->
@@ -969,6 +1020,7 @@ function showPage(name) {
     if (name === 'vote') loadVotePage();
     if (name === 'matches') loadMatchesPage();
     if (name === 'admin' && isAdmin) renderAdminPanel();
+    if (name === 'dashboard') loadDashboard();
 }
 
 // ╔══════════════════════════════════╗
@@ -1772,6 +1824,323 @@ async function loadMatchesPage() {
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
     }
+}
+
+// ╔══════════════════════════════════╗
+// ║         DASHBOARD               ║
+// ╚══════════════════════════════════╝
+let dashData = { matches: [], playerStats: {}, matchCount: 0 };
+
+async function loadDashboard() {
+    const el = document.getElementById('dashContent');
+    el.innerHTML = '<div class="loading-spinner">Carregando</div>';
+
+    try {
+        const snap = await db.collection('matches').where('status', '==', 'closed').orderBy('createdAt', 'desc').get();
+        let matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
+
+        // Apply date filter
+        const dateFilter = document.getElementById('dashFilterDate').value;
+        if (dateFilter) {
+            const fd = new Date(dateFilter + 'T00:00:00');
+            const fdEnd = new Date(dateFilter + 'T23:59:59');
+            matches = matches.filter(m => {
+                if (!m.createdAt) return false;
+                const d = m.createdAt.toDate();
+                return d >= fd && d <= fdEnd;
+            });
+        }
+
+        // Player filter
+        const playerFilter = document.getElementById('dashFilterPlayer').value;
+
+        if (matches.length === 0) {
+            el.innerHTML = '<div class="empty-state"><div class="icon">📊</div><p>Nenhuma partida com stats GC importadas encontrada.</p><p style="font-size:13px;margin-top:4px;">Importe as stats do Gamers Club nas partidas encerradas (Admin).</p></div>';
+            return;
+        }
+
+        // Build player stats
+        const ps = {};
+        const records = { bestKills: null, bestAdr: null, bestKdr: null, bestRp: null, worstRp: null, bestDiff: null, worstDiff: null, bestFk: null };
+
+        matches.forEach(m => {
+            const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
+            m.gcStats.forEach(g => {
+                const key = g.playerId || g.gcName || g.playerName;
+                if (!ps[key]) {
+                    ps[key] = { name: g.playerName, avatar: g.avatar || '', gcId: g.gcId || '', matches: 0, kills: 0, deaths: 0, assists: 0, diff: 0, adrSum: 0, kdrSum: 0, kastSum: 0, fk: 0, rpTotal: 0, rpPositive: 0, rpNegative: 0, wins: 0, losses: 0, bestKills: 0, worstDeaths: 0, matchList: [] };
+                }
+                const p = ps[key];
+                p.matches++;
+                p.kills += g.k;
+                p.deaths += g.d;
+                p.assists += g.a;
+                p.diff += g.diff;
+                p.adrSum += g.adr;
+                p.kdrSum += g.kdr;
+                p.kastSum += g.kast;
+                p.fk += g.fk;
+                p.rpTotal += g.rp;
+                if (g.rp >= 0) { p.wins++; p.rpPositive += g.rp; }
+                else { p.losses++; p.rpNegative += g.rp; }
+                if (g.k > p.bestKills) p.bestKills = g.k;
+                if (g.d > p.worstDeaths) p.worstDeaths = g.d;
+                p.matchList.push({ matchName: m.name, date, ...g });
+
+                // Records
+                if (!records.bestKills || g.k > records.bestKills.val) records.bestKills = { val: g.k, name: g.playerName, match: m.name, date };
+                if (!records.bestAdr || g.adr > records.bestAdr.val) records.bestAdr = { val: g.adr, name: g.playerName, match: m.name, date };
+                if (!records.bestKdr || g.kdr > records.bestKdr.val) records.bestKdr = { val: g.kdr, name: g.playerName, match: m.name, date };
+                if (!records.bestRp || g.rp > records.bestRp.val) records.bestRp = { val: g.rp, name: g.playerName, match: m.name, date };
+                if (!records.worstRp || g.rp < records.worstRp.val) records.worstRp = { val: g.rp, name: g.playerName, match: m.name, date };
+                if (!records.bestDiff || g.diff > records.bestDiff.val) records.bestDiff = { val: g.diff, name: g.playerName, match: m.name, date };
+                if (!records.worstDiff || g.diff < records.worstDiff.val) records.worstDiff = { val: g.diff, name: g.playerName, match: m.name, date };
+                if (!records.bestFk || g.fk > records.bestFk.val) records.bestFk = { val: g.fk, name: g.playerName, match: m.name, date };
+            });
+        });
+
+        // Populate player filter dropdown
+        const sel = document.getElementById('dashFilterPlayer');
+        const currentVal = sel.value;
+        sel.innerHTML = '<option value="">Todos</option>' + Object.values(ps).sort((a,b) => a.name.localeCompare(b.name)).map(p => `<option value="${p.name}" ${p.name === currentVal ? 'selected' : ''}>${p.name}</option>`).join('');
+
+        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter };
+        renderDashModules();
+    } catch (e) {
+        el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
+    }
+}
+
+function renderDashModules() {
+    const el = document.getElementById('dashContent');
+    const { matches, playerStats: ps, matchCount, records, playerFilter } = dashData;
+    if (!matchCount) return;
+
+    const modules = [...document.querySelectorAll('.dashModule')].filter(c => c.checked).map(c => c.value);
+    let entries = Object.values(ps);
+
+    // Apply player filter
+    if (playerFilter) {
+        entries = entries.filter(p => p.name === playerFilter);
+    }
+
+    let html = '';
+
+    // ═══ OVERVIEW ═══
+    if (modules.includes('overview')) {
+        const totalKills = entries.reduce((s, p) => s + p.kills, 0);
+        const totalDeaths = entries.reduce((s, p) => s + p.deaths, 0);
+        const totalMatches = matchCount;
+        const uniquePlayers = entries.length;
+
+        html += `
+        <div class="card">
+            <div class="card-title">📈 Resumo Geral</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;">
+                ${dashStatBox('🎮', 'Partidas', totalMatches, '')}
+                ${dashStatBox('👥', 'Jogadores', uniquePlayers, '')}
+                ${dashStatBox('🔫', 'Total Kills', totalKills, 'var(--green)')}
+                ${dashStatBox('💀', 'Total Deaths', totalDeaths, 'var(--red)')}
+                ${dashStatBox('📊', 'Avg K/Partida', (totalKills / totalMatches).toFixed(0), '')}
+                ${dashStatBox('⚔️', 'K/D Geral', (totalKills / (totalDeaths || 1)).toFixed(2), totalKills > totalDeaths ? 'var(--green)' : 'var(--red)')}
+            </div>
+        </div>`;
+    }
+
+    // ═══ RANKING ═══
+    if (modules.includes('ranking')) {
+        const sorted = [...entries].sort((a, b) => {
+            const wrA = a.matches > 0 ? a.wins / a.matches : 0;
+            const wrB = b.matches > 0 ? b.wins / b.matches : 0;
+            return wrB - wrA || b.rpTotal - a.rpTotal;
+        });
+
+        html += `
+        <div class="card" style="overflow-x:auto;">
+            <div class="card-title">🏆 Ranking Geral</div>
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
+                        <th style="padding:10px 6px;text-align:left;">#</th>
+                        <th style="padding:10px 6px;text-align:left;">Jogador</th>
+                        <th style="padding:10px 6px;text-align:center;">P</th>
+                        <th style="padding:10px 6px;text-align:center;">V</th>
+                        <th style="padding:10px 6px;text-align:center;">D</th>
+                        <th style="padding:10px 6px;text-align:center;">Win%</th>
+                        <th style="padding:10px 6px;text-align:center;">K</th>
+                        <th style="padding:10px 6px;text-align:center;">Deaths</th>
+                        <th style="padding:10px 6px;text-align:center;">K/D</th>
+                        <th style="padding:10px 6px;text-align:center;">ADR</th>
+                        <th style="padding:10px 6px;text-align:center;">FK</th>
+                        <th style="padding:10px 6px;text-align:center;">RP</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        sorted.forEach((p, i) => {
+            const wr = p.matches > 0 ? ((p.wins / p.matches) * 100).toFixed(0) : 0;
+            const wrColor = wr >= 60 ? 'var(--green)' : wr >= 40 ? 'var(--yellow)' : 'var(--red)';
+            const avgAdr = (p.adrSum / p.matches).toFixed(1);
+            const avgKdr = (p.kdrSum / p.matches).toFixed(2);
+            const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+            const rpColor = p.rpTotal >= 0 ? 'var(--green)' : 'var(--red)';
+
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${i < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
+                    <td style="padding:10px 6px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);">${i < 3 ? ['🥇','🥈','🥉'][i] : i+1}</td>
+                    <td style="padding:10px 6px;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>
+                        </div>
+                    </td>
+                    <td style="padding:10px 6px;text-align:center;color:var(--text-dim);">${p.matches}</td>
+                    <td style="padding:10px 6px;text-align:center;color:var(--green);">${p.wins}</td>
+                    <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.losses}</td>
+                    <td style="padding:10px 6px;text-align:center;font-weight:700;color:${wrColor};">${wr}%</td>
+                    <td style="padding:10px 6px;text-align:center;color:var(--green);font-weight:700;">${p.kills}</td>
+                    <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.deaths}</td>
+                    <td style="padding:10px 6px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
+                    <td style="padding:10px 6px;text-align:center;">${avgAdr}</td>
+                    <td style="padding:10px 6px;text-align:center;">${p.fk}</td>
+                    <td style="padding:10px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
+                </tr>`;
+        });
+        html += '</tbody></table></div>';
+    }
+
+    // ═══ HIGHLIGHTS ═══
+    if (modules.includes('highlights') && entries.length > 1) {
+        const byWins = [...entries].sort((a, b) => b.wins - a.wins);
+        const byKills = [...entries].sort((a, b) => b.kills - a.kills);
+        const byRp = [...entries].sort((a, b) => b.rpTotal - a.rpTotal);
+        const byAdr = [...entries].sort((a, b) => (b.adrSum/b.matches) - (a.adrSum/a.matches));
+        const byKdr = [...entries].sort((a, b) => (b.kdrSum/b.matches) - (a.kdrSum/a.matches));
+        const byFk = [...entries].sort((a, b) => b.fk - a.fk);
+        const byWr = [...entries].filter(p => p.matches >= 2).sort((a, b) => (b.wins/b.matches) - (a.wins/a.matches));
+
+        html += `
+        <div class="card">
+            <div class="card-title">⭐ Destaques</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+                ${dashHighlight('🏆 Mais Vitórias', byWins[0], byWins[0].wins + ' vitória(s)', 'var(--green)')}
+                ${dashHighlight('🔫 Mais Kills', byKills[0], byKills[0].kills + ' kills', 'var(--green)')}
+                ${dashHighlight('📈 Mais RP Ganhos', byRp[0], '+' + byRp[0].rpTotal + ' RP', 'var(--blue)')}
+                ${dashHighlight('💥 Maior ADR Média', byAdr[0], (byAdr[0].adrSum/byAdr[0].matches).toFixed(1) + ' ADR', 'var(--yellow)')}
+                ${dashHighlight('🎯 Melhor K/D', byKdr[0], (byKdr[0].kdrSum/byKdr[0].matches).toFixed(2) + ' KDR', 'var(--green)')}
+                ${dashHighlight('⚡ Mais First Kills', byFk[0], byFk[0].fk + ' FK', 'var(--yellow)')}
+                ${byWr.length ? dashHighlight('📊 Maior Win Rate', byWr[0], ((byWr[0].wins/byWr[0].matches)*100).toFixed(0) + '% (' + byWr[0].matches + 'p)', 'var(--green)') : ''}
+            </div>
+        </div>`;
+    }
+
+    // ═══ SHAME WALL ═══
+    if (modules.includes('shame') && entries.length > 1) {
+        const byLosses = [...entries].sort((a, b) => b.losses - a.losses);
+        const byDeaths = [...entries].sort((a, b) => b.deaths - a.deaths);
+        const byRpLoss = [...entries].sort((a, b) => a.rpTotal - b.rpTotal);
+        const byWorstKdr = [...entries].sort((a, b) => (a.kdrSum/a.matches) - (b.kdrSum/b.matches));
+        const byWorstDiff = [...entries].sort((a, b) => a.diff - b.diff);
+        const byWorstWr = [...entries].filter(p => p.matches >= 2).sort((a, b) => (a.wins/a.matches) - (b.wins/b.matches));
+
+        html += `
+        <div class="card">
+            <div class="card-title">💀 Mural da Vergonha</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;">
+                ${dashHighlight('😭 Mais Derrotas', byLosses[0], byLosses[0].losses + ' derrota(s)', 'var(--red)')}
+                ${dashHighlight('💀 Mais Mortes', byDeaths[0], byDeaths[0].deaths + ' deaths', 'var(--red)')}
+                ${dashHighlight('📉 Mais RP Perdidos', byRpLoss[0], byRpLoss[0].rpTotal + ' RP', 'var(--red)')}
+                ${dashHighlight('🐌 Pior K/D', byWorstKdr[0], (byWorstKdr[0].kdrSum/byWorstKdr[0].matches).toFixed(2) + ' KDR', 'var(--red)')}
+                ${dashHighlight('🪦 Pior Diff', byWorstDiff[0], (byWorstDiff[0].diff > 0 ? '+' : '') + byWorstDiff[0].diff + ' diff', 'var(--red)')}
+                ${byWorstWr.length ? dashHighlight('📊 Menor Win Rate', byWorstWr[0], ((byWorstWr[0].wins/byWorstWr[0].matches)*100).toFixed(0) + '% (' + byWorstWr[0].matches + 'p)', 'var(--red)') : ''}
+            </div>
+        </div>`;
+    }
+
+    // ═══ RECORDS ═══
+    if (modules.includes('records') && records.bestKills) {
+        html += `
+        <div class="card">
+            <div class="card-title">🎖️ Recordes (melhor partida individual)</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                ${dashRecord('🔫 Mais Kills', records.bestKills)}
+                ${dashRecord('💥 Maior ADR', records.bestAdr)}
+                ${dashRecord('🎯 Maior KDR', records.bestKdr)}
+                ${dashRecord('📈 Mais RP Ganhos', records.bestRp)}
+                ${dashRecord('📉 Mais RP Perdidos', records.worstRp)}
+                ${dashRecord('➕ Melhor Diff', records.bestDiff)}
+                ${dashRecord('➖ Pior Diff', records.worstDiff)}
+                ${dashRecord('⚡ Mais First Kills', records.bestFk)}
+            </div>
+        </div>`;
+    }
+
+    // ═══ HISTORY ═══
+    if (modules.includes('history')) {
+        html += `
+        <div class="card">
+            <div class="card-title">📋 Histórico de Partidas</div>
+            <div style="display:grid;gap:8px;">`;
+
+        matches.forEach(m => {
+            const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
+            const top = [...m.gcStats].sort((a, b) => b.k - a.k)[0];
+            html += `
+                <div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-weight:600;font-size:14px;">${m.name} ${m.map ? `<span style="color:var(--text-dim);font-size:12px;">— ${m.map}</span>` : ''}</span>
+                        <span style="color:var(--text-dim);font-size:12px;">${date}</span>
+                    </div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;font-size:12px;">
+                        <span style="color:var(--green);">MVP: ${top.playerName} (${top.k}K)</span>
+                        <span style="color:var(--text-dim);">•</span>
+                        <span style="color:var(--text-dim);">${m.gcStats.length} jogadores</span>
+                    </div>
+                </div>`;
+        });
+        html += '</div></div>';
+    }
+
+    if (!html) {
+        html = '<div class="empty-state"><p>Selecione pelo menos um módulo acima.</p></div>';
+    }
+
+    el.innerHTML = html;
+}
+
+function dashStatBox(icon, label, value, color) {
+    return `
+        <div style="padding:16px;background:rgba(255,255,255,0.03);border-radius:10px;text-align:center;">
+            <div style="font-size:20px;margin-bottom:4px;">${icon}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:26px;font-weight:700;color:${color || 'var(--text)'};line-height:1;">${value}</div>
+            <div style="font-size:11px;color:var(--text-dim);margin-top:4px;text-transform:uppercase;letter-spacing:0.5px;">${label}</div>
+        </div>`;
+}
+
+function dashHighlight(title, player, stat, color) {
+    if (!player) return '';
+    return `
+        <div style="padding:14px;background:rgba(255,255,255,0.03);border-radius:10px;border-left:3px solid ${color};">
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">${title}</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                ${player.avatar ? `<img src="${player.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;">` : ''}
+                <div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--yellow);">${player.name}</div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:${color};">${stat}</div>
+                </div>
+            </div>
+        </div>`;
+}
+
+function dashRecord(title, rec) {
+    if (!rec) return '';
+    return `
+        <div style="padding:12px;background:rgba(255,255,255,0.02);border-radius:8px;">
+            <div style="font-size:11px;color:var(--text-dim);margin-bottom:4px;">${title}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--yellow);">${rec.val}</div>
+            <div style="font-size:12px;color:var(--text);">${rec.name}</div>
+            <div style="font-size:11px;color:var(--text-dim);">${rec.match} • ${rec.date}</div>
+        </div>`;
 }
 
 // ╔══════════════════════════════════╗
