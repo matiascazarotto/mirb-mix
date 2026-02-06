@@ -1252,8 +1252,14 @@ function openEditPlayer(id) {
     document.getElementById('editModal').classList.add('active');
 }
 
+let editModalOriginalHTML = '';
+
 function closeEditModal() {
     document.getElementById('editModal').classList.remove('active');
+    // Restore original edit form if it was replaced by GC stats/import
+    if (editModalOriginalHTML) {
+        document.getElementById('editModal').querySelector('.modal-box').innerHTML = editModalOriginalHTML;
+    }
 }
 
 async function savePlayerEdit(e) {
@@ -2697,6 +2703,8 @@ function toast(msg, type = 'success') {
 // ║           INIT                  ║
 // ╚══════════════════════════════════╝
 document.addEventListener('DOMContentLoaded', () => {
+    // Save original edit modal content
+    editModalOriginalHTML = document.getElementById('editModal').querySelector('.modal-box').innerHTML;
     // Restore admin session
     if (sessionStorage.getItem('mirb_admin') === 'true') {
         isAdmin = true;
