@@ -945,8 +945,7 @@ const firebaseConfig = {
   appId: "1:488557105379:web:c35c30be0dd0ff27d875d6"
 };
 
-// ─── Admin password (change this!) ───
-const ADMIN_PASSWORD = "mirb1337";
+// ─── Admin password (stored in Firestore: config/admin → password field) ───
 
 // ─── Init Firebase ───
 firebase.initializeApp(firebaseConfig);
@@ -975,15 +974,33 @@ function showPage(name) {
 // ╔══════════════════════════════════╗
 // ║         ADMIN AUTH              ║
 // ╚══════════════════════════════════╝
-function adminLogin() {
+async function adminLogin() {
     const pw = document.getElementById('adminPassword').value;
-    if (pw === ADMIN_PASSWORD) {
-        isAdmin = true;
-        sessionStorage.setItem('mirb_admin', 'true');
-        toast('Login de admin realizado!', 'success');
-        renderAdminPanel();
-    } else {
-        toast('Senha incorreta!', 'error');
+    if (!pw) { toast('Digite a senha!', 'error'); return; }
+
+    try {
+        const doc = await db.collection('config').doc('admin').get();
+        if (!doc.exists) {
+            // First time: create the config with this password
+            await db.collection('config').doc('admin').set({ password: pw });
+            isAdmin = true;
+            sessionStorage.setItem('mirb_admin', 'true');
+            toast('Senha de admin criada com sucesso! Use essa senha nas próximas vezes.', 'success');
+            renderAdminPanel();
+            return;
+        }
+
+        const stored = doc.data().password;
+        if (pw === stored) {
+            isAdmin = true;
+            sessionStorage.setItem('mirb_admin', 'true');
+            toast('Login de admin realizado!', 'success');
+            renderAdminPanel();
+        } else {
+            toast('Senha incorreta!', 'error');
+        }
+    } catch (e) {
+        toast('Erro ao verificar senha: ' + e.message, 'error');
     }
 }
 
