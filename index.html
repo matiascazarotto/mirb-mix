@@ -1830,6 +1830,18 @@ async function loadMatchesPage() {
 // ║         DASHBOARD               ║
 // ╚══════════════════════════════════╝
 let dashData = { matches: [], playerStats: {}, matchCount: 0 };
+let dashSortCol = 'adr';
+let dashSortDir = 'desc';
+
+function dashSort(col) {
+    if (dashSortCol === col) {
+        dashSortDir = dashSortDir === 'desc' ? 'asc' : 'desc';
+    } else {
+        dashSortCol = col;
+        dashSortDir = 'desc';
+    }
+    renderDashModules();
+}
 
 async function loadDashboard() {
     const el = document.getElementById('dashContent');
@@ -1949,11 +1961,29 @@ function renderDashModules() {
 
     // ═══ RANKING ═══
     if (modules.includes('ranking')) {
+        const col = dashSortCol || 'adr';
+        const dir = dashSortDir || 'desc';
         const sorted = [...entries].sort((a, b) => {
-            const wrA = a.matches > 0 ? a.wins / a.matches : 0;
-            const wrB = b.matches > 0 ? b.wins / b.matches : 0;
-            return wrB - wrA || b.rpTotal - a.rpTotal;
+            let va, vb;
+            switch(col) {
+                case 'p': va = a.matches; vb = b.matches; break;
+                case 'v': va = a.wins; vb = b.wins; break;
+                case 'd': va = a.losses; vb = b.losses; break;
+                case 'wr': va = a.matches ? a.wins/a.matches : 0; vb = b.matches ? b.wins/b.matches : 0; break;
+                case 'k': va = a.kills; vb = b.kills; break;
+                case 'deaths': va = a.deaths; vb = b.deaths; break;
+                case 'kd': va = a.kdrSum/a.matches; vb = b.kdrSum/b.matches; break;
+                case 'adr': va = a.adrSum/a.matches; vb = b.adrSum/b.matches; break;
+                case 'fk': va = a.fk; vb = b.fk; break;
+                case 'rp': va = a.rpTotal; vb = b.rpTotal; break;
+                default: va = a.adrSum/a.matches; vb = b.adrSum/b.matches;
+            }
+            return dir === 'desc' ? vb - va : va - vb;
         });
+
+        const arrow = (c) => col === c ? (dir === 'desc' ? ' ▼' : ' ▲') : '';
+        const thStyle = 'padding:10px 6px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;';
+        const activeStyle = (c) => col === c ? 'color:var(--yellow);' : '';
 
         html += `
         <div class="card" style="overflow-x:auto;">
@@ -1963,16 +1993,16 @@ function renderDashModules() {
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
                         <th style="padding:10px 6px;text-align:left;">#</th>
                         <th style="padding:10px 6px;text-align:left;">Jogador</th>
-                        <th style="padding:10px 6px;text-align:center;">P</th>
-                        <th style="padding:10px 6px;text-align:center;">V</th>
-                        <th style="padding:10px 6px;text-align:center;">D</th>
-                        <th style="padding:10px 6px;text-align:center;">Win%</th>
-                        <th style="padding:10px 6px;text-align:center;">K</th>
-                        <th style="padding:10px 6px;text-align:center;">Deaths</th>
-                        <th style="padding:10px 6px;text-align:center;">K/D</th>
-                        <th style="padding:10px 6px;text-align:center;">ADR</th>
-                        <th style="padding:10px 6px;text-align:center;">FK</th>
-                        <th style="padding:10px 6px;text-align:center;">RP</th>
+                        <th style="${thStyle}${activeStyle('p')}" onclick="dashSort('p')">P${arrow('p')}</th>
+                        <th style="${thStyle}${activeStyle('v')}" onclick="dashSort('v')">V${arrow('v')}</th>
+                        <th style="${thStyle}${activeStyle('d')}" onclick="dashSort('d')">D${arrow('d')}</th>
+                        <th style="${thStyle}${activeStyle('wr')}" onclick="dashSort('wr')">Win%${arrow('wr')}</th>
+                        <th style="${thStyle}${activeStyle('k')}" onclick="dashSort('k')">K${arrow('k')}</th>
+                        <th style="${thStyle}${activeStyle('deaths')}" onclick="dashSort('deaths')">Deaths${arrow('deaths')}</th>
+                        <th style="${thStyle}${activeStyle('kd')}" onclick="dashSort('kd')">K/D${arrow('kd')}</th>
+                        <th style="${thStyle}${activeStyle('adr')}" onclick="dashSort('adr')">ADR${arrow('adr')}</th>
+                        <th style="${thStyle}${activeStyle('fk')}" onclick="dashSort('fk')">FK${arrow('fk')}</th>
+                        <th style="${thStyle}${activeStyle('rp')}" onclick="dashSort('rp')">RP${arrow('rp')}</th>
                     </tr>
                 </thead>
                 <tbody>`;
