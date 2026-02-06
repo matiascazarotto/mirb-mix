@@ -1005,9 +1005,27 @@ function renderAdminPanel() {
         <!-- Create Match -->
         <div class="card">
             <div class="card-title">Criar Nova Partida</div>
-            <div class="form-group">
-                <label>Nome da Partida (opcional)</label>
-                <input type="text" id="matchName" placeholder="Ex: Mix Quinta-Feira">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Nome da Partida (opcional)</label>
+                    <input type="text" id="matchName" placeholder="Ex: Mix Quinta-Feira">
+                </div>
+                <div class="form-group">
+                    <label>Mapa</label>
+                    <div style="display:flex;gap:8px;">
+                        <select id="matchMap" style="flex:1;">
+                            <option value="">Sem mapa</option>
+                            <option value="Mirage">Mirage</option>
+                            <option value="Inferno">Inferno</option>
+                            <option value="Dust2">Dust2</option>
+                            <option value="Vertigo">Vertigo</option>
+                            <option value="Ancient">Ancient</option>
+                            <option value="Anubis">Anubis</option>
+                            <option value="Nuke">Nuke</option>
+                        </select>
+                        <button type="button" class="btn btn-secondary btn-small" onclick="randomMap()" title="Sortear mapa">🎲</button>
+                    </div>
+                </div>
             </div>
             <div class="selection-counter">
                 <span class="count" id="adminSelectedCount">0</span> / 10 jogadores
@@ -1023,10 +1041,17 @@ function renderAdminPanel() {
             <div class="card-title">Gerenciar Partidas</div>
             <div id="adminMatchesList"><div class="loading-spinner">Carregando</div></div>
         </div>
+
+        <!-- History & Stats -->
+        <div class="card">
+            <div class="card-title">📊 Histórico & Estatísticas</div>
+            <div id="historyContent"><div class="loading-spinner">Carregando</div></div>
+        </div>
     `;
 
     loadAdminPlayers();
     loadAdminMatches();
+    loadHistory();
 }
 
 // ╔══════════════════════════════════╗
@@ -1210,18 +1235,21 @@ async function createMatch() {
     });
 
     const name = document.getElementById('matchName').value.trim() || `Mix ${new Date().toLocaleDateString('pt-BR')}`;
+    const map = document.getElementById('matchMap').value || '';
 
     try {
         await db.collection('matches').add({
             name,
+            map,
             players: matchPlayers,
             status: 'voting',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        toast('Partida criada! Jogadores já podem votar.', 'success');
+        toast(`Partida criada!${map ? ' Mapa: ' + map : ''} Jogadores já podem votar.`, 'success');
         selectedForMatch = [];
         renderPlayerSelectionForMatch();
         document.getElementById('matchName').value = '';
+        document.getElementById('matchMap').value = '';
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -1254,20 +1282,40 @@ async function loadAdminMatches() {
             html += `
                 <div class="match-card ${m.status}">
                     <div class="match-header">
-                        <div class="match-title">${m.name}</div>
+                        <div class="match-title">${m.name}${m.map ? ` <span style="color:var(--text-dim);font-size:14px;">— ${m.map}</span>` : ''}</div>
                         <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Votação Aberta' : '🔴 Encerrada'}</span>
                     </div>
                     <div class="match-players">
                         ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
                     </div>
                     <div class="vote-count-info">📊 ${voteCount} voto(s) recebido(s)</div>
+                    ${m.status === 'closed' && m.result && !m.score ? `
+                        <div style="margin:10px 0;padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;">
+                            <label style="font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;">Registrar Placar</label>
+                            <div style="display:flex;gap:8px;align-items:center;margin-top:6px;">
+                                <span style="color:var(--ct-blue);font-weight:600;font-size:13px;">CT</span>
+                                <input type="number" id="scoreA-${matchId}" min="0" max="99" placeholder="0" style="width:55px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:16px;text-align:center;">
+                                <span style="color:var(--text-dim);">✕</span>
+                                <input type="number" id="scoreB-${matchId}" min="0" max="99" placeholder="0" style="width:55px;padding:6px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:4px;color:var(--text);font-family:'Rajdhani',sans-serif;font-size:16px;text-align:center;">
+                                <span style="color:var(--tr-gold);font-weight:600;font-size:13px;">TR</span>
+                                <button class="btn btn-primary btn-small" onclick="saveScore('${matchId}')">Salvar</button>
+                            </div>
+                        </div>
+                    ` : ''}
+                    ${m.score ? `
+                        <div style="margin:8px 0;font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;">
+                            Placar: <span style="color:var(--ct-blue)">CT ${m.score.a}</span> ✕ <span style="color:var(--tr-gold)">${m.score.b} TR</span>
+                            ${m.score.a > m.score.b ? '<span style="color:var(--ct-blue);font-size:13px;"> — CT Venceu</span>' : m.score.b > m.score.a ? '<span style="color:var(--tr-gold);font-size:13px;"> — TR Venceu</span>' : '<span style="color:var(--text-dim);font-size:13px;"> — Empate</span>'}
+                        </div>
+                    ` : ''}
                     <div class="btn-group">
                         ${m.status === 'voting' ? `
                             <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
                             <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ` : `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Resultado</button>
-                            <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
+                            <button class="btn btn-primary btn-small" onclick="reSortTeams('${matchId}')">🔄 Re-sortear</button>
+                            <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🗳️ Reabrir Votação</button>
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
@@ -1465,13 +1513,13 @@ async function viewMatchResult(matchId) {
             toast('Resultado não disponível.', 'error');
             return;
         }
-        showResultModal(match.name, match.result);
+        showResultModal(match.name, match.result, match.map, match.score, matchId);
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
     }
 }
 
-function showResultModal(title, teams) {
+function showResultModal(title, teams, map, score, matchId) {
     const diff = Math.abs(teams.sumA - teams.sumB);
     const overlay = document.getElementById('editModal');
     overlay.querySelector('.modal-box').innerHTML = `
@@ -1479,6 +1527,10 @@ function showResultModal(title, teams) {
             <span>🏆 ${title}</span>
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
         </div>
+        ${map ? `<div style="text-align:center;color:var(--text-dim);margin-bottom:8px;">🗺️ Mapa: <span style="color:var(--yellow)">${map}</span></div>` : ''}
+        ${score ? `<div style="text-align:center;font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;margin-bottom:8px;">
+            <span style="color:var(--ct-blue)">CT ${score.a}</span> ✕ <span style="color:var(--tr-gold)">${score.b} TR</span>
+        </div>` : ''}
         <div class="diff-display ${diff <= 2 ? 'balanced' : 'unbalanced'}">
             Diferença: <span class="diff-value">${diff}</span> ponto(s)
             ${diff <= 2 ? '<br><span style="color:var(--green);font-size:14px;">✅ Times Balanceados!</span>' : ''}
@@ -1511,24 +1563,221 @@ function showResultModal(title, teams) {
                 <div class="team-total" style="color:var(--tr-gold)">Total: ${teams.sumB}</div>
             </div>
         </div>
-        <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-primary btn-small" onclick="copyResultWhatsApp('${encodeURIComponent(JSON.stringify({name:title,teams}))}')">📱 Copiar p/ WhatsApp</button>
+        <div style="text-align:center;margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+            <button class="btn btn-primary btn-small" onclick="copyResultWhatsApp('${matchId}')">📱 Copiar p/ WhatsApp</button>
+            ${isAdmin && matchId ? `<button class="btn btn-secondary btn-small" onclick="closeEditModal();reSortTeams('${matchId}')">🔄 Re-sortear</button>` : ''}
         </div>
     `;
     overlay.classList.add('active');
 }
 
-function copyResultWhatsApp(encoded) {
-    const { name, teams } = JSON.parse(decodeURIComponent(encoded));
-    let text = `🎮 *${name}* 🎮\n\n`;
-    text += `💙 *TIME CT* (${teams.sumA} pts)\n`;
-    teams.teamA.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
-    text += `\n🧡 *TIME TR* (${teams.sumB} pts)\n`;
-    teams.teamB.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
-    text += `\n📊 Diferença: ${Math.abs(teams.sumA - teams.sumB)} pts`;
-    text += `\n\n_Bom jogo! GLHF!_ 🎯`;
+async function copyResultWhatsApp(matchId) {
+    try {
+        const doc = await db.collection('matches').doc(matchId).get();
+        const match = doc.data();
+        const teams = match.result;
+        const map = match.map;
+        const score = match.score;
 
-    navigator.clipboard.writeText(text).then(() => toast('Copiado!', 'success'));
+        let text = `🎮 *${match.name}* 🎮\n`;
+        if (map) text += `🗺️ *Mapa:* ${map}\n`;
+        text += `\n💙 *TIME CT* (${teams.sumA} pts)\n`;
+        teams.teamA.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
+        text += `\n🧡 *TIME TR* (${teams.sumB} pts)\n`;
+        teams.teamB.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
+        text += `\n📊 Diferença: ${Math.abs(teams.sumA - teams.sumB)} pts`;
+        if (score) text += `\n🏆 *Placar:* CT ${score.a} ✕ ${score.b} TR`;
+        text += `\n\n_Bom jogo! GLHF!_ 🎯`;
+
+        await navigator.clipboard.writeText(text);
+        toast('Copiado!', 'success');
+    } catch (e) {
+        toast('Erro ao copiar: ' + e.message, 'error');
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║         RANDOM MAP              ║
+// ╚══════════════════════════════════╝
+function randomMap() {
+    const maps = ['Mirage', 'Inferno', 'Dust2', 'Vertigo', 'Ancient', 'Anubis', 'Nuke'];
+    const sel = document.getElementById('matchMap');
+    const random = maps[Math.floor(Math.random() * maps.length)];
+    sel.value = random;
+    toast(`🎲 Mapa sorteado: ${random}`, 'success');
+}
+
+// ╔══════════════════════════════════╗
+// ║         RE-SORT TEAMS           ║
+// ╚══════════════════════════════════╝
+async function reSortTeams(matchId) {
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+        const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+
+        if (votesSnap.empty) {
+            toast('Sem votos para recalcular!', 'error');
+            return;
+        }
+
+        const averages = computeAverages(match.players, votesSnap.docs);
+        const playersWithLevels = match.players.map(p => ({
+            ...p,
+            currentLevel: averages[p.id] ? Math.round(averages[p.id].avg) : 10
+        }));
+
+        const teams = balanceTeams(playersWithLevels);
+
+        await db.collection('matches').doc(matchId).update({
+            result: teams
+        });
+
+        toast('Times re-sorteados!', 'success');
+        loadAdminMatches();
+        showResultModal(match.name, teams, match.map, match.score, matchId);
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║         SAVE SCORE              ║
+// ╚══════════════════════════════════╝
+async function saveScore(matchId) {
+    const a = parseInt(document.getElementById(`scoreA-${matchId}`).value);
+    const b = parseInt(document.getElementById(`scoreB-${matchId}`).value);
+
+    if (isNaN(a) || isNaN(b)) {
+        toast('Preencha os dois placares!', 'error');
+        return;
+    }
+
+    try {
+        // Determine winner team players
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+
+        await db.collection('matches').doc(matchId).update({
+            score: { a, b }
+        });
+
+        toast(`Placar salvo: CT ${a} ✕ ${b} TR`, 'success');
+        loadAdminMatches();
+        loadHistory();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+// ╔══════════════════════════════════╗
+// ║      HISTORY & STATISTICS       ║
+// ╚══════════════════════════════════╝
+async function loadHistory() {
+    const el = document.getElementById('historyContent');
+    if (!el) return;
+
+    try {
+        const snap = await db.collection('matches')
+            .where('status', '==', 'closed')
+            .orderBy('createdAt', 'desc')
+            .get();
+
+        const matchesWithScore = snap.docs.filter(d => d.data().score && d.data().result);
+
+        if (!matchesWithScore.length) {
+            el.innerHTML = '<div class="empty-state"><p>Nenhuma partida com placar registrado.</p><p style="font-size:13px;margin-top:4px;">Encerre uma partida e registre o placar para ver estatísticas.</p></div>';
+            return;
+        }
+
+        // Compute player stats
+        const stats = {};
+
+        matchesWithScore.forEach(doc => {
+            const m = doc.data();
+            const winnerTeam = m.score.a > m.score.b ? 'teamA' : m.score.b > m.score.a ? 'teamB' : 'draw';
+
+            ['teamA', 'teamB'].forEach(team => {
+                m.result[team].forEach(p => {
+                    if (!stats[p.name]) {
+                        stats[p.name] = { wins: 0, losses: 0, draws: 0, total: 0 };
+                    }
+                    stats[p.name].total++;
+                    if (winnerTeam === 'draw') {
+                        stats[p.name].draws++;
+                    } else if (winnerTeam === team) {
+                        stats[p.name].wins++;
+                    } else {
+                        stats[p.name].losses++;
+                    }
+                });
+            });
+        });
+
+        // Sort by winrate
+        const sorted = Object.entries(stats).sort((a, b) => {
+            const wrA = a[1].total > 0 ? a[1].wins / a[1].total : 0;
+            const wrB = b[1].total > 0 ? b[1].wins / b[1].total : 0;
+            return wrB - wrA;
+        });
+
+        let html = `
+            <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;">${matchesWithScore.length} partida(s) com placar</div>
+            <div style="display:grid;gap:6px;">
+                <div style="display:grid;grid-template-columns:1fr 50px 50px 50px 60px;gap:8px;padding:8px 12px;font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;">
+                    <span>Jogador</span><span style="text-align:center">V</span><span style="text-align:center">D</span><span style="text-align:center">E</span><span style="text-align:center">Win%</span>
+                </div>
+        `;
+
+        sorted.forEach(([name, s], i) => {
+            const wr = s.total > 0 ? ((s.wins / s.total) * 100).toFixed(0) : 0;
+            const wrColor = wr >= 60 ? 'var(--green)' : wr >= 40 ? 'var(--yellow)' : 'var(--red)';
+            html += `
+                <div style="display:grid;grid-template-columns:1fr 50px 50px 50px 60px;gap:8px;padding:10px 12px;background:rgba(255,255,255,0.03);border-radius:6px;align-items:center;">
+                    <span style="font-family:'Rajdhani',sans-serif;font-weight:600;color:var(--yellow);font-size:15px;">
+                        ${i < 3 ? ['🥇','🥈','🥉'][i] : ''} ${name}
+                        <span style="color:var(--text-dim);font-size:12px;font-weight:400;">(${s.total})</span>
+                    </span>
+                    <span style="text-align:center;color:var(--green);font-weight:600;">${s.wins}</span>
+                    <span style="text-align:center;color:var(--red);font-weight:600;">${s.losses}</span>
+                    <span style="text-align:center;color:var(--text-dim);font-weight:600;">${s.draws}</span>
+                    <span style="text-align:center;font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:${wrColor};">${wr}%</span>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+
+        // Recent matches list
+        html += '<div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);"><div style="font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">Últimas Partidas</div>';
+
+        matchesWithScore.slice(0, 10).forEach(doc => {
+            const m = doc.data();
+            const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '—';
+            const winner = m.score.a > m.score.b ? 'CT' : m.score.b > m.score.a ? 'TR' : 'Empate';
+            const winColor = winner === 'CT' ? 'var(--ct-blue)' : winner === 'TR' ? 'var(--tr-gold)' : 'var(--text-dim)';
+            html += `
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:rgba(255,255,255,0.02);border-radius:6px;margin-bottom:4px;">
+                    <div>
+                        <span style="font-weight:600;font-size:14px;">${m.name}</span>
+                        ${m.map ? `<span style="color:var(--text-dim);font-size:12px;"> — ${m.map}</span>` : ''}
+                        <span style="color:var(--text-dim);font-size:12px;margin-left:6px;">${date}</span>
+                    </div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-weight:700;">
+                        <span style="color:var(--ct-blue)">${m.score.a}</span>
+                        <span style="color:var(--text-dim)">✕</span>
+                        <span style="color:var(--tr-gold)">${m.score.b}</span>
+                        <span style="color:${winColor};font-size:12px;margin-left:6px;">${winner}</span>
+                    </div>
+                </div>
+            `;
+        });
+
+        html += '</div>';
+        el.innerHTML = html;
+    } catch (e) {
+        el.innerHTML = `<p style="color:var(--red)">Erro: ${e.message}</p>`;
+    }
 }
 
 // ╔══════════════════════════════════╗
@@ -1676,13 +1925,18 @@ async function loadMatchesPage() {
             html += `
                 <div class="match-card ${m.status}">
                     <div class="match-header">
-                        <div class="match-title">${m.name}</div>
+                        <div class="match-title">${m.name}${m.map ? ` <span style="color:var(--text-dim);font-size:14px;">— ${m.map}</span>` : ''}</div>
                         <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Votação Aberta' : '🔴 Encerrada'}</span>
                     </div>
                     <div class="match-players">
                         ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
                     </div>
                     <div class="vote-count-info">📊 ${votesSnap.size} voto(s)</div>
+                    ${m.score ? `
+                        <div style="margin:6px 0;font-family:'Rajdhani',sans-serif;font-size:17px;font-weight:700;">
+                            <span style="color:var(--ct-blue)">CT ${m.score.a}</span> ✕ <span style="color:var(--tr-gold)">${m.score.b} TR</span>
+                        </div>
+                    ` : ''}
                     ${m.status === 'closed' && m.result ? `
                         <button class="btn btn-secondary btn-small" style="margin-top:10px;" onclick="viewMatchResult('${matchId}')">
                             🏆 Ver Resultado
