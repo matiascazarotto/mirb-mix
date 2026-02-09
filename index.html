@@ -1827,6 +1827,55 @@ async function loadMatchesPage() {
             const matchId = doc.id;
             const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
 
+            // Compute MVP and worst player from gcStats (aggregated per player)
+            let mvpHtml = '';
+            let worstHtml = '';
+            if (m.gcStats && m.gcStats.length > 0) {
+                const agg = {};
+                m.gcStats.forEach(s => {
+                    const key = s.playerId || s.gcName;
+                    if (!agg[key]) {
+                        agg[key] = { name: s.playerName, avatar: s.avatar || '', kills: 0, deaths: 0, adrSum: 0, matches: 0 };
+                    }
+                    agg[key].kills += s.k;
+                    agg[key].deaths += s.d;
+                    agg[key].adrSum += s.adr;
+                    agg[key].matches++;
+                });
+                const entries = Object.values(agg);
+                const byAdr = [...entries].sort((a, b) => (b.adrSum / b.matches) - (a.adrSum / a.matches));
+                const mvp = byAdr[0];
+                const worst = byAdr[byAdr.length - 1];
+                const mvpAdr = (mvp.adrSum / mvp.matches).toFixed(1);
+                const mvpKdr = (mvp.deaths > 0 ? mvp.kills / mvp.deaths : mvp.kills).toFixed(2);
+                const worstAdr = (worst.adrSum / worst.matches).toFixed(1);
+                const worstKdr = (worst.deaths > 0 ? worst.kills / worst.deaths : worst.kills).toFixed(2);
+
+                mvpHtml = `
+                    <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
+                        <div style="flex:1;min-width:180px;padding:10px 14px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.2);border-radius:8px;display:flex;align-items:center;gap:10px;">
+                            <div style="font-size:24px;">⭐</div>
+                            ${mvp.avatar ? `<img src="${mvp.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--green);">` : ''}
+                            <div>
+                                <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:600;">MVP</div>
+                                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--yellow);">${mvp.name}</div>
+                                <div style="font-size:11px;color:var(--text-dim);">${mvp.kills}K • ADR ${mvpAdr} • KDR ${mvpKdr}</div>
+                            </div>
+                        </div>
+                        <div style="flex:1;min-width:180px;padding:10px 14px;background:rgba(255,61,61,0.06);border:1px solid rgba(255,61,61,0.2);border-radius:8px;display:flex;align-items:center;gap:10px;">
+                            <div style="font-size:24px;">🗑️</div>
+                            ${worst.avatar ? `<img src="${worst.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--red);">` : ''}
+                            <div>
+                                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:600;">Pior Jogador</div>
+                                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--yellow);">${worst.name}</div>
+                                <div style="font-size:11px;color:var(--text-dim);">${worst.kills}K • ADR ${worstAdr} • KDR ${worstKdr}</div>
+                            </div>
+                        </div>
+                    </div>`;
+            }
+
+            const gcCount = m.gcMatchCount || 0;
+
             html += `
                 <div class="match-card ${m.status}">
                     <div class="match-header">
@@ -1837,11 +1886,13 @@ async function loadMatchesPage() {
                         ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
                     </div>
                     <div class="vote-count-info">📊 ${votesSnap.size} voto(s)</div>
-                    ${m.status === 'closed' && m.result ? `
-                        <button class="btn btn-secondary btn-small" style="margin-top:10px;" onclick="viewMatchResult('${matchId}')">
-                            🏆 Ver Resultado
-                        </button>
-                    ` : ''}
+                    ${mvpHtml}
+                    <div class="btn-group" style="margin-top:12px;">
+                        ${m.status === 'closed' && m.result ? `
+                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Resultado</button>
+                        ` : ''}
+                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Stats GC${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
+                    </div>
                 </div>
             `;
         }
