@@ -1407,7 +1407,8 @@ async function loadAdminMatches() {
                             <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ` : `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Resultado</button>
-                            ${!m.gcStats ? `<button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Importar Stats GC</button>` : `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Stats GC</button>`}
+                            <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
+                            ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Stats GC${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
                             <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
@@ -2258,10 +2259,11 @@ function dashRecord(title, rec) {
 // ║     GC IMPORT INTO MATCH        ║
 // ╚══════════════════════════════════╝
 let gcImportMatchId = null;
-let gcImportData = [];
+let gcImportSlotCount = 0;
 
 function openGCImport(matchId) {
     gcImportMatchId = matchId;
+    gcImportSlotCount = 0;
     const overlay = document.getElementById('editModal');
     overlay.querySelector('.modal-box').innerHTML = `
         <div class="card-title">
@@ -2269,90 +2271,165 @@ function openGCImport(matchId) {
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
         </div>
         <p style="color:var(--text-dim);font-size:13px;margin:10px 0;">
-            Cole o JSON extraído do Gamers Club. Abra a partida no GC → F12 → Console → cole o snippet abaixo:
+            Cole o JSON de cada partida GC. Abra a partida no GC → F12 → Console → cole o snippet.
         </p>
         <div style="display:flex;gap:8px;margin-bottom:12px;">
             <button class="btn btn-secondary btn-small" onclick="copySnippet()" style="white-space:nowrap;">📋 Copiar Snippet</button>
-            <span style="color:var(--text-dim);font-size:11px;align-self:center;">Cole no Console (F12) da partida no Gamers Club, depois cole o resultado aqui.</span>
+            <span style="color:var(--text-dim);font-size:11px;align-self:center;">Cole no Console (F12) da partida no Gamers Club.</span>
         </div>
-        <div class="form-group">
-            <textarea id="gcImportJson" rows="4" placeholder='Cole o JSON aqui...'
-                style="width:100%;padding:10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;resize:vertical;"></textarea>
+        <div id="gcImportSlots"></div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
+            <button class="btn btn-secondary btn-small" onclick="addGCImportSlot()">＋ Adicionar Partida GC</button>
+            <button class="btn btn-primary" onclick="processAllGCImports()">📊 Processar Todas</button>
         </div>
-        <button class="btn btn-primary" onclick="processGCImport()">Processar</button>
         <div id="gcImportResult" style="margin-top:16px;"></div>
     `;
     overlay.classList.add('active');
+    addGCImportSlot();
 }
 
-async function processGCImport() {
-    const raw = document.getElementById('gcImportJson').value.trim();
-    if (!raw) { toast('Cole o JSON primeiro!', 'error'); return; }
+function addGCImportSlot() {
+    gcImportSlotCount++;
+    const idx = gcImportSlotCount;
+    const container = document.getElementById('gcImportSlots');
+    const slot = document.createElement('div');
+    slot.id = `gcImpSlot-${idx}`;
+    slot.style.cssText = 'position:relative;margin-bottom:10px;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px;background:rgba(255,255,255,0.02);transition:border-color 0.2s;';
+    slot.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--ct-blue);letter-spacing:1px;">🎮 PARTIDA GC ${idx}</span>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span id="gcImpStatus-${idx}" style="font-size:11px;color:var(--text-dim);"></span>
+                ${idx > 1 ? `<button onclick="removeGCImportSlot(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;opacity:0.6;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remover">✕</button>` : ''}
+            </div>
+        </div>
+        <textarea id="gcImpJson-${idx}" rows="2" placeholder='Cole o JSON da partida GC ${idx}...'
+            oninput="validateGCImportSlot(${idx})"
+            style="width:100%;padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;resize:vertical;"></textarea>
+    `;
+    container.appendChild(slot);
+    slot.querySelector('textarea').focus();
+}
 
-    try {
-        gcImportData = JSON.parse(raw);
-        if (!Array.isArray(gcImportData) || !gcImportData.length) throw new Error('vazio');
-    } catch (e) {
-        toast('JSON inválido!', 'error');
+function removeGCImportSlot(idx) {
+    const slot = document.getElementById(`gcImpSlot-${idx}`);
+    if (slot) {
+        slot.style.opacity = '0';
+        slot.style.transform = 'translateX(20px)';
+        slot.style.transition = 'opacity 0.2s, transform 0.2s';
+        setTimeout(() => slot.remove(), 200);
+    }
+}
+
+function validateGCImportSlot(idx) {
+    const textarea = document.getElementById(`gcImpJson-${idx}`);
+    const status = document.getElementById(`gcImpStatus-${idx}`);
+    const slot = document.getElementById(`gcImpSlot-${idx}`);
+    const raw = textarea.value.trim();
+    if (!raw) {
+        status.textContent = '';
+        slot.style.borderColor = 'rgba(255,255,255,0.06)';
         return;
     }
+    try {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data) && data.length > 0) {
+            status.textContent = `✅ ${data.length} jogadores`;
+            status.style.color = 'var(--green)';
+            slot.style.borderColor = 'rgba(0,200,83,0.3)';
+        } else { throw new Error(); }
+    } catch {
+        status.textContent = '❌ JSON inválido';
+        status.style.color = 'var(--red)';
+        slot.style.borderColor = 'rgba(255,61,61,0.3)';
+    }
+}
 
-    // Refresh players to get latest gcId mappings
-    const snap = await db.collection('players').orderBy('name').get();
-    players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+async function processAllGCImports() {
+    const slots = document.querySelectorAll('[id^="gcImpJson-"]');
+    const allParsed = [];
+    let errors = [];
 
-    // Try auto-match by gcId
-    const matched = [];
-    const unmatched = [];
-
-    gcImportData.forEach(gc => {
-        const gcId = gc.gcId || '';
-        // Try to find player by gcId
-        const byGcId = gcId ? players.find(p => p.gcId === gcId) : null;
-        if (byGcId) {
-            matched.push({ gc, player: byGcId });
-        } else {
-            // Try by exact name match
-            const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
-            if (byName) {
-                matched.push({ gc, player: byName, needsLink: true });
-            } else {
-                unmatched.push(gc);
-            }
+    slots.forEach(textarea => {
+        const raw = textarea.value.trim();
+        const slotId = textarea.id.replace('gcImpJson-', '');
+        if (!raw) return;
+        try {
+            const data = JSON.parse(raw);
+            if (!Array.isArray(data) || !data.length) throw new Error();
+            allParsed.push({ slotId, data });
+        } catch {
+            errors.push(`Partida GC ${slotId}`);
         }
     });
 
-    renderGCImportResult(matched, unmatched);
+    if (allParsed.length === 0) {
+        toast(errors.length ? `JSON inválido em: ${errors.join(', ')}` : 'Cole pelo menos um JSON!', 'error');
+        return;
+    }
+
+    if (errors.length) {
+        toast(`⚠️ Erro em: ${errors.join(', ')} — essas serão ignoradas.`, 'error');
+    }
+
+    // Refresh players
+    const snap = await db.collection('players').orderBy('name').get();
+    players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    // Process each GC match
+    const allMatched = [];
+    const allUnmatched = [];
+
+    allParsed.forEach(({ slotId, data }) => {
+        data.forEach(gc => {
+            const gcId = gc.gcId || '';
+            const byGcId = gcId ? players.find(p => p.gcId === gcId) : null;
+            if (byGcId) {
+                allMatched.push({ gc, player: byGcId, gcMatchIdx: slotId });
+            } else {
+                const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
+                if (byName) {
+                    allMatched.push({ gc, player: byName, needsLink: true, gcMatchIdx: slotId });
+                } else {
+                    allUnmatched.push({ gc, gcMatchIdx: slotId });
+                }
+            }
+        });
+    });
+
+    renderGCImportResult(allMatched, allUnmatched, allParsed);
 }
 
-function renderGCImportResult(matched, unmatched) {
+function renderGCImportResult(matched, unmatched, allParsed) {
     const el = document.getElementById('gcImportResult');
+    const totalGCMatches = allParsed.length;
 
-    let html = '';
+    let html = `<div style="margin-bottom:8px;padding:8px 12px;background:rgba(0,200,83,0.08);border-radius:6px;font-size:13px;color:var(--green);">📊 ${totalGCMatches} partida(s) GC detectada(s)</div>`;
 
     if (matched.length) {
-        html += `<div style="margin-bottom:12px;color:var(--green);font-size:13px;font-weight:600;">✅ ${matched.length} jogador(es) vinculados automaticamente</div>`;
+        html += `<div style="margin-bottom:8px;color:var(--green);font-size:13px;font-weight:600;">✅ ${matched.length} jogador(es) vinculados</div>`;
         html += matched.map(m => `
-            <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;">
-                ${m.gc.avatar ? `<img src="${m.gc.avatar}" style="width:24px;height:24px;border-radius:50%;">` : ''}
+            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;">
+                ${m.gc.avatar ? `<img src="${m.gc.avatar}" style="width:20px;height:20px;border-radius:50%;">` : ''}
                 <span style="color:var(--yellow);">${m.gc.name}</span>
                 <span style="color:var(--text-dim);">→</span>
                 <span style="color:var(--green);">${m.player.name}</span>
-                ${m.needsLink ? `<span style="color:var(--blue);font-size:11px;">(vincular GC ID)</span>` : ''}
+                <span style="color:var(--text-dim);font-size:10px;">(GC #${m.gcMatchIdx})</span>
             </div>
         `).join('');
     }
 
     if (unmatched.length) {
-        html += `<div style="margin:16px 0 8px;color:var(--yellow);font-size:13px;font-weight:600;">⚠️ ${unmatched.length} jogador(es) sem vínculo — associe abaixo:</div>`;
-        unmatched.forEach((gc, idx) => {
+        html += `<div style="margin:12px 0 8px;color:var(--yellow);font-size:13px;font-weight:600;">⚠️ ${unmatched.length} jogador(es) sem vínculo:</div>`;
+        unmatched.forEach((item, idx) => {
             html += `
-                <div style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:13px;flex-wrap:wrap;">
-                    ${gc.avatar ? `<img src="${gc.avatar}" style="width:24px;height:24px;border-radius:50%;">` : ''}
-                    <span style="color:var(--yellow);min-width:100px;">${gc.name}</span>
+                <div style="display:flex;align-items:center;gap:6px;padding:6px 0;font-size:12px;flex-wrap:wrap;">
+                    ${item.gc.avatar ? `<img src="${item.gc.avatar}" style="width:20px;height:20px;border-radius:50%;">` : ''}
+                    <span style="color:var(--yellow);min-width:80px;">${item.gc.name}</span>
+                    <span style="color:var(--text-dim);font-size:10px;">(GC #${item.gcMatchIdx})</span>
                     <span style="color:var(--text-dim);">→</span>
-                    <select id="gcLink-${idx}" style="flex:1;min-width:140px;padding:6px 8px;background:#0a0e17;border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#e8eaf0;font-size:13px;">
-                        <option value="">— Selecionar jogador —</option>
+                    <select id="gcLink-${idx}" style="flex:1;min-width:120px;padding:4px 6px;background:#0a0e17;border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#e8eaf0;font-size:12px;">
+                        <option value="">— Selecionar —</option>
                         ${players.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
                     </select>
                 </div>
@@ -2360,58 +2437,48 @@ function renderGCImportResult(matched, unmatched) {
         });
     }
 
-    html += `<button class="btn btn-primary" style="margin-top:16px;" onclick="saveGCImport()">💾 Salvar Stats na Partida</button>`;
+    // Store data for saving
+    window._gcImportMatched = matched;
+    window._gcImportUnmatched = unmatched;
+    window._gcImportParsed = allParsed;
 
+    html += `<button class="btn btn-primary" style="margin-top:16px;" onclick="saveGCImport()">💾 Salvar Stats na Partida</button>`;
     el.innerHTML = html;
 }
 
 async function saveGCImport() {
-    // Refresh players
     const snap = await db.collection('players').orderBy('name').get();
     players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const matched = [];
-    const unmatched = [];
-
-    gcImportData.forEach(gc => {
-        const gcId = gc.gcId || '';
-        const byGcId = gcId ? players.find(p => p.gcId === gcId) : null;
-        if (byGcId) {
-            matched.push({ gc, player: byGcId });
-        } else {
-            const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
-            if (byName) {
-                matched.push({ gc, player: byName, needsLink: true });
-            } else {
-                unmatched.push(gc);
-            }
-        }
-    });
+    const matched = window._gcImportMatched || [];
+    const unmatched = window._gcImportUnmatched || [];
+    const allParsed = window._gcImportParsed || [];
 
     // Resolve unmatched from selects
     const allLinked = [...matched];
     for (let i = 0; i < unmatched.length; i++) {
         const sel = document.getElementById(`gcLink-${i}`);
         if (!sel || !sel.value) {
-            toast(`Associe o jogador "${unmatched[i].name}" antes de salvar!`, 'error');
+            toast(`Associe o jogador "${unmatched[i].gc.name}" antes de salvar!`, 'error');
             return;
         }
         const player = players.find(p => p.id === sel.value);
         if (player) {
-            allLinked.push({ gc: unmatched[i], player, needsLink: true });
+            allLinked.push({ gc: unmatched[i].gc, player, needsLink: true, gcMatchIdx: unmatched[i].gcMatchIdx });
         }
     }
 
     try {
-        // Save gcId on players that need linking
         const batch = db.batch();
+
+        // Link gcIds
         for (const entry of allLinked) {
             if (entry.needsLink && entry.gc.gcId) {
                 batch.update(db.collection('players').doc(entry.player.id), { gcId: entry.gc.gcId });
             }
         }
 
-        // Build gcStats array
+        // Build gcStats array — each entry gets a gcMatchIdx to identify which GC match it came from
         const gcStats = allLinked.map(e => ({
             playerId: e.player.id,
             playerName: e.player.name,
@@ -2426,14 +2493,18 @@ async function saveGCImport() {
             kdr: e.gc.kdr,
             kast: e.gc.kast,
             fk: e.gc.fk,
-            rp: e.gc.rp
+            rp: e.gc.rp,
+            gcMatchIdx: parseInt(e.gcMatchIdx) || 1
         }));
 
-        // Save gcStats on match
-        batch.update(db.collection('matches').doc(gcImportMatchId), { gcStats });
+        // Save on match — also store how many GC matches were imported
+        batch.update(db.collection('matches').doc(gcImportMatchId), {
+            gcStats,
+            gcMatchCount: allParsed.length
+        });
         await batch.commit();
 
-        toast('✅ Stats GC salvas e jogadores vinculados!', 'success');
+        toast(`✅ Stats de ${allParsed.length} partida(s) GC salvas!`, 'success');
         closeEditModal();
         await loadAdminPlayers();
         loadAdminMatches();
@@ -2447,64 +2518,150 @@ function viewGCStats(matchId) {
         const m = doc.data();
         if (!m.gcStats) { toast('Sem stats GC.', 'error'); return; }
 
-        const stats = m.gcStats.sort((a, b) => b.k - a.k);
         const overlay = document.getElementById('editModal');
+        const gcMatchCount = m.gcMatchCount || 1;
+
+        // Group stats by gcMatchIdx
+        const byMatch = {};
+        m.gcStats.forEach(s => {
+            const idx = s.gcMatchIdx || 1;
+            if (!byMatch[idx]) byMatch[idx] = [];
+            byMatch[idx].push(s);
+        });
+
+        const matchKeys = Object.keys(byMatch).sort((a, b) => a - b);
+        const hasMultiple = matchKeys.length > 1;
 
         let html = `
             <div class="card-title">
-                <span>📊 Stats GC — ${m.name}</span>
+                <span>📊 Stats GC — ${m.name} ${hasMultiple ? `(${matchKeys.length} partidas)` : ''}</span>
                 <button class="modal-close" onclick="closeEditModal()">&times;</button>
             </div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
-                <thead>
-                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;">
-                        <th style="padding:8px 6px;text-align:left;">#</th>
-                        <th style="padding:8px 6px;text-align:left;">Jogador</th>
-                        <th style="padding:8px 6px;text-align:center;">K</th>
-                        <th style="padding:8px 6px;text-align:center;">A</th>
-                        <th style="padding:8px 6px;text-align:center;">D</th>
-                        <th style="padding:8px 6px;text-align:center;">Diff</th>
-                        <th style="padding:8px 6px;text-align:center;">ADR</th>
-                        <th style="padding:8px 6px;text-align:center;">KDR</th>
-                        <th style="padding:8px 6px;text-align:center;">KAST</th>
-                        <th style="padding:8px 6px;text-align:center;">FK</th>
-                        <th style="padding:8px 6px;text-align:center;">RP</th>
-                    </tr>
-                </thead>
-                <tbody>`;
+        `;
 
-        stats.forEach((p, idx) => {
-            const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
-            const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
-            const kdrColor = p.kdr >= 1 ? 'var(--green)' : 'var(--yellow)';
-            html += `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${idx < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
-                    <td style="padding:8px 6px;color:var(--text-dim);">${idx < 3 ? ['🥇','🥈','🥉'][idx] : idx+1}</td>
-                    <td style="padding:8px 6px;">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
-                            <div>
-                                <span style="font-weight:600;color:var(--yellow);font-size:14px;">${p.playerName}</span>
-                                ${p.gcName !== p.playerName ? `<span style="color:var(--text-dim);font-size:11px;margin-left:4px;">(${p.gcName})</span>` : ''}
-                            </div>
-                        </div>
-                    </td>
-                    <td style="padding:8px 6px;text-align:center;color:var(--green);font-weight:700;">${p.k}</td>
-                    <td style="padding:8px 6px;text-align:center;">${p.a}</td>
-                    <td style="padding:8px 6px;text-align:center;color:var(--red);">${p.d}</td>
-                    <td style="padding:8px 6px;text-align:center;color:${diffColor};font-weight:600;">${p.diff > 0 ? '+' : ''}${p.diff}</td>
-                    <td style="padding:8px 6px;text-align:center;">${p.adr}</td>
-                    <td style="padding:8px 6px;text-align:center;color:${kdrColor};font-weight:600;">${p.kdr}</td>
-                    <td style="padding:8px 6px;text-align:center;">${p.kast}%</td>
-                    <td style="padding:8px 6px;text-align:center;">${p.fk}</td>
-                    <td style="padding:8px 6px;text-align:center;color:${rpColor};font-weight:700;">${p.rp > 0 ? '+' : ''}${p.rp}</td>
-                </tr>`;
+        // Tabs if multiple matches
+        if (hasMultiple) {
+            html += `<div style="display:flex;gap:6px;margin:12px 0;flex-wrap:wrap;">
+                <button class="btn btn-secondary btn-small" style="font-size:11px;" onclick="gcViewShowTab('all', this)">📊 Agregado</button>`;
+            matchKeys.forEach(k => {
+                html += `<button class="btn btn-secondary btn-small" style="font-size:11px;" onclick="gcViewShowTab('${k}', this)">GC #${k}</button>`;
+            });
+            html += `</div>`;
+        }
+
+        // Aggregated view
+        if (hasMultiple) {
+            const aggregated = {};
+            m.gcStats.forEach(s => {
+                const key = s.playerId || s.gcName;
+                if (!aggregated[key]) {
+                    aggregated[key] = { ...s, matches: 1 };
+                } else {
+                    aggregated[key].k += s.k;
+                    aggregated[key].a += s.a;
+                    aggregated[key].d += s.d;
+                    aggregated[key].diff += s.diff;
+                    aggregated[key].adr += s.adr;
+                    aggregated[key].kdr += s.kdr;
+                    aggregated[key].kast += s.kast;
+                    aggregated[key].fk += s.fk;
+                    aggregated[key].rp += s.rp;
+                    aggregated[key].matches += 1;
+                    if (!aggregated[key].avatar && s.avatar) aggregated[key].avatar = s.avatar;
+                }
+            });
+            const aggEntries = Object.values(aggregated).sort((a, b) => b.k - a.k);
+            html += `<div id="gcViewTab-all">${buildGCStatsTable(aggEntries, true)}</div>`;
+        }
+
+        // Individual match views
+        matchKeys.forEach(k => {
+            const stats = byMatch[k].sort((a, b) => b.k - a.k);
+            const display = hasMultiple ? 'none' : 'block';
+            html += `<div id="gcViewTab-${k}" style="display:${display};">${buildGCStatsTable(stats, false)}</div>`;
         });
 
-        html += '</tbody></table>';
         overlay.querySelector('.modal-box').innerHTML = html;
         overlay.classList.add('active');
     });
+}
+
+function gcViewShowTab(tabKey, btn) {
+    // Hide all tabs
+    document.querySelectorAll('[id^="gcViewTab-"]').forEach(el => el.style.display = 'none');
+    // Show selected
+    const tab = document.getElementById(`gcViewTab-${tabKey}`);
+    if (tab) tab.style.display = 'block';
+    // Highlight active button
+    if (btn) {
+        btn.parentElement.querySelectorAll('button').forEach(b => {
+            b.style.background = 'rgba(255,255,255,0.08)';
+            b.style.color = 'var(--text)';
+            b.style.borderColor = 'rgba(255,255,255,0.1)';
+        });
+        btn.style.background = 'rgba(0,200,83,0.12)';
+        btn.style.color = 'var(--green)';
+        btn.style.borderColor = 'var(--green)';
+    }
+}
+
+function buildGCStatsTable(stats, isAggregated) {
+    let html = `
+        <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;">
+            <thead>
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;">
+                    <th style="padding:8px 6px;text-align:left;">#</th>
+                    <th style="padding:8px 6px;text-align:left;">Jogador</th>
+                    <th style="padding:8px 6px;text-align:center;">K</th>
+                    <th style="padding:8px 6px;text-align:center;">A</th>
+                    <th style="padding:8px 6px;text-align:center;">D</th>
+                    <th style="padding:8px 6px;text-align:center;">Diff</th>
+                    <th style="padding:8px 6px;text-align:center;">ADR</th>
+                    <th style="padding:8px 6px;text-align:center;">KDR</th>
+                    <th style="padding:8px 6px;text-align:center;">KAST</th>
+                    <th style="padding:8px 6px;text-align:center;">FK</th>
+                    <th style="padding:8px 6px;text-align:center;">RP</th>
+                    ${isAggregated ? '<th style="padding:8px 6px;text-align:center;">P</th>' : ''}
+                </tr>
+            </thead>
+            <tbody>`;
+
+    stats.forEach((p, idx) => {
+        const m = p.matches || 1;
+        const adr = isAggregated ? (p.adr / m).toFixed(1) : p.adr;
+        const kdr = isAggregated ? (p.kdr / m).toFixed(2) : p.kdr;
+        const kast = isAggregated ? Math.round(p.kast / m) : p.kast;
+        const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
+        const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
+        const kdrVal = isAggregated ? parseFloat(kdr) : p.kdr;
+        const kdrColor = kdrVal >= 1 ? 'var(--green)' : 'var(--yellow)';
+        html += `
+            <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${idx < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
+                <td style="padding:8px 6px;color:var(--text-dim);">${idx < 3 ? ['🥇','🥈','🥉'][idx] : idx+1}</td>
+                <td style="padding:8px 6px;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
+                        <div>
+                            <span style="font-weight:600;color:var(--yellow);font-size:14px;">${p.playerName}</span>
+                            ${p.gcName !== p.playerName ? `<span style="color:var(--text-dim);font-size:11px;margin-left:4px;">(${p.gcName})</span>` : ''}
+                        </div>
+                    </div>
+                </td>
+                <td style="padding:8px 6px;text-align:center;color:var(--green);font-weight:700;">${p.k}</td>
+                <td style="padding:8px 6px;text-align:center;">${p.a}</td>
+                <td style="padding:8px 6px;text-align:center;color:var(--red);">${p.d}</td>
+                <td style="padding:8px 6px;text-align:center;color:${diffColor};font-weight:600;">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                <td style="padding:8px 6px;text-align:center;">${adr}</td>
+                <td style="padding:8px 6px;text-align:center;color:${kdrColor};font-weight:600;">${kdr}</td>
+                <td style="padding:8px 6px;text-align:center;">${kast}%</td>
+                <td style="padding:8px 6px;text-align:center;">${p.fk}</td>
+                <td style="padding:8px 6px;text-align:center;color:${rpColor};font-weight:700;">${p.rp > 0 ? '+' : ''}${p.rp}</td>
+                ${isAggregated ? `<td style="padding:8px 6px;text-align:center;color:var(--text-dim);">${m}</td>` : ''}
+            </tr>`;
+    });
+
+    html += '</tbody></table>';
+    return html;
 }
 
 // ╔══════════════════════════════════╗
@@ -2530,8 +2687,8 @@ function addGCMatchSlot() {
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
             <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--ct-blue);letter-spacing:1px;">🎮 PARTIDA ${idx}</span>
             <div style="display:flex;align-items:center;gap:8px;">
-                <span class="gcSlotStatus" id="gcSlotStatus-${idx}" style="font-size:11px;color:var(--text-dim);"></span>
-                <button onclick="removeGCMatchSlot(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;opacity:0.6;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remover partida">✕</button>
+                <span id="gcSlotStatus-${idx}" style="font-size:11px;color:var(--text-dim);"></span>
+                ${idx > 1 ? `<button onclick="removeGCMatchSlot(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;opacity:0.6;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remover partida">✕</button>` : ''}
             </div>
         </div>
         <textarea id="gcJsonInput-${idx}" rows="2" placeholder='Cole aqui o JSON da partida ${idx} (Ctrl+V)...'
@@ -2568,9 +2725,7 @@ function validateGCSlot(idx) {
             status.textContent = `✅ ${data.length} jogadores`;
             status.style.color = 'var(--green)';
             slot.style.borderColor = 'rgba(0,200,83,0.3)';
-        } else {
-            throw new Error();
-        }
+        } else { throw new Error(); }
     } catch {
         status.textContent = '❌ JSON inválido';
         status.style.color = 'var(--red)';
