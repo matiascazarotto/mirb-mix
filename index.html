@@ -818,6 +818,9 @@
     <button class="nav-btn" onclick="showPage('stats')">
         <span class="icon">🎮</span> GC
     </button>
+    <button class="nav-btn" onclick="showPage('h2h')">
+        <span class="icon">⚔️</span> 1 vs 1
+    </button>
 </nav>
 
 <div class="container">
@@ -935,9 +938,12 @@
 
         <div id="dashContent"><div class="empty-state"><div class="icon">🏆</div><p>Carregando estatísticas...</p></div></div>
 
-        <!-- Head-to-Head -->
-        <div class="card" id="h2hCard" style="display:none;">
-            <div class="card-title">📊 Comparar Jogadores</div>
+    </div>
+
+    <!-- ════════════ PAGE: H2H (1 vs 1) ════════════ -->
+    <div id="page-h2h" class="page">
+        <div class="card" id="h2hCard">
+            <div class="card-title">⚔️ Comparar Jogadores</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;">
                 <div class="form-group" style="margin-bottom:0;flex:1;min-width:130px;">
                     <label style="font-size:11px;">Jogador 1</label>
@@ -957,8 +963,6 @@
             <div id="h2hResult"></div>
         </div>
     </div>
-
-    <!-- ════════════ PAGE: STATS GC ════════════ -->
     <div id="page-stats" class="page">
         <div class="card">
             <div class="card-title">📊 Stats Gamers Club</div>
@@ -1087,6 +1091,7 @@ function showPage(name) {
     if (name === 'matches') loadMatchesPage();
     if (name === 'admin' && isAdmin) renderAdminPanel();
     if (name === 'dashboard') loadDashboard();
+    if (name === 'h2h') loadH2HPage();
 }
 
 // ╔══════════════════════════════════╗
@@ -2596,13 +2601,32 @@ async function loadAdminLiveStatus() {
 // ╔══════════════════════════════════╗
 // ║       HEAD-TO-HEAD              ║
 // ╚══════════════════════════════════╝
+async function loadH2HPage() {
+    // If dashData already has player stats, just populate dropdowns
+    if (dashData && dashData.playerStats && Object.keys(dashData.playerStats).length >= 2) {
+        populateH2HDropdowns();
+        return;
+    }
+    // Otherwise load dashboard data first (silently)
+    try {
+        const el = document.getElementById('h2hResult');
+        el.innerHTML = '<div class="loading-spinner">Carregando jogadores...</div>';
+        // Trigger dashboard data load
+        await loadDashboard();
+        populateH2HDropdowns();
+    } catch (e) {
+        console.error('Error loading h2h data:', e);
+    }
+}
+
 function populateH2HDropdowns() {
     const ps = dashData.playerStats || {};
     const entries = Object.entries(ps).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
-    const card = document.getElementById('h2hCard');
-    if (entries.length < 2) { card.style.display = 'none'; return; }
-    card.style.display = 'block';
+    if (entries.length < 2) {
+        document.getElementById('h2hResult').innerHTML = '<div class="empty-state"><div class="icon">⚔️</div><p>É necessário ter pelo menos 2 jogadores com estatísticas para comparar.</p></div>';
+        return;
+    }
 
     ['h2hPlayer1', 'h2hPlayer2'].forEach(id => {
         const sel = document.getElementById(id);
