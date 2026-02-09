@@ -1418,9 +1418,9 @@ async function loadAdminMatches() {
                             <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
                             <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ` : `
-                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Resultado</button>
+                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
                             <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
-                            ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Stats GC${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
+                            ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
                             <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
@@ -1889,9 +1889,9 @@ async function loadMatchesPage() {
                     ${mvpHtml}
                     <div class="btn-group" style="margin-top:12px;">
                         ${m.status === 'closed' && m.result ? `
-                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Resultado</button>
+                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
                         ` : ''}
-                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Stats GC${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
+                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
                     </div>
                 </div>
             `;
