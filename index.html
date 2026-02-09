@@ -1991,7 +1991,7 @@ function renderDashModules() {
                 case 'wr': va = a.matches ? a.wins/a.matches : 0; vb = b.matches ? b.wins/b.matches : 0; break;
                 case 'k': va = a.kills; vb = b.kills; break;
                 case 'deaths': va = a.deaths; vb = b.deaths; break;
-                case 'kd': va = a.kdrSum/a.matches; vb = b.kdrSum/b.matches; break;
+                case 'kd': va = a.deaths ? a.kills/a.deaths : a.kills; vb = b.deaths ? b.kills/b.deaths : b.kills; break;
                 case 'adr': va = a.adrSum/a.matches; vb = b.adrSum/b.matches; break;
                 case 'fk': va = a.fk; vb = b.fk; break;
                 case 'rp': va = a.rpTotal; vb = b.rpTotal; break;
@@ -2030,7 +2030,7 @@ function renderDashModules() {
             const wr = p.matches > 0 ? ((p.wins / p.matches) * 100).toFixed(0) : 0;
             const wrColor = wr >= 60 ? 'var(--green)' : wr >= 40 ? 'var(--yellow)' : 'var(--red)';
             const avgAdr = (p.adrSum / p.matches).toFixed(1);
-            const avgKdr = (p.kdrSum / p.matches).toFixed(2);
+            const avgKdr = (p.deaths > 0 ? p.kills / p.deaths : p.kills).toFixed(2);
             const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
             const rpColor = p.rpTotal >= 0 ? 'var(--green)' : 'var(--red)';
 
@@ -2064,7 +2064,7 @@ function renderDashModules() {
         const byKills = [...entries].sort((a, b) => b.kills - a.kills);
         const byRp = [...entries].sort((a, b) => b.rpTotal - a.rpTotal);
         const byAdr = [...entries].sort((a, b) => (b.adrSum/b.matches) - (a.adrSum/a.matches));
-        const byKdr = [...entries].sort((a, b) => (b.kdrSum/b.matches) - (a.kdrSum/a.matches));
+        const byKdr = [...entries].sort((a, b) => (b.deaths ? b.kills/b.deaths : b.kills) - (a.deaths ? a.kills/a.deaths : a.kills));
         const byFk = [...entries].sort((a, b) => b.fk - a.fk);
         const byWr = [...entries].filter(p => p.matches >= 2).sort((a, b) => (b.wins/b.matches) - (a.wins/a.matches));
 
@@ -2076,7 +2076,7 @@ function renderDashModules() {
                 ${dashHighlight('🔫 Mais Kills', byKills[0], byKills[0].kills + ' kills', 'var(--green)')}
                 ${dashHighlight('📈 Mais RP Ganhos', byRp[0], '+' + byRp[0].rpTotal + ' RP', 'var(--blue)')}
                 ${dashHighlight('💥 Maior ADR Média', byAdr[0], (byAdr[0].adrSum/byAdr[0].matches).toFixed(1) + ' ADR', 'var(--yellow)')}
-                ${dashHighlight('🎯 Melhor K/D', byKdr[0], (byKdr[0].kdrSum/byKdr[0].matches).toFixed(2) + ' KDR', 'var(--green)')}
+                ${dashHighlight('🎯 Melhor K/D', byKdr[0], (byKdr[0].deaths ? byKdr[0].kills/byKdr[0].deaths : byKdr[0].kills).toFixed(2) + ' KDR', 'var(--green)')}
                 ${dashHighlight('⚡ Mais First Kills', byFk[0], byFk[0].fk + ' FK', 'var(--yellow)')}
                 ${byWr.length ? dashHighlight('📊 Maior Win Rate', byWr[0], ((byWr[0].wins/byWr[0].matches)*100).toFixed(0) + '% (' + byWr[0].matches + 'p)', 'var(--green)') : ''}
             </div>
@@ -2088,7 +2088,7 @@ function renderDashModules() {
         const worstAdrPlayer = [...entries].sort((a, b) => (a.adrSum/a.matches) - (b.adrSum/b.matches))[0];
         const wp = worstAdrPlayer;
         const avgAdr = (wp.adrSum / wp.matches).toFixed(1);
-        const avgKdr = (wp.kdrSum / wp.matches).toFixed(2);
+        const avgKdr = (wp.deaths > 0 ? wp.kills / wp.deaths : wp.kills).toFixed(2);
         const avgKast = (wp.kastSum / wp.matches).toFixed(0);
         const wr = wp.matches > 0 ? ((wp.wins / wp.matches) * 100).toFixed(0) : 0;
 
@@ -2137,7 +2137,7 @@ function renderDashModules() {
         const byLosses = [...entries].sort((a, b) => b.losses - a.losses);
         const byDeaths = [...entries].sort((a, b) => b.deaths - a.deaths);
         const byRpLoss = [...entries].sort((a, b) => a.rpTotal - b.rpTotal);
-        const byWorstKdr = [...entries].sort((a, b) => (a.kdrSum/a.matches) - (b.kdrSum/b.matches));
+        const byWorstKdr = [...entries].sort((a, b) => (a.deaths ? a.kills/a.deaths : a.kills) - (b.deaths ? b.kills/b.deaths : b.kills));
         const byWorstDiff = [...entries].sort((a, b) => a.diff - b.diff);
         const byWorstWr = [...entries].filter(p => p.matches >= 2).sort((a, b) => (a.wins/a.matches) - (b.wins/b.matches));
 
@@ -2148,7 +2148,7 @@ function renderDashModules() {
                 ${dashHighlight('😭 Mais Derrotas', byLosses[0], byLosses[0].losses + ' derrota(s)', 'var(--red)')}
                 ${dashHighlight('💀 Mais Mortes', byDeaths[0], byDeaths[0].deaths + ' deaths', 'var(--red)')}
                 ${dashHighlight('📉 Mais RP Perdidos', byRpLoss[0], byRpLoss[0].rpTotal + ' RP', 'var(--red)')}
-                ${dashHighlight('🐌 Pior K/D', byWorstKdr[0], (byWorstKdr[0].kdrSum/byWorstKdr[0].matches).toFixed(2) + ' KDR', 'var(--red)')}
+                ${dashHighlight('🐌 Pior K/D', byWorstKdr[0], (byWorstKdr[0].deaths ? byWorstKdr[0].kills/byWorstKdr[0].deaths : byWorstKdr[0].kills).toFixed(2) + ' KDR', 'var(--red)')}
                 ${dashHighlight('🪦 Pior Diff', byWorstDiff[0], (byWorstDiff[0].diff > 0 ? '+' : '') + byWorstDiff[0].diff + ' diff', 'var(--red)')}
                 ${byWorstWr.length ? dashHighlight('📊 Menor Win Rate', byWorstWr[0], ((byWorstWr[0].wins/byWorstWr[0].matches)*100).toFixed(0) + '% (' + byWorstWr[0].matches + 'p)', 'var(--red)') : ''}
             </div>
@@ -2285,22 +2285,40 @@ function openGCImport(matchId) {
         <div id="gcImportResult" style="margin-top:16px;"></div>
     `;
     overlay.classList.add('active');
-    addGCImportSlot();
+
+    // Load existing raw JSONs if any
+    db.collection('matches').doc(matchId).get().then(doc => {
+        const m = doc.data();
+        if (m.gcRawJsons && m.gcRawJsons.length > 0) {
+            m.gcRawJsons.forEach(rawJson => {
+                addGCImportSlot(rawJson);
+            });
+            // Add one empty slot for the new match
+            addGCImportSlot();
+        } else {
+            addGCImportSlot();
+        }
+    }).catch(() => {
+        addGCImportSlot();
+    });
 }
 
-function addGCImportSlot() {
+function addGCImportSlot(prefillJson) {
     gcImportSlotCount++;
     const idx = gcImportSlotCount;
     const container = document.getElementById('gcImportSlots');
     const slot = document.createElement('div');
     slot.id = `gcImpSlot-${idx}`;
     slot.style.cssText = 'position:relative;margin-bottom:10px;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:10px;background:rgba(255,255,255,0.02);transition:border-color 0.2s;';
+
+    const isPrefilled = !!prefillJson;
+
     slot.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
             <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;color:var(--ct-blue);letter-spacing:1px;">🎮 PARTIDA GC ${idx}</span>
             <div style="display:flex;align-items:center;gap:6px;">
                 <span id="gcImpStatus-${idx}" style="font-size:11px;color:var(--text-dim);"></span>
-                ${idx > 1 ? `<button onclick="removeGCImportSlot(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;opacity:0.6;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remover">✕</button>` : ''}
+                <button onclick="removeGCImportSlot(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 4px;opacity:0.6;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remover">✕</button>
             </div>
         </div>
         <textarea id="gcImpJson-${idx}" rows="2" placeholder='Cole o JSON da partida GC ${idx}...'
@@ -2308,7 +2326,14 @@ function addGCImportSlot() {
             style="width:100%;padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;resize:vertical;"></textarea>
     `;
     container.appendChild(slot);
-    slot.querySelector('textarea').focus();
+
+    if (isPrefilled) {
+        const textarea = document.getElementById(`gcImpJson-${idx}`);
+        textarea.value = prefillJson;
+        validateGCImportSlot(idx);
+    } else {
+        slot.querySelector('textarea').focus();
+    }
 }
 
 function removeGCImportSlot(idx) {
@@ -2500,7 +2525,10 @@ async function saveGCImport() {
 
         // Build gcStats array — one entry per player per GC match (for granularity)
         const gcStats = [];
+        const gcRawJsons = [];
         allParsed.forEach(({ slotId, data }) => {
+            // Save raw JSON string for this GC match
+            gcRawJsons.push(JSON.stringify(data));
             data.forEach(gc => {
                 const key = gc.gcId || gc.name.toLowerCase();
                 const linked = gcToPlayer[key];
@@ -2528,7 +2556,8 @@ async function saveGCImport() {
         // Save on match
         batch.update(db.collection('matches').doc(gcImportMatchId), {
             gcStats,
-            gcMatchCount: allParsed.length
+            gcMatchCount: allParsed.length,
+            gcRawJsons
         });
         await batch.commit();
 
@@ -2878,7 +2907,7 @@ function renderGCStats() {
 
     entries.forEach((p, idx) => {
         const avgAdr = (p.adrSum / p.matches).toFixed(1);
-        const avgKdr = (p.kdrSum / p.matches).toFixed(2);
+        const avgKdr = (p.deaths > 0 ? p.kills / p.deaths : p.kills).toFixed(2);
         const avgKast = (p.kastSum / p.matches).toFixed(0);
         const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
         const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
@@ -2919,7 +2948,7 @@ function renderGCStats() {
 
 function gcPodiumSlot(player, pos, medal, color, height) {
     const avgAdr = (player.adrSum / player.matches).toFixed(1);
-    const avgKdr = (player.kdrSum / player.matches).toFixed(2);
+    const avgKdr = (player.deaths > 0 ? player.kills / player.deaths : player.kills).toFixed(2);
     return `
         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;${pos === 1 ? 'margin-bottom:20px;' : ''}">
             <span style="font-size:28px;">${medal}</span>
