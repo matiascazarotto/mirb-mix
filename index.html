@@ -1235,6 +1235,7 @@ function renderAdminPanel() {
 
     loadAdminPlayers();
     loadAdminMatches();
+    loadAdminLiveStatus();
 }
 
 // ╔══════════════════════════════════╗
@@ -2559,6 +2560,16 @@ async function toggleLive(activate) {
         } catch (e) {
             toast('Erro: ' + e.message, 'error');
         }
+    }
+}
+
+async function loadAdminLiveStatus() {
+    try {
+        const doc = await db.collection('settings').doc('live').get();
+        const data = doc.exists ? doc.data() : {};
+        updateAdminLiveUI(data);
+    } catch (e) {
+        console.error('Error loading live status:', e);
     }
 }
 
