@@ -1960,20 +1960,29 @@ function renderDashModules() {
     // ═══ OVERVIEW ═══
     if (modules.includes('overview')) {
         const totalKills = entries.reduce((s, p) => s + p.kills, 0);
-        const totalDeaths = entries.reduce((s, p) => s + p.deaths, 0);
-        const totalMatches = matchCount;
         const uniquePlayers = entries.length;
+        const totalGCMatches = matches.reduce((s, m) => s + (m.gcMatchCount || 1), 0);
+        const totalConfrontos = matchCount;
+
+        // ADR média geral (média das médias de ADR de cada jogador, ponderada por partidas)
+        const totalAdrWeighted = entries.reduce((s, p) => s + p.adrSum, 0);
+        const totalMatchesPlayed = entries.reduce((s, p) => s + p.matches, 0);
+        const avgAdrGeral = totalMatchesPlayed > 0 ? (totalAdrWeighted / totalMatchesPlayed).toFixed(1) : '0';
+
+        // KAST médio geral
+        const totalKastWeighted = entries.reduce((s, p) => s + p.kastSum, 0);
+        const avgKastGeral = totalMatchesPlayed > 0 ? (totalKastWeighted / totalMatchesPlayed).toFixed(0) : '0';
 
         html += `
         <div class="card">
             <div class="card-title">📈 Resumo Geral</div>
             <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;">
-                ${dashStatBox('🎮', 'Partidas', totalMatches, '')}
+                ${dashStatBox('⚔️', 'Confrontos', totalConfrontos, '')}
+                ${dashStatBox('🎮', 'Partidas GC', totalGCMatches, 'var(--ct-blue)')}
                 ${dashStatBox('👥', 'Jogadores', uniquePlayers, '')}
                 ${dashStatBox('🔫', 'Total Kills', totalKills, 'var(--green)')}
-                ${dashStatBox('💀', 'Total Deaths', totalDeaths, 'var(--red)')}
-                ${dashStatBox('📊', 'Avg K/Partida', (totalKills / totalMatches).toFixed(0), '')}
-                ${dashStatBox('⚔️', 'K/D Geral', (totalKills / (totalDeaths || 1)).toFixed(2), totalKills > totalDeaths ? 'var(--green)' : 'var(--red)')}
+                ${dashStatBox('💥', 'ADR Média', avgAdrGeral, 'var(--yellow)')}
+                ${dashStatBox('🎯', 'KAST Médio', avgKastGeral + '%', 'var(--blue)')}
             </div>
         </div>`;
     }
