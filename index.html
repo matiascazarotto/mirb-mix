@@ -849,18 +849,30 @@
         <div class="card">
             <div class="card-title">🏆 Dashboard de Estatísticas</div>
             <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-                <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px;">
-                    <label style="font-size:11px;">Filtrar por data</label>
-                    <input type="text" id="dashFilterDate" placeholder="dd/mm/aaaa" maxlength="10" oninput="dashDateMask(this)" style="padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;width:100%;">
+                <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;">
+                    <label style="font-size:11px;">Mês</label>
+                    <select id="dashFilterMonth" style="padding:8px 10px;background:#0a0e17;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;font-size:13px;width:100%;">
+                        <option value="">Todos os meses</option>
+                    </select>
                 </div>
-                <div class="form-group" style="margin-bottom:0;flex:1;min-width:150px;">
-                    <label style="font-size:11px;">Filtrar por jogador</label>
+                <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;">
+                    <label style="font-size:11px;">Confronto</label>
+                    <select id="dashFilterMatch" style="padding:8px 10px;background:#0a0e17;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;font-size:13px;width:100%;">
+                        <option value="">Todos os confrontos</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:0;flex:1;min-width:140px;">
+                    <label style="font-size:11px;">Jogador</label>
                     <select id="dashFilterPlayer" style="padding:8px 10px;background:#0a0e17;border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:#e8eaf0;font-size:13px;width:100%;">
                         <option value="">Todos</option>
                     </select>
                 </div>
+                <div class="form-group" style="margin-bottom:0;min-width:120px;">
+                    <label style="font-size:11px;">Data exata</label>
+                    <input type="text" id="dashFilterDate" placeholder="dd/mm/aaaa" maxlength="10" oninput="dashDateMask(this)" style="padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:'Outfit',sans-serif;font-size:13px;width:100%;">
+                </div>
                 <button class="btn btn-primary btn-small" onclick="loadDashboard()" style="height:38px;">Filtrar</button>
-                <button class="btn btn-secondary btn-small" onclick="document.getElementById('dashFilterDate').value='';document.getElementById('dashFilterPlayer').value='';loadDashboard()" style="height:38px;">Limpar</button>
+                <button class="btn btn-secondary btn-small" onclick="clearDashFilters()" style="height:38px;">Limpar</button>
             </div>
         </div>
 
@@ -1856,15 +1868,69 @@ function dashSort(col) {
     renderDashModules();
 }
 
+function clearDashFilters() {
+    document.getElementById('dashFilterDate').value = '';
+    document.getElementById('dashFilterMonth').value = '';
+    document.getElementById('dashFilterMatch').value = '';
+    document.getElementById('dashFilterPlayer').value = '';
+    loadDashboard();
+}
+
 async function loadDashboard() {
     const el = document.getElementById('dashContent');
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
 
     try {
         const snap = await db.collection('matches').where('status', '==', 'closed').orderBy('createdAt', 'desc').get();
-        let matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
+        let allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
 
-        // Apply date filter
+        // ── Populate month dropdown ──
+        const monthSet = new Map();
+        allMatches.forEach(m => {
+            if (!m.createdAt) return;
+            const d = m.createdAt.toDate();
+            const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            const monthNames = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+            const label = `${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+            if (!monthSet.has(key)) monthSet.set(key, label);
+        });
+        const monthSel = document.getElementById('dashFilterMonth');
+        const currentMonth = monthSel.value;
+        monthSel.innerHTML = '<option value="">Todos os meses</option>' +
+            [...monthSet.entries()].map(([k, v]) => `<option value="${k}" ${k === currentMonth ? 'selected' : ''}>${v}</option>`).join('');
+
+        // ── Populate match/confronto dropdown (most recent first) ──
+        const matchSel = document.getElementById('dashFilterMatch');
+        const currentMatchFilter = matchSel.value;
+        matchSel.innerHTML = '<option value="">Todos os confrontos</option>' +
+            allMatches.map(m => {
+                const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '';
+                const gcCount = m.gcMatchCount || 1;
+                const label = `${m.name}${gcCount > 1 ? ' (MD' + gcCount + ')' : ''} — ${date}`;
+                return `<option value="${m.id}" ${m.id === currentMatchFilter ? 'selected' : ''}>${label}</option>`;
+            }).join('');
+
+        // ── Apply filters ──
+        let matches = [...allMatches];
+
+        // Month filter
+        const monthFilter = document.getElementById('dashFilterMonth').value;
+        if (monthFilter) {
+            const [fy, fm] = monthFilter.split('-').map(Number);
+            matches = matches.filter(m => {
+                if (!m.createdAt) return false;
+                const d = m.createdAt.toDate();
+                return d.getFullYear() === fy && d.getMonth() + 1 === fm;
+            });
+        }
+
+        // Match/confronto filter
+        const matchFilter = document.getElementById('dashFilterMatch').value;
+        if (matchFilter) {
+            matches = matches.filter(m => m.id === matchFilter);
+        }
+
+        // Date filter (exact day)
         const dateFilter = document.getElementById('dashFilterDate').value.trim();
         if (dateFilter && dateFilter.length === 10) {
             const [dd, mm, yyyy] = dateFilter.split('/');
