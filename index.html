@@ -1994,6 +1994,7 @@ function renderDashModules() {
                 case 'kd': va = a.deaths ? a.kills/a.deaths : a.kills; vb = b.deaths ? b.kills/b.deaths : b.kills; break;
                 case 'adr': va = a.adrSum/a.matches; vb = b.adrSum/b.matches; break;
                 case 'fk': va = a.fk; vb = b.fk; break;
+                case 'kast': va = a.kastSum/a.matches; vb = b.kastSum/b.matches; break;
                 case 'rp': va = a.rpTotal; vb = b.rpTotal; break;
                 default: va = a.adrSum/a.matches; vb = b.adrSum/b.matches;
             }
@@ -2021,6 +2022,7 @@ function renderDashModules() {
                         <th style="${thStyle}${activeStyle('kd')}" onclick="dashSort('kd')">K/D${arrow('kd')}</th>
                         <th style="${thStyle}${activeStyle('adr')}" onclick="dashSort('adr')">ADR${arrow('adr')}</th>
                         <th style="${thStyle}${activeStyle('fk')}" onclick="dashSort('fk')">FK${arrow('fk')}</th>
+                        <th style="${thStyle}${activeStyle('kast')}" onclick="dashSort('kast')">KAST${arrow('kast')}</th>
                         <th style="${thStyle}${activeStyle('rp')}" onclick="dashSort('rp')">RP${arrow('rp')}</th>
                     </tr>
                 </thead>
@@ -2033,6 +2035,7 @@ function renderDashModules() {
             const avgKdr = (p.deaths > 0 ? p.kills / p.deaths : p.kills).toFixed(2);
             const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
             const rpColor = p.rpTotal >= 0 ? 'var(--green)' : 'var(--red)';
+            const avgKast = p.matches > 0 ? (p.kastSum / p.matches).toFixed(0) : 0;
 
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${i < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
@@ -2052,6 +2055,7 @@ function renderDashModules() {
                     <td style="padding:10px 6px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
                     <td style="padding:10px 6px;text-align:center;">${avgAdr}</td>
                     <td style="padding:10px 6px;text-align:center;">${p.fk}</td>
+                    <td style="padding:10px 6px;text-align:center;">${avgKast}%</td>
                     <td style="padding:10px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
                 </tr>`;
         });
