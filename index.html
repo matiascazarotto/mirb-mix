@@ -2442,7 +2442,6 @@ function renderH2H() {
     if (!p1 || !p2) { toast('Jogador não encontrado.', 'error'); return; }
 
     const stats = [
-        { label: 'Partidas', v1: p1.matches, v2: p2.matches, fmt: v => v, higher: true },
         { label: 'Vitórias', v1: p1.wins, v2: p2.wins, fmt: v => v, higher: true },
         { label: 'Derrotas', v1: p1.losses, v2: p2.losses, fmt: v => v, higher: false },
         { label: 'Win Rate', v1: p1.matches ? p1.wins/p1.matches*100 : 0, v2: p2.matches ? p2.wins/p2.matches*100 : 0, fmt: v => v.toFixed(0) + '%', higher: true },
@@ -2452,7 +2451,6 @@ function renderH2H() {
         { label: 'ADR', v1: p1.matches ? p1.adrSum/p1.matches : 0, v2: p2.matches ? p2.adrSum/p2.matches : 0, fmt: v => v.toFixed(1), higher: true },
         { label: 'KAST', v1: p1.matches ? p1.kastSum/p1.matches : 0, v2: p2.matches ? p2.kastSum/p2.matches : 0, fmt: v => v.toFixed(0) + '%', higher: true },
         { label: 'First Kills', v1: p1.fk, v2: p2.fk, fmt: v => v, higher: true },
-        { label: 'RP Total', v1: p1.rpTotal, v2: p2.rpTotal, fmt: v => (v > 0 ? '+' : '') + v, higher: true },
         { label: 'Diff', v1: p1.diff, v2: p2.diff, fmt: v => (v > 0 ? '+' : '') + v, higher: true },
     ];
 
