@@ -2376,60 +2376,73 @@ async function processAllGCImports() {
     const snap = await db.collection('players').orderBy('name').get();
     players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    // Process each GC match
-    const allMatched = [];
-    const allUnmatched = [];
-
-    allParsed.forEach(({ slotId, data }) => {
+    // Collect unique GC players across all matches (by gcId or name)
+    const uniqueGC = {};
+    allParsed.forEach(({ data }) => {
         data.forEach(gc => {
-            const gcId = gc.gcId || '';
-            const byGcId = gcId ? players.find(p => p.gcId === gcId) : null;
-            if (byGcId) {
-                allMatched.push({ gc, player: byGcId, gcMatchIdx: slotId });
-            } else {
-                const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
-                if (byName) {
-                    allMatched.push({ gc, player: byName, needsLink: true, gcMatchIdx: slotId });
-                } else {
-                    allUnmatched.push({ gc, gcMatchIdx: slotId });
-                }
+            const key = gc.gcId || gc.name.toLowerCase();
+            if (!uniqueGC[key]) {
+                uniqueGC[key] = { gcId: gc.gcId || '', name: gc.name, avatar: gc.avatar || '' };
             }
         });
     });
 
-    renderGCImportResult(allMatched, allUnmatched, allParsed);
+    // Match unique players to system players
+    const matchedUnique = [];
+    const unmatchedUnique = [];
+
+    Object.values(uniqueGC).forEach(gc => {
+        const byGcId = gc.gcId ? players.find(p => p.gcId === gc.gcId) : null;
+        if (byGcId) {
+            matchedUnique.push({ gc, player: byGcId });
+        } else {
+            const byName = players.find(p => p.name.toLowerCase() === gc.name.toLowerCase());
+            if (byName) {
+                matchedUnique.push({ gc, player: byName, needsLink: true });
+            } else {
+                unmatchedUnique.push(gc);
+            }
+        }
+    });
+
+    renderGCImportResult(matchedUnique, unmatchedUnique, allParsed);
 }
 
 function renderGCImportResult(matched, unmatched, allParsed) {
     const el = document.getElementById('gcImportResult');
     const totalGCMatches = allParsed.length;
+    const totalUniquePlayers = matched.length + unmatched.length;
 
-    let html = `<div style="margin-bottom:8px;padding:8px 12px;background:rgba(0,200,83,0.08);border-radius:6px;font-size:13px;color:var(--green);">📊 ${totalGCMatches} partida(s) GC detectada(s)</div>`;
+    let html = `
+        <div style="margin-bottom:10px;padding:10px 14px;background:rgba(0,200,83,0.08);border-radius:6px;font-size:13px;">
+            <span style="color:var(--green);font-weight:600;">📊 ${totalGCMatches} partida(s) GC</span>
+            <span style="color:var(--text-dim);margin:0 6px;">•</span>
+            <span style="color:var(--text);">${totalUniquePlayers} jogador(es) único(s)</span>
+        </div>`;
 
     if (matched.length) {
-        html += `<div style="margin-bottom:8px;color:var(--green);font-size:13px;font-weight:600;">✅ ${matched.length} jogador(es) vinculados</div>`;
+        html += `<div style="margin-bottom:8px;color:var(--green);font-size:13px;font-weight:600;">✅ ${matched.length} vinculado(s) automaticamente</div>`;
         html += matched.map(m => `
-            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;">
-                ${m.gc.avatar ? `<img src="${m.gc.avatar}" style="width:20px;height:20px;border-radius:50%;">` : ''}
+            <div style="display:flex;align-items:center;gap:8px;padding:5px 0;font-size:13px;">
+                ${m.gc.avatar ? `<img src="${m.gc.avatar}" style="width:22px;height:22px;border-radius:50%;">` : ''}
                 <span style="color:var(--yellow);">${m.gc.name}</span>
                 <span style="color:var(--text-dim);">→</span>
                 <span style="color:var(--green);">${m.player.name}</span>
-                <span style="color:var(--text-dim);font-size:10px;">(GC #${m.gcMatchIdx})</span>
+                ${m.needsLink ? `<span style="color:var(--blue);font-size:11px;">(vincular GC ID)</span>` : ''}
             </div>
         `).join('');
     }
 
     if (unmatched.length) {
-        html += `<div style="margin:12px 0 8px;color:var(--yellow);font-size:13px;font-weight:600;">⚠️ ${unmatched.length} jogador(es) sem vínculo:</div>`;
-        unmatched.forEach((item, idx) => {
+        html += `<div style="margin:14px 0 8px;color:var(--yellow);font-size:13px;font-weight:600;">⚠️ ${unmatched.length} jogador(es) sem vínculo — associe abaixo:</div>`;
+        unmatched.forEach((gc, idx) => {
             html += `
-                <div style="display:flex;align-items:center;gap:6px;padding:6px 0;font-size:12px;flex-wrap:wrap;">
-                    ${item.gc.avatar ? `<img src="${item.gc.avatar}" style="width:20px;height:20px;border-radius:50%;">` : ''}
-                    <span style="color:var(--yellow);min-width:80px;">${item.gc.name}</span>
-                    <span style="color:var(--text-dim);font-size:10px;">(GC #${item.gcMatchIdx})</span>
+                <div style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;flex-wrap:wrap;">
+                    ${gc.avatar ? `<img src="${gc.avatar}" style="width:22px;height:22px;border-radius:50%;">` : ''}
+                    <span style="color:var(--yellow);min-width:90px;">${gc.name}</span>
                     <span style="color:var(--text-dim);">→</span>
-                    <select id="gcLink-${idx}" style="flex:1;min-width:120px;padding:4px 6px;background:#0a0e17;border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#e8eaf0;font-size:12px;">
-                        <option value="">— Selecionar —</option>
+                    <select id="gcLink-${idx}" style="flex:1;min-width:130px;padding:5px 8px;background:#0a0e17;border:1px solid rgba(255,255,255,0.2);border-radius:4px;color:#e8eaf0;font-size:13px;">
+                        <option value="">— Selecionar jogador —</option>
                         ${players.map(p => `<option value="${p.id}">${p.name}</option>`).join('')}
                     </select>
                 </div>
@@ -2438,8 +2451,8 @@ function renderGCImportResult(matched, unmatched, allParsed) {
     }
 
     // Store data for saving
-    window._gcImportMatched = matched;
-    window._gcImportUnmatched = unmatched;
+    window._gcImportMatchedUnique = matched;
+    window._gcImportUnmatchedUnique = unmatched;
     window._gcImportParsed = allParsed;
 
     html += `<button class="btn btn-primary" style="margin-top:16px;" onclick="saveGCImport()">💾 Salvar Stats na Partida</button>`;
@@ -2450,61 +2463,76 @@ async function saveGCImport() {
     const snap = await db.collection('players').orderBy('name').get();
     players = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-    const matched = window._gcImportMatched || [];
-    const unmatched = window._gcImportUnmatched || [];
+    const matchedUnique = window._gcImportMatchedUnique || [];
+    const unmatchedUnique = window._gcImportUnmatchedUnique || [];
     const allParsed = window._gcImportParsed || [];
 
     // Resolve unmatched from selects
-    const allLinked = [...matched];
-    for (let i = 0; i < unmatched.length; i++) {
+    const allUniqueLinked = [...matchedUnique];
+    for (let i = 0; i < unmatchedUnique.length; i++) {
         const sel = document.getElementById(`gcLink-${i}`);
         if (!sel || !sel.value) {
-            toast(`Associe o jogador "${unmatched[i].gc.name}" antes de salvar!`, 'error');
+            toast(`Associe o jogador "${unmatchedUnique[i].name}" antes de salvar!`, 'error');
             return;
         }
         const player = players.find(p => p.id === sel.value);
         if (player) {
-            allLinked.push({ gc: unmatched[i].gc, player, needsLink: true, gcMatchIdx: unmatched[i].gcMatchIdx });
+            allUniqueLinked.push({ gc: unmatchedUnique[i], player, needsLink: true });
         }
+    }
+
+    // Build a lookup: gcKey -> player info
+    const gcToPlayer = {};
+    for (const entry of allUniqueLinked) {
+        const key = entry.gc.gcId || entry.gc.name.toLowerCase();
+        gcToPlayer[key] = entry;
     }
 
     try {
         const batch = db.batch();
 
-        // Link gcIds
-        for (const entry of allLinked) {
+        // Link gcIds on players that need it
+        for (const entry of allUniqueLinked) {
             if (entry.needsLink && entry.gc.gcId) {
                 batch.update(db.collection('players').doc(entry.player.id), { gcId: entry.gc.gcId });
             }
         }
 
-        // Build gcStats array — each entry gets a gcMatchIdx to identify which GC match it came from
-        const gcStats = allLinked.map(e => ({
-            playerId: e.player.id,
-            playerName: e.player.name,
-            gcName: e.gc.name,
-            gcId: e.gc.gcId || '',
-            avatar: e.gc.avatar || '',
-            k: e.gc.k,
-            a: e.gc.a,
-            d: e.gc.d,
-            diff: e.gc.diff,
-            adr: e.gc.adr,
-            kdr: e.gc.kdr,
-            kast: e.gc.kast,
-            fk: e.gc.fk,
-            rp: e.gc.rp,
-            gcMatchIdx: parseInt(e.gcMatchIdx) || 1
-        }));
+        // Build gcStats array — one entry per player per GC match (for granularity)
+        const gcStats = [];
+        allParsed.forEach(({ slotId, data }) => {
+            data.forEach(gc => {
+                const key = gc.gcId || gc.name.toLowerCase();
+                const linked = gcToPlayer[key];
+                if (!linked) return;
+                gcStats.push({
+                    playerId: linked.player.id,
+                    playerName: linked.player.name,
+                    gcName: gc.name,
+                    gcId: gc.gcId || '',
+                    avatar: gc.avatar || '',
+                    k: gc.k,
+                    a: gc.a,
+                    d: gc.d,
+                    diff: gc.diff,
+                    adr: gc.adr,
+                    kdr: gc.kdr,
+                    kast: gc.kast,
+                    fk: gc.fk,
+                    rp: gc.rp,
+                    gcMatchIdx: parseInt(slotId) || 1
+                });
+            });
+        });
 
-        // Save on match — also store how many GC matches were imported
+        // Save on match
         batch.update(db.collection('matches').doc(gcImportMatchId), {
             gcStats,
             gcMatchCount: allParsed.length
         });
         await batch.commit();
 
-        toast(`✅ Stats de ${allParsed.length} partida(s) GC salvas!`, 'success');
+        toast(`✅ Stats de ${allParsed.length} partida(s) GC salvas! (${allUniqueLinked.length} jogadores)`, 'success');
         closeEditModal();
         await loadAdminPlayers();
         loadAdminMatches();
