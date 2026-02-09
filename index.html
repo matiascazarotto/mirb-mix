@@ -920,17 +920,17 @@
                 </div>
             </div>
 
-            <!-- Step 2: Paste JSON -->
+            <!-- Step 2: Paste JSONs per match -->
             <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:16px;margin-bottom:16px;">
-                <span style="color:var(--yellow);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;">PASSO 2 — Colar aqui</span>
-                <div class="form-group" style="margin-top:10px;margin-bottom:0;">
-                    <textarea id="gcJsonInput" rows="3" placeholder='Cole aqui o JSON copiado (Ctrl+V)...'
-                        style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:12px;resize:vertical;"></textarea>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <span style="color:var(--yellow);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;">PASSO 2 — Colar dados das partidas</span>
+                    <button class="btn btn-secondary btn-small" onclick="addGCMatchSlot()" style="padding:6px 14px;font-size:12px;">＋ Partida</button>
                 </div>
+                <div id="gcMatchSlots"></div>
             </div>
 
             <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="processGCJson()">📊 Adicionar Partida</button>
+                <button class="btn btn-primary" onclick="processAllGCMatches()">📊 Processar Todas</button>
                 <button class="btn btn-secondary" onclick="clearGCStats()">🗑️ Limpar Tudo</button>
             </div>
         </div>
@@ -2512,69 +2512,147 @@ function viewGCStats(matchId) {
 // ╚══════════════════════════════════╝
 let gcAggregated = {};
 let gcMatchCount = 0;
+let gcSlotCount = 0;
 
 function copySnippet() {
     const snippet = document.getElementById('gcSnippet').textContent;
     navigator.clipboard.writeText(snippet).then(() => toast('Snippet copiado! Cole no Console (F12) da partida.', 'success'));
 }
 
-function processGCJson() {
-    const raw = document.getElementById('gcJsonInput').value.trim();
+function addGCMatchSlot() {
+    gcSlotCount++;
+    const idx = gcSlotCount;
+    const container = document.getElementById('gcMatchSlots');
+    const slot = document.createElement('div');
+    slot.id = `gcSlot-${idx}`;
+    slot.style.cssText = 'position:relative;margin-bottom:10px;border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:12px;background:rgba(255,255,255,0.02);transition:border-color 0.2s;';
+    slot.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:var(--ct-blue);letter-spacing:1px;">🎮 PARTIDA ${idx}</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <span class="gcSlotStatus" id="gcSlotStatus-${idx}" style="font-size:11px;color:var(--text-dim);"></span>
+                <button onclick="removeGCMatchSlot(${idx})" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:18px;padding:0 4px;line-height:1;opacity:0.6;transition:opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Remover partida">✕</button>
+            </div>
+        </div>
+        <textarea id="gcJsonInput-${idx}" rows="2" placeholder='Cole aqui o JSON da partida ${idx} (Ctrl+V)...'
+            oninput="validateGCSlot(${idx})"
+            style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:12px;resize:vertical;"></textarea>
+    `;
+    container.appendChild(slot);
+    slot.querySelector('textarea').focus();
+}
+
+function removeGCMatchSlot(idx) {
+    const slot = document.getElementById(`gcSlot-${idx}`);
+    if (slot) {
+        slot.style.opacity = '0';
+        slot.style.transform = 'translateX(20px)';
+        slot.style.transition = 'opacity 0.2s, transform 0.2s';
+        setTimeout(() => slot.remove(), 200);
+    }
+}
+
+function validateGCSlot(idx) {
+    const textarea = document.getElementById(`gcJsonInput-${idx}`);
+    const status = document.getElementById(`gcSlotStatus-${idx}`);
+    const slot = document.getElementById(`gcSlot-${idx}`);
+    const raw = textarea.value.trim();
     if (!raw) {
-        toast('Cole o JSON da partida primeiro!', 'error');
+        status.textContent = '';
+        slot.style.borderColor = 'rgba(255,255,255,0.06)';
         return;
     }
-
-    let players;
     try {
-        players = JSON.parse(raw);
-        if (!Array.isArray(players) || players.length === 0) throw new Error('vazio');
-    } catch (e) {
-        toast('JSON inválido. Verifique se copiou corretamente.', 'error');
+        const data = JSON.parse(raw);
+        if (Array.isArray(data) && data.length > 0) {
+            status.textContent = `✅ ${data.length} jogadores`;
+            status.style.color = 'var(--green)';
+            slot.style.borderColor = 'rgba(0,200,83,0.3)';
+        } else {
+            throw new Error();
+        }
+    } catch {
+        status.textContent = '❌ JSON inválido';
+        status.style.color = 'var(--red)';
+        slot.style.borderColor = 'rgba(255,61,61,0.3)';
+    }
+}
+
+function processAllGCMatches() {
+    const slots = document.querySelectorAll('[id^="gcJsonInput-"]');
+    if (slots.length === 0) {
+        toast('Adicione pelo menos uma partida primeiro!', 'error');
         return;
     }
 
-    gcMatchCount++;
+    gcAggregated = {};
+    gcMatchCount = 0;
+    let totalPlayers = 0;
+    let errors = [];
 
-    players.forEach(p => {
-        const key = p.name;
-        if (gcAggregated[key]) {
-            const e = gcAggregated[key];
-            e.kills += (p.k || 0);
-            e.assists += (p.a || 0);
-            e.deaths += (p.d || 0);
-            e.diff += (p.diff || 0);
-            e.adrSum += (p.adr || 0);
-            e.kdrSum += (p.kdr || 0);
-            e.kastSum += (p.kast || 0);
-            e.fk += (p.fk || 0);
-            e.rp += (p.rp || 0);
-            e.matches += 1;
-            e.wins += ((p.rp || 0) >= 0 ? 1 : 0);
-            e.losses += ((p.rp || 0) < 0 ? 1 : 0);
-            if (!e.avatar && p.avatar) e.avatar = p.avatar;
-        } else {
-            gcAggregated[key] = {
-                name: p.name,
-                avatar: p.avatar || '',
-                kills: p.k || 0,
-                assists: p.a || 0,
-                deaths: p.d || 0,
-                diff: p.diff || 0,
-                adrSum: p.adr || 0,
-                kdrSum: p.kdr || 0,
-                kastSum: p.kast || 0,
-                fk: p.fk || 0,
-                rp: p.rp || 0,
-                matches: 1,
-                wins: (p.rp || 0) >= 0 ? 1 : 0,
-                losses: (p.rp || 0) < 0 ? 1 : 0,
-            };
+    slots.forEach(textarea => {
+        const raw = textarea.value.trim();
+        const slotId = textarea.id.replace('gcJsonInput-', '');
+        if (!raw) return;
+
+        let players;
+        try {
+            players = JSON.parse(raw);
+            if (!Array.isArray(players) || players.length === 0) throw new Error();
+        } catch {
+            errors.push(`Partida ${slotId}`);
+            return;
         }
+
+        gcMatchCount++;
+        totalPlayers += players.length;
+
+        players.forEach(p => {
+            const key = p.name;
+            if (gcAggregated[key]) {
+                const e = gcAggregated[key];
+                e.kills += (p.k || 0);
+                e.assists += (p.a || 0);
+                e.deaths += (p.d || 0);
+                e.diff += (p.diff || 0);
+                e.adrSum += (p.adr || 0);
+                e.kdrSum += (p.kdr || 0);
+                e.kastSum += (p.kast || 0);
+                e.fk += (p.fk || 0);
+                e.rp += (p.rp || 0);
+                e.matches += 1;
+                e.wins += ((p.rp || 0) >= 0 ? 1 : 0);
+                e.losses += ((p.rp || 0) < 0 ? 1 : 0);
+                if (!e.avatar && p.avatar) e.avatar = p.avatar;
+            } else {
+                gcAggregated[key] = {
+                    name: p.name,
+                    avatar: p.avatar || '',
+                    kills: p.k || 0,
+                    assists: p.a || 0,
+                    deaths: p.d || 0,
+                    diff: p.diff || 0,
+                    adrSum: p.adr || 0,
+                    kdrSum: p.kdr || 0,
+                    kastSum: p.kast || 0,
+                    fk: p.fk || 0,
+                    rp: p.rp || 0,
+                    matches: 1,
+                    wins: (p.rp || 0) >= 0 ? 1 : 0,
+                    losses: (p.rp || 0) < 0 ? 1 : 0,
+                };
+            }
+        });
     });
 
-    toast(`✅ ${players.length} jogadores adicionados! (${gcMatchCount} partida${gcMatchCount > 1 ? 's' : ''} no total)`, 'success');
-    document.getElementById('gcJsonInput').value = '';
+    if (gcMatchCount === 0) {
+        toast(errors.length ? `JSON inválido em: ${errors.join(', ')}` : 'Nenhum dado para processar!', 'error');
+        return;
+    }
+
+    let msg = `✅ ${gcMatchCount} partida${gcMatchCount > 1 ? 's' : ''} processada${gcMatchCount > 1 ? 's' : ''}!`;
+    if (errors.length) msg += ` ⚠️ Erro em: ${errors.join(', ')}`;
+    toast(msg, errors.length ? 'error' : 'success');
     renderGCStats();
 }
 
@@ -2677,8 +2755,10 @@ function gcPodiumSlot(player, pos, medal, color, height) {
 function clearGCStats() {
     gcAggregated = {};
     gcMatchCount = 0;
-    document.getElementById('gcJsonInput').value = '';
+    gcSlotCount = 0;
+    document.getElementById('gcMatchSlots').innerHTML = '';
     document.getElementById('gcStatsResult').innerHTML = '';
+    addGCMatchSlot();
     toast('Dados limpos!', 'success');
 }
 
@@ -2710,6 +2790,8 @@ document.addEventListener('DOMContentLoaded', () => {
         isAdmin = true;
     }
     loadVotePage();
+    // Init first GC match slot
+    addGCMatchSlot();
 });
 
 // Close modal on overlay click
