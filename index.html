@@ -2016,6 +2016,7 @@ function clearDashFilters() {
     document.getElementById('dashFilterMonth').value = '';
     document.getElementById('dashFilterMatch').value = '';
     document.getElementById('dashFilterPlayer').value = '';
+    dashData._initialMonthSet = false;
     loadDashboard();
 }
 
@@ -2039,8 +2040,21 @@ async function loadDashboard() {
         });
         const monthSel = document.getElementById('dashFilterMonth');
         const currentMonth = monthSel.value;
+        const monthKeys = [...monthSet.keys()].sort().reverse(); // sorted desc (most recent first)
         monthSel.innerHTML = '<option value="">Todos os meses</option>' +
-            [...monthSet.entries()].map(([k, v]) => `<option value="${k}" ${k === currentMonth ? 'selected' : ''}>${v}</option>`).join('');
+            [...monthSet.entries()].sort((a, b) => b[0].localeCompare(a[0])).map(([k, v]) => `<option value="${k}" ${k === currentMonth ? 'selected' : ''}>${v}</option>`).join('');
+
+        // Auto-select current month on first load (or most recent month with data)
+        if (!currentMonth && !dashData._initialMonthSet) {
+            const now = new Date();
+            const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+            if (monthSet.has(currentMonthKey)) {
+                monthSel.value = currentMonthKey;
+            } else if (monthKeys.length > 0) {
+                monthSel.value = monthKeys[0]; // most recent month with data
+            }
+            dashData._initialMonthSet = true;
+        }
 
         // ── Populate match/confronto dropdown (most recent first) ──
         const matchSel = document.getElementById('dashFilterMatch');
