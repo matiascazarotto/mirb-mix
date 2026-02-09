@@ -1492,6 +1492,13 @@ async function loadAdminMatches() {
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
+                    ${m.status === 'closed' ? `
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
+                        <input type="text" id="vodUrl-${matchId}" value="${m.vodUrl || ''}" placeholder="Link da gravação (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:12px;">
+                        <button class="btn btn-secondary btn-small" onclick="saveVodUrl('${matchId}')" style="white-space:nowrap;font-size:11px;">📹 Salvar VOD</button>
+                        ${m.vodUrl ? '<span style="color:var(--green);font-size:11px;">✅</span>' : ''}
+                    </div>
+                    ` : ''}
                 </div>
             `;
         }
@@ -1521,6 +1528,18 @@ async function reopenVoting(matchId) {
     try {
         await db.collection('matches').doc(matchId).update({ status: 'voting', result: firebase.firestore.FieldValue.delete() });
         toast('Votação reaberta!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function saveVodUrl(matchId) {
+    const input = document.getElementById(`vodUrl-${matchId}`);
+    const url = input ? input.value.trim() : '';
+    try {
+        await db.collection('matches').doc(matchId).update({ vodUrl: url });
+        toast(url ? '📹 Link da gravação salvo!' : '📹 Link removido.', 'success');
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -1959,6 +1978,7 @@ async function loadMatchesPage() {
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
                         ` : ''}
                         ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
+                        ${m.vodUrl ? `<a href="${m.vodUrl}" target="_blank" class="btn btn-secondary btn-small" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📹 Assistir Gravação</a>` : ''}
                     </div>
                 </div>
             `;
