@@ -308,6 +308,9 @@
         .badge-level { background: rgba(41,121,255,0.2); color: var(--blue); }
         .badge-role { background: rgba(0,200,83,0.15); color: var(--green); }
         .badge-duo { background: rgba(255,214,0,0.15); color: var(--yellow); }
+        .badge-style-Agressivo { background: rgba(255,61,61,0.18); color: #ff6b6b; }
+        .badge-style-Normal { background: rgba(41,121,255,0.18); color: #64b5f6; }
+        .badge-style-Lento { background: rgba(255,214,0,0.18); color: #ffd740; }
 
         .player-actions { display: flex; gap: 6px; }
 
@@ -1063,6 +1066,17 @@
                     </select>
                 </div>
             </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Estilo de Jogo</label>
+                    <select id="editPlaystyle">
+                        <option value="Normal">Normal</option>
+                        <option value="Agressivo">Agressivo</option>
+                        <option value="Lento">Lento</option>
+                    </select>
+                </div>
+                <div></div>
+            </div>
             <button type="submit" class="btn btn-primary">Salvar</button>
         </form>
     </div>
@@ -1227,6 +1241,17 @@ function renderAdminPanel() {
                         </select>
                     </div>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Estilo de Jogo</label>
+                        <select id="newPlayerPlaystyle">
+                            <option value="Normal">Normal</option>
+                            <option value="Agressivo">Agressivo</option>
+                            <option value="Lento">Lento</option>
+                        </select>
+                    </div>
+                    <div></div>
+                </div>
                 <button type="submit" class="btn btn-primary">Adicionar</button>
             </form>
         </div>
@@ -1293,6 +1318,7 @@ function renderAdminPlayersList() {
                 <div class="player-name">${p.name}</div>
                 <div class="player-meta">
                     <span class="badge badge-role">${p.role}</span>
+                    ${p.playstyle && p.playstyle !== 'Normal' ? `<span class="badge badge-style-${p.playstyle}">${p.playstyle === 'Agressivo' ? '⚡ Agressivo' : '🐢 Lento'}</span>` : `<span class="badge badge-style-Normal">🎯 Normal</span>`}
                     ${p.duo ? `<span class="badge badge-duo">Duo: ${getPlayerName(p.duo)}</span>` : ''}
                     ${p.gcId ? `<span class="badge" style="background:rgba(0,200,83,0.15);color:var(--green);">GC: ${p.gcId}</span>` : `<span class="badge" style="background:rgba(255,61,61,0.15);color:var(--red);font-size:10px;">Sem GC</span>`}
                 </div>
@@ -1317,6 +1343,7 @@ async function addPlayer(e) {
         gcId: document.getElementById('newPlayerGcId').value.trim(),
         role: document.getElementById('newPlayerRole').value,
         duo: document.getElementById('newPlayerDuo').value,
+        playstyle: document.getElementById('newPlayerPlaystyle').value,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
     try {
@@ -1355,6 +1382,9 @@ function openEditPlayer(id) {
             `<option value="${pl.id}" ${p.duo === pl.id ? 'selected' : ''}>${pl.name}</option>`
         ).join('');
 
+    // Populate playstyle
+    document.getElementById('editPlaystyle').value = p.playstyle || 'Normal';
+
     document.getElementById('editModal').classList.add('active');
 }
 
@@ -1376,7 +1406,8 @@ async function savePlayerEdit(e) {
             name: document.getElementById('editName').value.trim(),
             gcId: document.getElementById('editGcId').value.trim(),
             role: document.getElementById('editRole').value,
-            duo: document.getElementById('editDuo').value
+            duo: document.getElementById('editDuo').value,
+            playstyle: document.getElementById('editPlaystyle').value
         });
         closeEditModal();
         toast('Jogador atualizado!', 'success');
@@ -1415,6 +1446,7 @@ function renderPlayerSelectionForMatch() {
                 <div class="player-name">${p.name}</div>
                 <div class="player-meta">
                     <span class="badge badge-role">${p.role}</span>
+                    <span class="badge badge-style-${p.playstyle || 'Normal'}">${(p.playstyle || 'Normal') === 'Agressivo' ? '⚡' : (p.playstyle || 'Normal') === 'Lento' ? '🐢' : '🎯'} ${p.playstyle || 'Normal'}</span>
                 </div>
             </div>
         </div>
@@ -1452,7 +1484,7 @@ async function createMatch() {
 
     const matchPlayers = selectedForMatch.map(id => {
         const p = players.find(pl => pl.id === id);
-        return { id: p.id, name: p.name, role: p.role, duo: p.duo || '' };
+        return { id: p.id, name: p.name, role: p.role, duo: p.duo || '', playstyle: p.playstyle || 'Normal' };
     });
 
     const name = document.getElementById('matchName').value.trim() || `Mix ${new Date().toLocaleDateString('pt-BR')}`;
@@ -1732,7 +1764,7 @@ function balanceTeams(players) {
         const sumB = teamB.reduce((s, p) => s + p.currentLevel, 0);
         const diff = Math.abs(sumA - sumB);
 
-        // Duo bonus
+        // Duo bonus (keeps duos together)
         let bonus = 0;
         teamA.forEach(p => {
             if (p.duo && teamA.some(t => t.id === p.duo)) bonus -= 1;
@@ -1741,7 +1773,18 @@ function balanceTeams(players) {
             if (p.duo && teamB.some(t => t.id === p.duo)) bonus -= 1;
         });
 
-        const score = diff + bonus;
+        // Playstyle penalty (espelhar estilos entre os times)
+        const stylesA = { Agressivo: 0, Normal: 0, Lento: 0 };
+        const stylesB = { Agressivo: 0, Normal: 0, Lento: 0 };
+        teamA.forEach(p => { stylesA[p.playstyle || 'Normal']++; });
+        teamB.forEach(p => { stylesB[p.playstyle || 'Normal']++; });
+        const stylePenalty = (
+            Math.abs(stylesA.Agressivo - stylesB.Agressivo) +
+            Math.abs(stylesA.Normal - stylesB.Normal) +
+            Math.abs(stylesA.Lento - stylesB.Lento)
+        ) * 1.5;
+
+        const score = diff + bonus + stylePenalty;
 
         if (score < bestDiff) {
             bestDiff = score;
