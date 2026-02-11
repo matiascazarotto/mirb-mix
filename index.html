@@ -3139,13 +3139,13 @@ function viewGCStats(matchId) {
                     if (!aggregated[key].avatar && s.avatar) aggregated[key].avatar = s.avatar;
                 }
             });
-            const aggEntries = Object.values(aggregated).sort((a, b) => b.k - a.k);
+            const aggEntries = Object.values(aggregated).sort((a, b) => (b.adr / b.matches) - (a.adr / a.matches));
             html += `<div id="gcViewTab-all">${buildGCStatsTable(aggEntries, true)}</div>`;
         }
 
         // Individual match views
         matchKeys.forEach(k => {
-            const stats = byMatch[k].sort((a, b) => b.k - a.k);
+            const stats = byMatch[k].sort((a, b) => b.adr - a.adr);
             const display = hasMultiple ? 'none' : 'block';
             html += `<div id="gcViewTab-${k}" style="display:${display};">${buildGCStatsTable(stats, false)}</div>`;
         });
