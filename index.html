@@ -314,6 +314,44 @@
 
         .player-actions { display: flex; gap: 6px; }
 
+        /* ── Admin Sub-tabs ── */
+        .admin-sub-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 20px;
+            background: rgba(0,0,0,0.3);
+            padding: 6px;
+            border-radius: 10px;
+        }
+        .admin-sub-tab {
+            flex: 1;
+            font-family: 'Rajdhani', sans-serif;
+            padding: 12px 10px;
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            transition: all 0.2s;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .admin-sub-tab:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+        .admin-sub-tab.active {
+            background: rgba(0,200,83,0.15);
+            color: var(--green);
+            box-shadow: 0 2px 12px rgba(0,200,83,0.15);
+        }
+        .admin-tab-content { display: none; animation: pageIn 0.3s ease; }
+        .admin-tab-content.active { display: block; }
+
         /* ── Player Selector (Match) ── */
         .player-selector {
             display: flex;
@@ -1190,104 +1228,125 @@ function renderAdminPanel() {
             <button class="btn btn-secondary btn-small" onclick="adminLogout()">Sair</button>
         </div>
 
-        <!-- Live Stream -->
-        <div class="card" style="border:1px solid rgba(255,61,61,0.15);">
-            <div class="card-title">🔴 Transmissão Ao Vivo</div>
-            <div id="adminLiveStatus" style="margin-bottom:12px;"></div>
-            <div class="form-group">
-                <label>Link do YouTube (live ou vídeo)</label>
-                <input type="text" id="adminLiveUrl" placeholder="https://www.youtube.com/watch?v=... ou https://youtu.be/...">
+        <div class="admin-sub-tabs">
+            <button class="admin-sub-tab active" onclick="switchAdminTab(this, 'adminTabPlayers')">👥 Jogadores</button>
+            <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabMatch')">🎮 Partidas</button>
+            <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabManage')">⚙️ Gerenciar</button>
+            <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLive')">📡 Live</button>
+        </div>
+
+        <!-- TAB: Jogadores -->
+        <div class="admin-tab-content active" id="adminTabPlayers">
+            <div class="card">
+                <div class="card-title">Cadastrar Jogador</div>
+                <form id="addPlayerForm" onsubmit="addPlayer(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome</label>
+                            <input type="text" id="newPlayerName" required>
+                        </div>
+                        <div class="form-group">
+                            <label>ID Gamers Club (opcional)</label>
+                            <input type="text" id="newPlayerGcId" placeholder="Ex: 1138165">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Função</label>
+                            <select id="newPlayerRole">
+                                <option value="Rifler">Rifler</option>
+                                <option value="Entry">Entry Fragger</option>
+                                <option value="AWPer">AWPer</option>
+                                <option value="Suporte">Suporte</option>
+                                <option value="Lurker">Lurker</option>
+                                <option value="IGL">IGL/Capitão</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Dupla</label>
+                            <select id="newPlayerDuo">
+                                <option value="">Nenhuma</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Estilo de Jogo</label>
+                            <select id="newPlayerPlaystyle">
+                                <option value="Normal">Normal</option>
+                                <option value="Agressivo">Agressivo</option>
+                                <option value="Lento">Lento</option>
+                            </select>
+                        </div>
+                        <div></div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Adicionar</button>
+                </form>
             </div>
-            <div class="form-group">
-                <label>Título (opcional)</label>
-                <input type="text" id="adminLiveTitle" placeholder="Ex: MIRB MIX — MD3">
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-primary btn-small" onclick="toggleLive(true)" id="btnGoLive" style="background:var(--red);">🔴 Iniciar Live</button>
-                <button class="btn btn-secondary btn-small" onclick="toggleLive(false)" id="btnStopLive" style="display:none;">⬛ Encerrar Live</button>
+
+            <div class="card">
+                <div class="card-title">Jogadores Cadastrados</div>
+                <div id="adminPlayersList"><div class="loading-spinner">Carregando</div></div>
             </div>
         </div>
 
-        <!-- Add Player -->
-        <div class="card">
-            <div class="card-title">Cadastrar Jogador</div>
-            <form id="addPlayerForm" onsubmit="addPlayer(event)">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Nome</label>
-                        <input type="text" id="newPlayerName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>ID Gamers Club (opcional)</label>
-                        <input type="text" id="newPlayerGcId" placeholder="Ex: 1138165">
-                    </div>
+        <!-- TAB: Criar Partida -->
+        <div class="admin-tab-content" id="adminTabMatch">
+            <div class="card">
+                <div class="card-title">Criar Nova Partida</div>
+                <div class="form-group">
+                    <label>Nome da Partida (opcional)</label>
+                    <input type="text" id="matchName" placeholder="Ex: Mix Quinta-Feira">
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Função</label>
-                        <select id="newPlayerRole">
-                            <option value="Rifler">Rifler</option>
-                            <option value="Entry">Entry Fragger</option>
-                            <option value="AWPer">AWPer</option>
-                            <option value="Suporte">Suporte</option>
-                            <option value="Lurker">Lurker</option>
-                            <option value="IGL">IGL/Capitão</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>Dupla</label>
-                        <select id="newPlayerDuo">
-                            <option value="">Nenhuma</option>
-                        </select>
-                    </div>
+                <div class="selection-counter">
+                    <span class="count" id="adminSelectedCount">0</span> / 10 jogadores
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Estilo de Jogo</label>
-                        <select id="newPlayerPlaystyle">
-                            <option value="Normal">Normal</option>
-                            <option value="Agressivo">Agressivo</option>
-                            <option value="Lento">Lento</option>
-                        </select>
-                    </div>
-                    <div></div>
+                <div id="adminPlayerSelection"></div>
+                <button class="btn btn-primary" id="createMatchBtn" onclick="createMatch()" disabled style="margin-top:16px;">
+                    Criar Partida
+                </button>
+            </div>
+        </div>
+
+        <!-- TAB: Gerenciar -->
+        <div class="admin-tab-content" id="adminTabManage">
+            <div class="card">
+                <div class="card-title">Gerenciar Partidas</div>
+                <div id="adminMatchesList"><div class="loading-spinner">Carregando</div></div>
+            </div>
+        </div>
+
+        <!-- TAB: Transmissão -->
+        <div class="admin-tab-content" id="adminTabLive">
+            <div class="card" style="border:1px solid rgba(255,61,61,0.15);">
+                <div class="card-title">🔴 Transmissão Ao Vivo</div>
+                <div id="adminLiveStatus" style="margin-bottom:12px;"></div>
+                <div class="form-group">
+                    <label>Link do YouTube (live ou vídeo)</label>
+                    <input type="text" id="adminLiveUrl" placeholder="https://www.youtube.com/watch?v=... ou https://youtu.be/...">
                 </div>
-                <button type="submit" class="btn btn-primary">Adicionar</button>
-            </form>
-        </div>
-
-        <!-- Players List -->
-        <div class="card">
-            <div class="card-title">Jogadores Cadastrados</div>
-            <div id="adminPlayersList"><div class="loading-spinner">Carregando</div></div>
-        </div>
-
-        <!-- Create Match -->
-        <div class="card">
-            <div class="card-title">Criar Nova Partida</div>
-            <div class="form-group">
-                <label>Nome da Partida (opcional)</label>
-                <input type="text" id="matchName" placeholder="Ex: Mix Quinta-Feira">
+                <div class="form-group">
+                    <label>Título (opcional)</label>
+                    <input type="text" id="adminLiveTitle" placeholder="Ex: MIRB MIX — MD3">
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                    <button class="btn btn-primary btn-small" onclick="toggleLive(true)" id="btnGoLive" style="background:var(--red);">🔴 Iniciar Live</button>
+                    <button class="btn btn-secondary btn-small" onclick="toggleLive(false)" id="btnStopLive" style="display:none;">⬛ Encerrar Live</button>
+                </div>
             </div>
-            <div class="selection-counter">
-                <span class="count" id="adminSelectedCount">0</span> / 10 jogadores
-            </div>
-            <div id="adminPlayerSelection"></div>
-            <button class="btn btn-primary" id="createMatchBtn" onclick="createMatch()" disabled style="margin-top:16px;">
-                Criar Partida
-            </button>
-        </div>
-
-        <!-- Active Matches Management -->
-        <div class="card">
-            <div class="card-title">Gerenciar Partidas</div>
-            <div id="adminMatchesList"><div class="loading-spinner">Carregando</div></div>
         </div>
     `;
 
     loadAdminPlayers();
     loadAdminMatches();
     loadAdminLiveStatus();
+}
+
+function switchAdminTab(btn, tabId) {
+    document.querySelectorAll('.admin-sub-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(tabId).classList.add('active');
 }
 
 // ╔══════════════════════════════════╗
