@@ -1520,10 +1520,29 @@ async function loadAdminMatches() {
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
                     ${m.status === 'closed' ? `
-                    <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">
-                        <input type="text" id="vodUrl-${matchId}" value="${m.vodUrl || ''}" placeholder="Link da gravação (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:12px;">
-                        <button class="btn btn-secondary btn-small" onclick="saveVodUrl('${matchId}')" style="white-space:nowrap;font-size:11px;">📹 Salvar VOD</button>
-                        ${m.vodUrl ? '<span style="color:var(--green);font-size:11px;">✅</span>' : ''}
+                    <div id="vodContainer-${matchId}" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
+                        ${(function() {
+                            const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+                            let vodHtml = vods.map((url, i) => `
+                                <div style="display:flex;gap:6px;align-items:center;" data-vod-row>
+                                    <input type="text" value="${url}" placeholder="Link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:12px;" class="vod-input-${matchId}">
+                                    <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Remover">✕</button>
+                                    <span style="color:var(--green);font-size:11px;">✅</span>
+                                </div>
+                            `).join('');
+                            if (vods.length === 0) {
+                                vodHtml = `
+                                <div style="display:flex;gap:6px;align-items:center;" data-vod-row>
+                                    <input type="text" value="" placeholder="Link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:12px;" class="vod-input-${matchId}">
+                                    <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Remover">✕</button>
+                                </div>`;
+                            }
+                            return vodHtml;
+                        })()}
+                        <div style="display:flex;gap:8px;align-items:center;margin-top:2px;">
+                            <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')" style="font-size:11px;">➕ Adicionar VOD</button>
+                            <button class="btn btn-secondary btn-small" onclick="saveVodUrls('${matchId}')" style="white-space:nowrap;font-size:11px;">📹 Salvar VOD</button>
+                        </div>
                     </div>
                     ` : ''}
                 </div>
@@ -1561,12 +1580,29 @@ async function reopenVoting(matchId) {
     }
 }
 
-async function saveVodUrl(matchId) {
-    const input = document.getElementById(`vodUrl-${matchId}`);
-    const url = input ? input.value.trim() : '';
+function addVodRow(matchId) {
+    const container = document.getElementById(`vodContainer-${matchId}`);
+    const btnRow = container.querySelector('div:last-child');
+    const row = document.createElement('div');
+    row.setAttribute('data-vod-row', '');
+    row.style.cssText = 'display:flex;gap:6px;align-items:center;';
+    row.innerHTML = `
+        <input type="text" value="" placeholder="Link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:12px;" class="vod-input-${matchId}">
+        <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Remover">✕</button>
+    `;
+    container.insertBefore(row, btnRow);
+}
+
+async function saveVodUrls(matchId) {
+    const container = document.getElementById(`vodContainer-${matchId}`);
+    const inputs = container.querySelectorAll(`[data-vod-row] input`);
+    const urls = Array.from(inputs).map(i => i.value.trim()).filter(u => u);
     try {
-        await db.collection('matches').doc(matchId).update({ vodUrl: url });
-        toast(url ? '📹 Link da gravação salvo!' : '📹 Link removido.', 'success');
+        await db.collection('matches').doc(matchId).update({
+            vodUrls: urls,
+            vodUrl: urls.length > 0 ? urls[0] : firebase.firestore.FieldValue.delete()
+        });
+        toast(urls.length ? `📹 ${urls.length} VOD(s) salva(s)!` : '📹 VODs removidas.', 'success');
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -2005,7 +2041,10 @@ async function loadMatchesPage() {
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
                         ` : ''}
                         ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
-                        ${m.vodUrl ? `<a href="${m.vodUrl}" target="_blank" class="btn btn-secondary btn-small" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📹 Assistir Gravação</a>` : ''}
+                        ${(function() {
+                            const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+                            return vods.map((url, i) => `<a href="${url}" target="_blank" class="btn btn-secondary btn-small" style="text-decoration:none;display:inline-flex;align-items:center;gap:4px;">📹 VOD${vods.length > 1 ? ' ' + (i + 1) : ''}</a>`).join('');
+                        })()}
                     </div>
                 </div>
             `;
