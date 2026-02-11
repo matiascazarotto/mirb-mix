@@ -3385,7 +3385,7 @@ function renderGCStats() {
     const entries = Object.values(gcAggregated);
     if (!entries.length) { el.innerHTML = ''; return; }
 
-    entries.sort((a, b) => b.kills - a.kills);
+    entries.sort((a, b) => (b.adrSum / b.matches) - (a.adrSum / a.matches));
 
     let html = `
         <div class="card" style="overflow-x:auto;">
