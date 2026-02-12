@@ -1073,7 +1073,7 @@
                     Abra a partida no Gamers Club → F12 → Console → cole o comando abaixo e aperte Enter. Os dados serão copiados automaticamente.
                 </p>
                 <div style="position:relative;">
-                    <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((()=>{const d=[];document.querySelectorAll('.PlayerStatsTable').forEach(t=>{t.querySelectorAll('tr.PlayerStatsLine').forEach(r=>{const n=r.querySelector('.PlayerStatsProfile__nickname')?.textContent?.trim();if(!n)return;const c=[...r.querySelectorAll('td.PlayerStatsLine__col')].map(c=>c.textContent.trim());const av=r.querySelector('.gc-avatar-image')?.src||'';const m=av.match(/players\/avatar\/(\d+)/);d.push({name:n,gcId:m?m[1]:'',avatar:av,k:+c[1]||0,a:+c[2]||0,d:+c[3]||0,diff:+c[4]||0,adr:+(c[5])||0,kdr:+(c[6])||0,kast:parseInt(c[7])||0,fk:+c[11]||0,rp:+c[12]||0})})});const j=JSON.stringify(d);const ta=document.createElement('textarea');ta.value=j;document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove();alert('✅ '+d.length+' jogadores copiados! Cole no MIRB MIX.')})())</pre>
+                    <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((()=>{const d=[];const MAP={'kill':'k','kills':'k','abates':'k','assist':'a','assists':'a','assistencias':'a','assistências':'a','death':'d','deaths':'d','mortes':'d','+/-':'diff','diff':'diff','adr':'adr','k/d':'kdr','kd':'kdr','kdr':'kdr','kast':'kast','kast%':'kast','fk':'fk','first kill':'fk','firstkill':'fk','primeiro abate':'fk','rp':'rp','rating':'rp','gc rating':'rp'};document.querySelectorAll('.PlayerStatsTable').forEach(t=>{const hs=[...t.querySelectorAll('th.PlayerStatsLine__col,th.PlayerStatsHeader__col,.PlayerStatsHeader th,.PlayerStatsHeader td')].map(h=>h.textContent.trim().toLowerCase().replace(/[^a-z0-9%/+\- ]/g,''));const colMap={};hs.forEach((h,i)=>{const key=MAP[h];if(key)colMap[key]=i});const need=['k','a','d','kdr'];const miss=need.filter(k=>!colMap.hasOwnProperty(k));if(miss.length>0){alert('⚠️ Colunas não encontradas: '+miss.join(', ')+'\\nHeaders detectados: '+hs.join(', ')+'\\nO site da GC pode ter mudado. Avise o admin do MIRB!');return}t.querySelectorAll('tr.PlayerStatsLine').forEach(r=>{const n=r.querySelector('.PlayerStatsProfile__nickname')?.textContent?.trim();if(!n)return;const c=[...r.querySelectorAll('td.PlayerStatsLine__col')].map(c=>c.textContent.trim());const av=r.querySelector('.gc-avatar-image')?.src||'';const m=av.match(/players\/avatar\/(\d+)/);const g=k=>colMap.hasOwnProperty(k)?c[colMap[k]]:'0';d.push({name:n,gcId:m?m[1]:'',avatar:av,k:+g('k')||0,a:+g('a')||0,d:+g('d')||0,diff:+g('diff')||0,adr:+g('adr')||0,kdr:+g('kdr')||0,kast:parseInt(g('kast'))||0,fk:+g('fk')||0,rp:+g('rp')||0,_headers:hs,_v:2})})});if(d.length===0){alert('❌ Nenhum jogador encontrado! Verifique se está na página de uma partida da GC.');return}const j=JSON.stringify(d);const ta=document.createElement('textarea');ta.value=j;document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove();alert('✅ '+d.length+' jogadores copiados! (Snippet v2 - Headers inteligentes)\\nCole no MIRB MIX.')})())</pre>
                     <button class="btn btn-secondary btn-small" onclick="copySnippet()" style="position:absolute;top:8px;right:8px;padding:4px 10px;font-size:11px;">📋 Copiar</button>
                 </div>
             </div>
@@ -3180,11 +3180,26 @@ function validateGCImportSlot(idx) {
     }
     try {
         const data = JSON.parse(raw);
-        if (Array.isArray(data) && data.length > 0) {
-            status.textContent = `✅ ${data.length} jogadores`;
+        if (!Array.isArray(data) || data.length === 0) throw new Error();
+
+        const isV2 = data[0]._v === 2;
+        const warnings = [];
+        data.forEach(p => {
+            if (p.k < 0 || p.d < 0 || p.a < 0) warnings.push(`${p.name}: kills/deaths/assists negativos`);
+            if (p.kdr > 10) warnings.push(`${p.name}: KDR=${p.kdr} (muito alto)`);
+            if (p.adr > 500) warnings.push(`${p.name}: ADR=${p.adr} (muito alto)`);
+            if (p.k === 0 && p.d === 0 && p.a === 0) warnings.push(`${p.name}: todas stats zeradas`);
+        });
+
+        if (warnings.length > 0) {
+            status.innerHTML = `⚠️ ${data.length} jogadores - <span style="color:var(--yellow);cursor:pointer;" title="${warnings.join('\n')}">${warnings.length} aviso(s)</span>`;
+            status.style.color = 'var(--yellow)';
+            slot.style.borderColor = 'rgba(255,214,0,0.3)';
+        } else {
+            status.textContent = `✅ ${data.length} jogadores${isV2 ? ' (v2)' : ''}`;
             status.style.color = 'var(--green)';
             slot.style.borderColor = 'rgba(0,200,83,0.3)';
-        } else { throw new Error(); }
+        }
     } catch {
         status.textContent = '❌ JSON inválido';
         status.style.color = 'var(--red)';
@@ -3600,11 +3615,32 @@ function validateGCSlot(idx) {
     }
     try {
         const data = JSON.parse(raw);
-        if (Array.isArray(data) && data.length > 0) {
-            status.textContent = `✅ ${data.length} jogadores`;
+        if (!Array.isArray(data) || data.length === 0) throw new Error();
+
+        // Check snippet version
+        const isV2 = data[0]._v === 2;
+
+        // Sanity checks on data
+        const warnings = [];
+        data.forEach(p => {
+            if (p.k < 0 || p.d < 0 || p.a < 0) warnings.push(`${p.name}: kills/deaths/assists negativos`);
+            if (p.kdr > 10) warnings.push(`${p.name}: KDR=${p.kdr} (muito alto)`);
+            if (p.adr > 500) warnings.push(`${p.name}: ADR=${p.adr} (muito alto)`);
+            if (p.k === 0 && p.d === 0 && p.a === 0) warnings.push(`${p.name}: todas stats zeradas`);
+            const requiredFields = ['k', 'a', 'd', 'kdr'];
+            const missingFields = requiredFields.filter(f => !(f in p));
+            if (missingFields.length > 0) warnings.push(`${p.name}: campos faltando (${missingFields.join(',')})`);
+        });
+
+        if (warnings.length > 0) {
+            status.innerHTML = `⚠️ ${data.length} jogadores - <span style="color:var(--yellow);cursor:pointer;" title="${warnings.join('\n')}">${warnings.length} aviso(s)</span>`;
+            status.style.color = 'var(--yellow)';
+            slot.style.borderColor = 'rgba(255,214,0,0.3)';
+        } else {
+            status.textContent = `✅ ${data.length} jogadores${isV2 ? ' (v2)' : ''}`;
             status.style.color = 'var(--green)';
             slot.style.borderColor = 'rgba(0,200,83,0.3)';
-        } else { throw new Error(); }
+        }
     } catch {
         status.textContent = '❌ JSON inválido';
         status.style.color = 'var(--red)';
