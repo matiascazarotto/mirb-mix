@@ -1098,6 +1098,66 @@
 </div>
 
 <!-- ════════════ MODAL: Edit Player ════════════ -->
+<!-- Rating MiRB Info Modal -->
+<div id="ratingInfoModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)this.style.display='none'">
+    <div style="background:#0e1420;border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:520px;width:100%;padding:28px;position:relative;max-height:90vh;overflow-y:auto;">
+        <div onclick="document.getElementById('ratingInfoModal').style.display='none'" style="position:absolute;top:12px;right:16px;cursor:pointer;font-size:20px;color:var(--text-dim);line-height:1;">&times;</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:1.4em;font-weight:700;color:var(--yellow);margin-bottom:16px;letter-spacing:1px;">📊 RATING MiRB 1.0</div>
+        <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:16px;">
+            O Rating MiRB combina cinco estatísticas individuais com pesos definidos e aplica um fator de confiança baseado na quantidade de partidas jogadas.
+        </p>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pesos</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;">
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-dim);font-size:13px;">ADR</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">28%</span>
+            </div>
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-dim);font-size:13px;">KAST</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">28%</span>
+            </div>
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-dim);font-size:13px;">K/D</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">22%</span>
+            </div>
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
+                <span style="color:var(--text-dim);font-size:13px;">FK</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">17%</span>
+            </div>
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;grid-column:span 2;">
+                <span style="color:var(--text-dim);font-size:13px;">WIN%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);font-size:16px;">5%</span>
+            </div>
+        </div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Fórmula</div>
+        <div style="padding:12px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.15);border-radius:8px;margin-bottom:18px;">
+            <code style="font-size:12px;color:var(--green);line-height:1.6;">Rating = (ADR×0.28 + KAST×0.28 + K/D×0.22 + FK×0.17 + WIN%×0.05) × Multiplicador</code>
+        </div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Normalização</div>
+        <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:18px;">
+            Cada estatística é normalizada de 0 a 100 dividindo pelo maior valor registrado na tabela.
+        </p>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Fator de Confiança</div>
+        <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:10px;">
+            Jogadores com poucas partidas recebem um multiplicador que varia de <span style="color:var(--red);font-weight:600;">0.60</span> até <span style="color:var(--green);font-weight:600;">1.00</span>. O limiar de confiança total é 70% do máximo de partidas jogadas.
+        </p>
+        <div style="display:flex;gap:8px;margin-top:16px;">
+            <div style="flex:1;padding:8px;background:rgba(0,200,83,0.08);border-radius:6px;text-align:center;">
+                <div style="font-size:11px;color:var(--text-dim);">≥ 70</div>
+                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);">Alto</div>
+            </div>
+            <div style="flex:1;padding:8px;background:rgba(255,214,0,0.08);border-radius:6px;text-align:center;">
+                <div style="font-size:11px;color:var(--text-dim);">≥ 50</div>
+                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);">Médio</div>
+            </div>
+            <div style="flex:1;padding:8px;background:rgba(255,61,61,0.08);border-radius:6px;text-align:center;">
+                <div style="font-size:11px;color:var(--text-dim);">< 50</div>
+                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--red);">Baixo</div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div id="editModal" class="modal-overlay">
     <div class="modal-box">
         <div class="card-title">
@@ -2330,7 +2390,7 @@ async function loadMatchesPage() {
 // ║         DASHBOARD               ║
 // ╚══════════════════════════════════╝
 let dashData = { matches: [], playerStats: {}, matchCount: 0 };
-let dashSortCol = 'adr';
+let dashSortCol = 'rating';
 let dashSortDir = 'desc';
 
 function dashSort(col) {
@@ -2545,11 +2605,56 @@ function renderDashModules() {
 
     // ═══ RANKING ═══
     if (modules.includes('ranking')) {
-        const col = dashSortCol || 'adr';
+        // ── Rating MiRB 1.0 ──
+        // Pesos: ADR 28%, KAST 28%, K/D 22%, FK 17%, WIN 5%
+        const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.17, W_WIN = 0.05;
+
+        // Calcular stats médias
+        entries.forEach(p => {
+            p._avgAdr  = p.adrSum / p.matches;
+            p._avgKast = p.kastSum / p.matches;
+            p._avgKdr  = p.deaths > 0 ? p.kills / p.deaths : p.kills;
+            p._winPct  = p.matches > 0 ? (p.wins / p.matches) * 100 : 0;
+        });
+
+        // Máximos para normalização
+        const _maxAdr  = Math.max(...entries.map(p => p._avgAdr));
+        const _maxKast = Math.max(...entries.map(p => p._avgKast));
+        const _maxKd   = Math.max(...entries.map(p => p._avgKdr));
+        const _maxFk   = Math.max(...entries.map(p => p.fk));
+        const _maxWin  = Math.max(...entries.map(p => p._winPct));
+
+        // Multiplicador de Partidas (Fator de Confiança)
+        const _maxMatches = Math.max(...entries.map(p => p.matches));
+        const _minMatches = Math.min(...entries.map(p => p.matches));
+        const _threshold  = Math.ceil(_maxMatches * 0.7);
+
+        entries.forEach(p => {
+            const nAdr  = _maxAdr  > 0 ? (p._avgAdr  / _maxAdr)  * 100 : 0;
+            const nKast = _maxKast > 0 ? (p._avgKast / _maxKast) * 100 : 0;
+            const nKd   = _maxKd   > 0 ? (p._avgKdr  / _maxKd)   * 100 : 0;
+            const nFk   = _maxFk   > 0 ? (p.fk       / _maxFk)   * 100 : 0;
+            const nWin  = _maxWin  > 0 ? (p._winPct  / _maxWin)  * 100 : 0;
+
+            p._rawScore = nAdr * W_ADR + nKast * W_KAST + nKd * W_KD + nFk * W_FK + nWin * W_WIN;
+
+            if (p.matches >= _threshold) {
+                p._multiplier = 1.00;
+            } else if (_threshold <= _minMatches) {
+                p._multiplier = 1.00;
+            } else {
+                p._multiplier = 0.60 + 0.40 * (p.matches - _minMatches) / (_threshold - _minMatches);
+            }
+
+            p._ratingMiRB = p._rawScore * p._multiplier;
+        });
+
+        const col = dashSortCol || 'rating';
         const dir = dashSortDir || 'desc';
         const sorted = [...entries].sort((a, b) => {
             let va, vb;
             switch(col) {
+                case 'rating': va = a._ratingMiRB; vb = b._ratingMiRB; break;
                 case 'p': va = a.matches; vb = b.matches; break;
                 case 'v': va = a.wins; vb = b.wins; break;
                 case 'd': va = a.losses; vb = b.losses; break;
@@ -2561,7 +2666,7 @@ function renderDashModules() {
                 case 'fk': va = a.fk; vb = b.fk; break;
                 case 'kast': va = a.kastSum/a.matches; vb = b.kastSum/b.matches; break;
                 case 'rp': va = a.rpTotal; vb = b.rpTotal; break;
-                default: va = a.adrSum/a.matches; vb = b.adrSum/b.matches;
+                default: va = a._ratingMiRB; vb = b._ratingMiRB;
             }
             return dir === 'desc' ? vb - va : va - vb;
         });
@@ -2572,12 +2677,15 @@ function renderDashModules() {
 
         html += `
         <div class="card" style="overflow-x:auto;">
-            <div class="card-title">🏆 Ranking Geral</div>
+            <div class="card-title" style="display:flex;align-items:center;gap:10px;">🏆 Ranking Geral
+                <span onclick="document.getElementById('ratingInfoModal').style.display='flex'" style="cursor:pointer;font-size:14px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-weight:700;" title="Como o Rating é calculado?">?</span>
+            </div>
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
                 <thead>
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
                         <th style="padding:10px 6px;text-align:left;">#</th>
                         <th style="padding:10px 6px;text-align:left;">Jogador</th>
+                        <th style="${thStyle}${activeStyle('rating')}" onclick="dashSort('rating')">Rating${arrow('rating')}</th>
                         <th style="${thStyle}${activeStyle('p')}" onclick="dashSort('p')">P${arrow('p')}</th>
                         <th style="${thStyle}${activeStyle('v')}" onclick="dashSort('v')">V${arrow('v')}</th>
                         <th style="${thStyle}${activeStyle('d')}" onclick="dashSort('d')">D${arrow('d')}</th>
@@ -2601,6 +2709,8 @@ function renderDashModules() {
             const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
             const rpColor = p.rpTotal >= 0 ? 'var(--green)' : 'var(--red)';
             const avgKast = p.matches > 0 ? (p.kastSum / p.matches).toFixed(0) : 0;
+            const ratingVal = p._ratingMiRB.toFixed(1);
+            const ratingColor = p._ratingMiRB >= 70 ? 'var(--green)' : p._ratingMiRB >= 50 ? 'var(--yellow)' : 'var(--red)';
 
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${i < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
@@ -2611,6 +2721,7 @@ function renderDashModules() {
                             <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>
                         </div>
                     </td>
+                    <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>
                     <td style="padding:10px 6px;text-align:center;color:var(--text-dim);">${p.matches}</td>
                     <td style="padding:10px 6px;text-align:center;color:var(--green);">${p.wins}</td>
                     <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.losses}</td>
@@ -3731,11 +3842,59 @@ function renderGCStats() {
     const entries = Object.values(gcAggregated);
     if (!entries.length) { el.innerHTML = ''; return; }
 
-    entries.sort((a, b) => (b.adrSum / b.matches) - (a.adrSum / a.matches));
+    // ── Rating MiRB 1.0 ──
+    // Pesos ajustados: ADR 28%, KAST 28%, K/D 22%, FK 17%, WIN 5%
+    const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.17, W_WIN = 0.05;
+
+    // Calcular stats médias de cada jogador
+    entries.forEach(p => {
+        p.avgAdr  = p.adrSum / p.matches;
+        p.avgKast = p.kastSum / p.matches;
+        p.avgKdr  = p.deaths > 0 ? p.kills / p.deaths : p.kills;
+        p.winPct  = (p.wins / p.matches) * 100;
+    });
+
+    // Encontrar máximos para normalização
+    const maxAdr  = Math.max(...entries.map(p => p.avgAdr));
+    const maxKast = Math.max(...entries.map(p => p.avgKast));
+    const maxKd   = Math.max(...entries.map(p => p.avgKdr));
+    const maxFk   = Math.max(...entries.map(p => p.fk));
+    const maxWin  = Math.max(...entries.map(p => p.winPct));
+
+    // Multiplicador de Partidas (Fator de Confiança)
+    const maxMatches = Math.max(...entries.map(p => p.matches));
+    const minMatches = Math.min(...entries.map(p => p.matches));
+    const threshold  = Math.ceil(maxMatches * 0.7); // limiar = 70% do máximo
+
+    entries.forEach(p => {
+        // Normalizar (0-100)
+        const nAdr  = maxAdr  > 0 ? (p.avgAdr  / maxAdr)  * 100 : 0;
+        const nKast = maxKast > 0 ? (p.avgKast / maxKast) * 100 : 0;
+        const nKd   = maxKd   > 0 ? (p.avgKdr  / maxKd)   * 100 : 0;
+        const nFk   = maxFk   > 0 ? (p.fk      / maxFk)   * 100 : 0;
+        const nWin  = maxWin  > 0 ? (p.winPct  / maxWin)  * 100 : 0;
+
+        // Raw score
+        p.rawScore = nAdr * W_ADR + nKast * W_KAST + nKd * W_KD + nFk * W_FK + nWin * W_WIN;
+
+        // Multiplicador de confiança
+        if (p.matches >= threshold) {
+            p.multiplier = 1.00;
+        } else if (threshold <= minMatches) {
+            p.multiplier = 1.00;
+        } else {
+            p.multiplier = 0.60 + 0.40 * (p.matches - minMatches) / (threshold - minMatches);
+        }
+
+        p.ratingMiRB = p.rawScore * p.multiplier;
+    });
+
+    // Ordenar por Rating MiRB
+    entries.sort((a, b) => b.ratingMiRB - a.ratingMiRB);
 
     let html = `
         <div class="card" style="overflow-x:auto;">
-            <div class="card-title">🏆 Ranking — ${gcMatchCount} partida${gcMatchCount > 1 ? 's' : ''}</div>
+            <div class="card-title">🏆 Ranking MiRB 1.0 — ${gcMatchCount} partida${gcMatchCount > 1 ? 's' : ''}</div>
 
             ${entries.length >= 3 ? `
             <div style="display:flex;justify-content:center;align-items:flex-end;gap:16px;margin:20px 0 30px;padding:20px 10px;">
@@ -3749,6 +3908,7 @@ function renderGCStats() {
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
                         <th style="padding:10px 6px;text-align:left;">#</th>
                         <th style="padding:10px 6px;text-align:left;">Jogador</th>
+                        <th style="padding:10px 6px;text-align:center;">Rating</th>
                         <th style="padding:10px 6px;text-align:center;">K</th>
                         <th style="padding:10px 6px;text-align:center;">A</th>
                         <th style="padding:10px 6px;text-align:center;">D</th>
@@ -3764,12 +3924,14 @@ function renderGCStats() {
                 <tbody>`;
 
     entries.forEach((p, idx) => {
-        const avgAdr = (p.adrSum / p.matches).toFixed(1);
-        const avgKdr = (p.deaths > 0 ? p.kills / p.deaths : p.kills).toFixed(2);
-        const avgKast = (p.kastSum / p.matches).toFixed(0);
+        const avgAdr = p.avgAdr.toFixed(1);
+        const avgKdr = p.avgKdr.toFixed(2);
+        const avgKast = p.avgKast.toFixed(0);
         const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
         const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
         const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+        const ratingColor = p.ratingMiRB >= 70 ? 'var(--green)' : p.ratingMiRB >= 50 ? 'var(--yellow)' : 'var(--red)';
+        const multLabel = p.multiplier < 1.00 ? `<span style="color:var(--red);font-size:10px;margin-left:2px;">×${p.multiplier.toFixed(2)}</span>` : '';
 
         html += `
             <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${idx < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
@@ -3784,6 +3946,9 @@ function renderGCStats() {
                             ${p.matches > 1 ? `<span style="color:var(--text-dim);font-size:11px;margin-left:4px;">(${p.matches}p)</span>` : ''}
                         </div>
                     </div>
+                </td>
+                <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:${ratingColor};">
+                    ${p.ratingMiRB.toFixed(1)}${multLabel}
                 </td>
                 <td style="padding:10px 6px;text-align:center;color:var(--green);font-weight:700;font-family:'Rajdhani',sans-serif;font-size:16px;">${p.kills}</td>
                 <td style="padding:10px 6px;text-align:center;color:var(--text);">${p.assists}</td>
@@ -3805,14 +3970,16 @@ function renderGCStats() {
 }
 
 function gcPodiumSlot(player, pos, medal, color, height) {
-    const avgAdr = (player.adrSum / player.matches).toFixed(1);
-    const avgKdr = (player.deaths > 0 ? player.kills / player.deaths : player.kills).toFixed(2);
+    const avgAdr = (player.avgAdr || (player.adrSum / player.matches)).toFixed(1);
+    const avgKdr = (player.avgKdr || (player.deaths > 0 ? player.kills / player.deaths : player.kills)).toFixed(2);
+    const rating = player.ratingMiRB != null ? player.ratingMiRB.toFixed(1) : '—';
     return `
         <div style="display:flex;flex-direction:column;align-items:center;gap:4px;${pos === 1 ? 'margin-bottom:20px;' : ''}">
             <span style="font-size:28px;">${medal}</span>
             ${player.avatar ? `<img src="${player.avatar}" style="width:${pos===1?'64px':'48px'};height:${pos===1?'64px':'48px'};border-radius:50%;object-fit:cover;border:3px solid ${color};box-shadow:0 0 15px ${color}33;">` : ''}
             <span style="font-family:'Rajdhani',sans-serif;font-size:${pos === 1 ? '18px' : '15px'};font-weight:700;color:${color};">${player.name}</span>
-            <span style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:var(--green);">${player.kills} K</span>
+            <span style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;color:var(--green);">${rating}</span>
+            <span style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;">Rating MiRB</span>
             <div style="display:flex;gap:8px;font-size:11px;color:var(--text-dim);">
                 <span>ADR ${avgAdr}</span>
                 <span>KDR ${avgKdr}</span>
