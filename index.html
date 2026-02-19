@@ -1073,7 +1073,7 @@
                     Abra a partida no Gamers Club → F12 → Console → cole o comando abaixo e aperte Enter. Os dados serão copiados automaticamente.
                 </p>
                 <div style="position:relative;">
-                    <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((()=>{const d=[];const errors=[];document.querySelectorAll('.PlayerStatsTable').forEach(t=>{t.querySelectorAll('tr.PlayerStatsLine').forEach(r=>{const n=r.querySelector('.PlayerStatsProfile__nickname')?.textContent?.trim();if(!n)return;const c=[...r.querySelectorAll('td.PlayerStatsLine__col')].map(c=>c.textContent.trim());const colCount=c.length;if(colCount<13){errors.push(n+': apenas '+colCount+' colunas (esperado 13+)');return}const av=r.querySelector('.gc-avatar-image')?.src||'';const m=av.match(/players\/avatar\/(\d+)/);const k=+c[1]||0,a=+c[2]||0,de=+c[3]||0,diff=+c[4]||0,adr=+(c[5])||0,kdr=+(c[6])||0,kast=parseInt(c[7])||0,fk=+c[11]||0,rp=+c[12]||0;const w=[];if(k<0||de<0||a<0)w.push('stats negativos');if(kdr>0&&de>0&&Math.abs(kdr-k/de)>0.15)w.push('KDR nao bate: '+kdr+' vs '+Math.round(k/de*100)/100);if(diff!==(k-de))w.push('Diff nao bate: '+diff+' vs '+(k-de));if(adr>500)w.push('ADR muito alto: '+adr);if(w.length>0)errors.push(n+': '+w.join(', '));d.push({name:n,gcId:m?m[1]:'',avatar:av,k,a,d:de,diff,adr,kdr,kast,fk,rp,_cols:colCount,_v:2})})});if(d.length===0){alert('❌ Nenhum jogador encontrado! Verifique se está na página de uma partida da GC.');return}let msg='✅ '+d.length+' jogadores copiados!';if(errors.length>0)msg+='\\n\\n⚠️ AVISOS (verifique!):\\n'+errors.join('\\n');const j=JSON.stringify(d);const ta=document.createElement('textarea');ta.value=j;document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove();alert(msg)})())</pre>
+                    <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((()=>{const d=[];const errors=[];const tables=document.querySelectorAll('.PlayerStatsTable');tables.forEach(t=>{const teamPlayers=[];t.querySelectorAll('tr.PlayerStatsLine').forEach(r=>{const n=r.querySelector('.PlayerStatsProfile__nickname')?.textContent?.trim();if(!n)return;const c=[...r.querySelectorAll('td.PlayerStatsLine__col')].map(c=>c.textContent.trim());const colCount=c.length;if(colCount<13){errors.push(n+': apenas '+colCount+' colunas (esperado 13+)');return}const av=r.querySelector('.gc-avatar-image')?.src||'';const m=av.match(/players\/avatar\/(\d+)/);const k=+c[1]||0,a=+c[2]||0,de=+c[3]||0,diff=+c[4]||0,adr=+(c[5])||0,kdr=+(c[6])||0,kast=parseInt(c[7])||0,fk=+c[11]||0,rp=+c[12]||0;const w=[];if(k<0||de<0||a<0)w.push('stats negativos');if(kdr>0&&de>0&&Math.abs(kdr-k/de)>0.15)w.push('KDR nao bate: '+kdr+' vs '+Math.round(k/de*100)/100);if(diff!==(k-de))w.push('Diff nao bate: '+diff+' vs '+(k-de));if(adr>500)w.push('ADR muito alto: '+adr);if(w.length>0)errors.push(n+': '+w.join(', '));teamPlayers.push({name:n,gcId:m?m[1]:'',avatar:av,k,a,d:de,diff,adr,kdr,kast,fk,rp,_cols:colCount,_v:3})});const rpPos=teamPlayers.filter(p=>p.rp>0).length;const rpNeg=teamPlayers.filter(p=>p.rp<0).length;const teamWin=rpPos>=rpNeg;teamPlayers.forEach(p=>{p.win=teamWin;d.push(p)})});if(d.length===0){alert('\u274c Nenhum jogador encontrado! Verifique se est\u00e1 na p\u00e1gina de uma partida da GC.');return}let msg='\u2705 '+d.length+' jogadores copiados!';if(errors.length>0)msg+='\\\\n\\\\n\u26a0\ufe0f AVISOS (verifique!):\\\\n'+errors.join('\\\\n');const j=JSON.stringify(d);const ta=document.createElement('textarea');ta.value=j;document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove();alert(msg)})())</pre>
                     <button class="btn btn-secondary btn-small" onclick="copySnippet()" style="position:absolute;top:8px;right:8px;padding:4px 10px;font-size:11px;">📋 Copiar</button>
                 </div>
             </div>
@@ -2522,7 +2522,8 @@ async function loadDashboard() {
                 p.kastSum += g.kast;
                 p.fk += g.fk;
                 p.rpTotal += g.rp;
-                if (g.rp >= 0) { p.wins++; p.rpPositive += g.rp; }
+                const isWin = g.win != null ? g.win : (g.rp >= 0);
+                if (isWin) { p.wins++; p.rpPositive += g.rp; }
                 else { p.losses++; p.rpNegative += g.rp; }
                 if (g.k > p.bestKills) p.bestKills = g.k;
                 if (g.d > p.worstDeaths) p.worstDeaths = g.d;
@@ -3496,6 +3497,7 @@ async function saveGCImport() {
                     kast: gc.kast,
                     fk: gc.fk,
                     rp: gc.rp,
+                    win: gc.win != null ? gc.win : (gc.rp >= 0),
                     gcMatchIdx: parseInt(slotId) || 1
                 });
             });
@@ -3802,8 +3804,9 @@ function processAllGCMatches() {
                 e.fk += (p.fk || 0);
                 e.rp += (p.rp || 0);
                 e.matches += 1;
-                e.wins += ((p.rp || 0) >= 0 ? 1 : 0);
-                e.losses += ((p.rp || 0) < 0 ? 1 : 0);
+                const isWin = p.win != null ? p.win : ((p.rp || 0) >= 0);
+                e.wins += (isWin ? 1 : 0);
+                e.losses += (isWin ? 0 : 1);
                 if (!e.avatar && p.avatar) e.avatar = p.avatar;
             } else {
                 gcAggregated[key] = {
@@ -3819,8 +3822,8 @@ function processAllGCMatches() {
                     fk: p.fk || 0,
                     rp: p.rp || 0,
                     matches: 1,
-                    wins: (p.rp || 0) >= 0 ? 1 : 0,
-                    losses: (p.rp || 0) < 0 ? 1 : 0,
+                    wins: (p.win != null ? p.win : ((p.rp || 0) >= 0)) ? 1 : 0,
+                    losses: (p.win != null ? p.win : ((p.rp || 0) >= 0)) ? 0 : 1,
                 };
             }
         });
