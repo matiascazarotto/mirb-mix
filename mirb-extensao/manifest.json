@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "MiRB - GC Stats",
+  "version": "1.0.0",
+  "description": "Envia stats de partidas da Gamers Club direto para o MiRB",
+  "permissions": [],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://gamersclub.com.br/lobby/partida/*",
+        "https://gamersclub.com.br/lobby/match/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "48": "icon48.png",
+    "128": "icon128.png"
+  }
+}
