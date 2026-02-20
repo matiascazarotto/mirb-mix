@@ -815,6 +815,7 @@
             .container { padding: 12px 10px; }
             .card { padding: 16px 12px; }
             .toast { right: 10px; left: 10px; max-width: none; }
+            .gc-scoreboard-teams { grid-template-columns: 1fr !important; }
         }
 
         @media (max-width: 400px) {
@@ -2173,7 +2174,7 @@ function showResultModal(title, teams) {
         </div>
         <div class="teams-grid">
             <div class="team-card ct">
-                <div class="team-label">Time CT</div>
+                <div class="team-label">Time A</div>
                 ${teams.teamA.map(p => `
                     <div class="team-player">
                         <span class="team-player-name">${p.name}</span>
@@ -2186,7 +2187,7 @@ function showResultModal(title, teams) {
                 <div class="team-total" style="color:var(--ct-blue)">Total: ${teams.sumA}</div>
             </div>
             <div class="team-card tr">
-                <div class="team-label">Time TR</div>
+                <div class="team-label">Time B</div>
                 ${teams.teamB.map(p => `
                     <div class="team-player">
                         <span class="team-player-name">${p.name}</span>
@@ -2209,9 +2210,9 @@ function showResultModal(title, teams) {
 function copyResultWhatsApp(encoded) {
     const { name, teams } = JSON.parse(decodeURIComponent(encoded));
     let text = `🎮 *${name}* 🎮\n\n`;
-    text += `💙 *TIME CT* (${teams.sumA} pts)\n`;
+    text += `💙 *TIME A* (${teams.sumA} pts)\n`;
     teams.teamA.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
-    text += `\n🧡 *TIME TR* (${teams.sumB} pts)\n`;
+    text += `\n🧡 *TIME B* (${teams.sumB} pts)\n`;
     teams.teamB.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
     text += `\n📊 Diferença: ${Math.abs(teams.sumA - teams.sumB)} pts`;
     text += `\n\n_Bom jogo! GLHF!_ 🎯`;
@@ -2454,6 +2455,95 @@ async function loadMatchesPage() {
 
             const gcCount = m.gcMatchCount || 0;
 
+            // Build GC scoreboard HTML
+            let gcScoreboardHtml = '';
+            if (m.gcStats && m.gcStats.length > 0) {
+                // Group by team
+                const teams = {};
+                m.gcStats.forEach(s => {
+                    const team = s.teamName || 'Sem Time';
+                    if (!teams[team]) teams[team] = { players: [], score: s.teamScore, wins: 0, losses: 0 };
+                    teams[team].players.push(s);
+                    if (s.win) teams[team].wins++;
+                    else teams[team].losses++;
+                });
+                const teamKeys = Object.keys(teams);
+                const hasTeams = teamKeys.length >= 2 && teamKeys[0] !== 'Sem Time';
+
+                if (hasTeams) {
+                    const [teamAKey, teamBKey] = teamKeys;
+                    const teamA = teams[teamAKey];
+                    const teamB = teams[teamBKey];
+                    const scoreA = teamA.score != null ? teamA.score : '?';
+                    const scoreB = teamB.score != null ? teamB.score : '?';
+                    const aWon = teamA.score != null && teamB.score != null && teamA.score > teamB.score;
+                    const bWon = teamA.score != null && teamB.score != null && teamB.score > teamA.score;
+
+                    const buildTeamRows = (players) => {
+                        return [...players].sort((a, b) => b.adr - a.adr).map(p => {
+                            const diffColor = p.diff > 0 ? 'var(--green)' : p.diff < 0 ? 'var(--red)' : 'var(--text-dim)';
+                            const kdrColor = p.kdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+                            const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
+                            return `<tr style="border-bottom:1px solid rgba(255,255,255,0.04);">
+                                <td style="padding:5px 4px;">
+                                    <div style="display:flex;align-items:center;gap:5px;">
+                                        ${p.avatar ? `<img src="${p.avatar}" style="width:20px;height:20px;border-radius:50%;object-fit:cover;">` : ''}
+                                        <span style="font-weight:600;font-size:12px;">${p.playerName}</span>
+                                    </div>
+                                </td>
+                                <td style="padding:5px 3px;text-align:center;color:var(--green);font-weight:700;font-size:12px;">${p.k}</td>
+                                <td style="padding:5px 3px;text-align:center;font-size:12px;">${p.d}</td>
+                                <td style="padding:5px 3px;text-align:center;color:${diffColor};font-weight:600;font-size:12px;">${p.diff > 0 ? '+' : ''}${p.diff}</td>
+                                <td style="padding:5px 3px;text-align:center;font-size:12px;">${p.adr}</td>
+                                <td style="padding:5px 3px;text-align:center;color:${kdrColor};font-weight:600;font-size:12px;">${p.kdr}</td>
+                                <td style="padding:5px 3px;text-align:center;color:${rpColor};font-weight:700;font-size:12px;">${p.rp > 0 ? '+' : ''}${p.rp}</td>
+                            </tr>`;
+                        }).join('');
+                    };
+
+                    const teamHeader = `<tr style="border-bottom:1px solid rgba(255,255,255,0.1);">
+                        <th style="padding:4px;text-align:left;font-size:10px;color:var(--text-dim);text-transform:uppercase;">Jogador</th>
+                        <th style="padding:4px 3px;text-align:center;font-size:10px;color:var(--text-dim);">K</th>
+                        <th style="padding:4px 3px;text-align:center;font-size:10px;color:var(--text-dim);">D</th>
+                        <th style="padding:4px 3px;text-align:center;font-size:10px;color:var(--text-dim);">+/-</th>
+                        <th style="padding:4px 3px;text-align:center;font-size:10px;color:var(--text-dim);">ADR</th>
+                        <th style="padding:4px 3px;text-align:center;font-size:10px;color:var(--text-dim);">KDR</th>
+                        <th style="padding:4px 3px;text-align:center;font-size:10px;color:var(--text-dim);">RP</th>
+                    </tr>`;
+
+                    gcScoreboardHtml = `
+                    <div style="margin-top:14px;padding:14px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:10px;">
+                        <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-bottom:14px;">
+                            <div style="text-align:center;">
+                                <div style="font-size:11px;color:var(--ct-blue);font-weight:600;text-transform:uppercase;letter-spacing:1px;">${teamAKey}</div>
+                                <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:${aWon ? 'var(--green)' : 'var(--red)'};">${scoreA}</div>
+                            </div>
+                            <div style="font-size:14px;color:var(--text-dim);font-weight:600;">VS</div>
+                            <div style="text-align:center;">
+                                <div style="font-size:11px;color:var(--tr-gold);font-weight:600;text-transform:uppercase;letter-spacing:1px;">${teamBKey}</div>
+                                <div style="font-family:'Rajdhani',sans-serif;font-size:32px;font-weight:700;color:${bWon ? 'var(--green)' : 'var(--red)'};">${scoreB}</div>
+                            </div>
+                        </div>
+                        <div class="gc-scoreboard-teams" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                            <div>
+                                <div style="font-size:11px;color:var(--ct-blue);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">${teamAKey}</div>
+                                <table style="width:100%;border-collapse:collapse;">
+                                    ${teamHeader}
+                                    ${buildTeamRows(teamA.players)}
+                                </table>
+                            </div>
+                            <div>
+                                <div style="font-size:11px;color:var(--tr-gold);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">${teamBKey}</div>
+                                <table style="width:100%;border-collapse:collapse;">
+                                    ${teamHeader}
+                                    ${buildTeamRows(teamB.players)}
+                                </table>
+                            </div>
+                        </div>
+                    </div>`;
+                }
+            }
+
             html += `
                 <div class="match-card ${m.status}">
                     <div class="match-header">
@@ -2465,6 +2555,7 @@ async function loadMatchesPage() {
                     </div>
                     <div class="vote-count-info">📊 ${votesSnap.size} voto(s)</div>
                     ${mvpHtml}
+                    ${gcScoreboardHtml}
                     <div class="btn-group" style="margin-top:12px;">
                         ${m.status === 'closed' && m.result ? `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
