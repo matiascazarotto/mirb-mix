@@ -1803,7 +1803,7 @@ async function loadAdminMatches() {
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')">📹 VOD</button>
                         <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir</button>
-                        ${hasGC ? `<span onclick="openGCImport('${matchId}')" style="font-size:11px;color:var(--text-dim);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;white-space:nowrap;" title="Reimportar stats da Gamersclub">reimportar GC${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? ' ⚠️' : ''}</span>` : `<button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Importar GC</button>`}
+                        ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="openGCImport('${matchId}')" style="padding:5px 10px;font-size:11px;opacity:0.6;">🔄 GC${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? ' ⚠️' : ''}</button>` : `<button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Importar GC</button>`}
                         <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(136,146,164,0.2);color:var(--text-dim);border:1px solid rgba(136,146,164,0.3);box-shadow:none;padding:8px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
                     </div>
                     <div id="vodNewInputs-${matchId}" style="margin-top:6px;"></div>
@@ -1820,7 +1820,7 @@ async function loadAdminMatches() {
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Reabrir</button>
-                        <span onclick="openGCImport('${matchId}')" style="font-size:11px;color:var(--text-dim);cursor:pointer;text-decoration:underline;text-decoration-style:dotted;white-space:nowrap;" title="Reimportar stats da Gamersclub">reimportar GC</span>
+                        <button class="btn btn-secondary btn-small" onclick="openGCImport('${matchId}')" style="padding:5px 10px;font-size:11px;opacity:0.6;">🔄 GC</button>
                     </div>
                     `}
                 </div>
