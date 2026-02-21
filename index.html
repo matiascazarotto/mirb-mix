@@ -3897,12 +3897,28 @@ async function saveGCImport() {
             });
         });
 
+        // Sync result teams with GC teams
+        const matchData = (await db.collection('matches').doc(gcImportMatchId).get()).data();
+        const updateData = { gcStats, gcMatchCount: allParsed.length, gcRawJsons };
+
+        if (matchData.result && matchData.players) {
+            const teamNames = [...new Set(gcStats.map(s => s.teamName).filter(Boolean))];
+            if (teamNames.length === 2) {
+                const playersInA = new Set(gcStats.filter(s => s.teamName === teamNames[0]).map(s => s.playerId));
+                const playersInB = new Set(gcStats.filter(s => s.teamName === teamNames[1]).map(s => s.playerId));
+                const allPlayers = matchData.players;
+                const newTeamA = allPlayers.filter(p => playersInA.has(p.id));
+                const newTeamB = allPlayers.filter(p => playersInB.has(p.id));
+                if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === allPlayers.length) {
+                    const sumA = newTeamA.reduce((s, p) => s + (p.currentLevel || 10), 0);
+                    const sumB = newTeamB.reduce((s, p) => s + (p.currentLevel || 10), 0);
+                    updateData.result = { teamA: newTeamA, teamB: newTeamB, sumA, sumB };
+                }
+            }
+        }
+
         // Save on match
-        batch.update(db.collection('matches').doc(gcImportMatchId), {
-            gcStats,
-            gcMatchCount: allParsed.length,
-            gcRawJsons
-        });
+        batch.update(db.collection('matches').doc(gcImportMatchId), updateData);
         await batch.commit();
 
         toast(`✅ Stats de ${allParsed.length} partida(s) GC salvas! (${allUniqueLinked.length} jogadores)`, 'success');
