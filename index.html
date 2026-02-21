@@ -2623,9 +2623,9 @@ function updateMuralAuthorLine() {
     if (!el) return;
     const name = localStorage.getItem('muralAuthor');
     if (name) {
-        el.innerHTML = `por <strong style="color:var(--yellow);">${escapeHtml(name)}</strong> · <a href="#" onclick="changeMuralAuthor();return false;" style="color:var(--text-dim);text-decoration:underline;">alterar</a>`;
+        el.innerHTML = `por <strong style="color:var(--yellow);">${escapeHtml(name)}</strong> · <a href="#" onclick="changeMuralAuthor();return false;" style="color:var(--text-dim);text-decoration:underline;">alterar</a> · <a href="#" onclick="clearMuralAuthor();return false;" style="color:var(--text-dim);text-decoration:underline;">anônimo</a>`;
     } else {
-        el.innerHTML = '';
+        el.innerHTML = `como <strong style="color:var(--text-dim);">Anônimo</strong> · <a href="#" onclick="changeMuralAuthor();return false;" style="color:var(--text-dim);text-decoration:underline;">me identificar</a>`;
     }
 }
 
@@ -2637,6 +2637,7 @@ function changeMuralAuthor() {
         <div style="display:inline-flex;gap:6px;align-items:center;">
             <input type="text" id="muralAuthorInput" value="${escapeHtml(current)}" placeholder="Seu nome" maxlength="30" style="padding:4px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--text);font-size:12px;font-family:inherit;width:120px;" onkeydown="if(event.key==='Enter'){confirmMuralAuthor();}">
             <button class="btn btn-primary btn-small" onclick="confirmMuralAuthor()" style="padding:3px 10px;font-size:11px;">OK</button>
+            <a href="#" onclick="updateMuralAuthorLine();return false;" style="color:var(--text-dim);font-size:11px;">cancelar</a>
         </div>
     `;
     setTimeout(() => { const i = document.getElementById('muralAuthorInput'); if (i) { i.focus(); i.select(); } }, 50);
@@ -2647,7 +2648,14 @@ function confirmMuralAuthor() {
     const val = input ? input.value.trim() : '';
     if (val) {
         localStorage.setItem('muralAuthor', val);
+    } else {
+        localStorage.removeItem('muralAuthor');
     }
+    updateMuralAuthorLine();
+}
+
+function clearMuralAuthor() {
+    localStorage.removeItem('muralAuthor');
     updateMuralAuthorLine();
 }
 
