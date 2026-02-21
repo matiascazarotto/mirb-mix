@@ -4604,14 +4604,14 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
         const mergedRawJsons = [...existingRawJsons, JSON.stringify(gcPlayers)];
         const newCount = existingCount > 0 ? existingCount + 1 : 1;
 
-        // ── Sync result teams with GC teams (first GC link only) ──
+        // ── Sync result teams with GC teams ──
         const updateData = {
             gcStats: mergedStats,
             gcMatchCount: newCount,
             gcRawJsons: mergedRawJsons
         };
 
-        if (nextIdx === 1 && matchData.result && matchData.players) {
+        if (matchData.result && matchData.players) {
             const teamNames = [...new Set(newStats.map(s => s.teamName).filter(Boolean))];
             if (teamNames.length === 2) {
                 const gcTeamA = teamNames[0];
