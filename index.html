@@ -1423,8 +1423,12 @@ function renderAdminPanel() {
             </div>
 
             <div class="card">
-                <div class="card-title">Jogadores Cadastrados</div>
-                <div id="adminPlayersList"><div class="loading-spinner">Carregando</div></div>
+                <div class="card-title">Jogadores Cadastrados <span id="adminPlayersCount" style="color:var(--text-dim);font-size:14px;font-weight:400;"></span></div>
+                <div style="position:relative;">
+                    <span style="position:absolute;left:12px;top:10px;font-size:14px;color:var(--text-dim);pointer-events:none;">🔍</span>
+                    <input type="text" class="player-filter-input" id="playersListFilter" placeholder="Filtrar jogador..." oninput="filterAdminPlayersList()">
+                </div>
+                <div id="adminPlayersList" class="player-selection-grid"><div class="loading-spinner">Carregando</div></div>
             </div>
         </div>
 
@@ -1526,27 +1530,36 @@ async function loadAdminPlayers() {
 
 function renderAdminPlayersList() {
     const el = document.getElementById('adminPlayersList');
+    const countEl = document.getElementById('adminPlayersCount');
+    if (countEl) countEl.textContent = `(${players.length})`;
+    const filterInput = document.getElementById('playersListFilter');
+    if (filterInput) filterInput.value = '';
+
     if (!players.length) {
         el.innerHTML = '<div class="empty-state"><p>Nenhum jogador cadastrado.</p></div>';
         return;
     }
     el.innerHTML = players.map(p => `
-        <div class="player-item">
-            <div>
-                <div class="player-name">${p.name}</div>
-                <div class="player-meta">
-                    <span class="badge badge-role">${p.role}</span>
-                    ${p.playstyle && p.playstyle !== 'Normal' ? `<span class="badge badge-style-${p.playstyle}">${p.playstyle === 'Agressivo' ? '⚡ Agressivo' : '🐢 Lento'}</span>` : `<span class="badge badge-style-Normal">🎯 Normal</span>`}
-                    ${p.duo ? `<span class="badge badge-duo">Duo: ${getPlayerName(p.duo)}</span>` : ''}
-                    ${p.gcId ? `<span class="badge" style="background:rgba(0,200,83,0.15);color:var(--green);">GC: ${p.gcId}</span>` : `<span class="badge" style="background:rgba(255,61,61,0.15);color:var(--red);font-size:10px;">Sem GC</span>`}
-                </div>
+        <div class="player-selector" onclick="openEditPlayer('${p.id}')" data-name="${p.name.toLowerCase()}" style="cursor:pointer;position:relative;">
+            <div class="player-name" style="color:var(--yellow);">${p.name}</div>
+            <div class="player-meta">
+                <span class="badge badge-role">${p.role}</span>
+                ${p.playstyle && p.playstyle !== 'Normal' ? `<span class="badge badge-style-${p.playstyle}">${p.playstyle === 'Agressivo' ? '⚡' : '🐢'}</span>` : ''}
             </div>
-            <div class="player-actions">
-                <button class="btn btn-secondary btn-small" onclick="openEditPlayer('${p.id}')">✏️</button>
-                <button class="btn btn-danger btn-small" onclick="deletePlayer('${p.id}')">🗑️</button>
+            <div style="display:flex;gap:4px;font-size:10px;margin-top:2px;">
+                ${p.duo ? `<span class="badge badge-duo" style="font-size:9px;padding:1px 5px;">Duo: ${getPlayerName(p.duo)}</span>` : ''}
+                ${p.gcId ? `<span style="color:var(--green);font-size:10px;">🔗 GC</span>` : `<span style="color:var(--red);font-size:10px;">Sem GC</span>`}
             </div>
         </div>
     `).join('');
+}
+
+function filterAdminPlayersList() {
+    const query = (document.getElementById('playersListFilter')?.value || '').toLowerCase();
+    document.querySelectorAll('#adminPlayersList .player-selector').forEach(el => {
+        const name = el.dataset.name || '';
+        el.style.display = name.includes(query) ? '' : 'none';
+    });
 }
 
 function getPlayerName(id) {
