@@ -2564,7 +2564,24 @@ function toggleMuralDropdown() {
         dd.innerHTML = dd._prevHtml;
         dd._prevHtml = null;
     }
-    dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
+    const opening = dd.style.display === 'none';
+    dd.style.display = opening ? 'block' : 'none';
+    if (opening) {
+        setTimeout(() => {
+            document.addEventListener('click', closeMuralDropdownOutside);
+        }, 0);
+    }
+}
+
+function closeMuralDropdownOutside(e) {
+    const dd = document.getElementById('muralDropdown');
+    const btn = document.getElementById('muralTargetBtn');
+    if (!dd || !btn) return;
+    if (!dd.contains(e.target) && !btn.contains(e.target)) {
+        dd.style.display = 'none';
+        if (dd._prevHtml) { dd.innerHTML = dd._prevHtml; dd._prevHtml = null; }
+        document.removeEventListener('click', closeMuralDropdownOutside);
+    }
 }
 
 function selectMuralTarget(name) {
