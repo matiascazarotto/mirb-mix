@@ -931,7 +931,7 @@
 
         .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
-        /* ── Mural da Acusação ── */
+        /* ── Ouvidoria MiRB ── */
         .mural-container { max-width: 600px; margin: 0 auto; padding: 0 16px; }
         .mural-title { font-family: 'Rajdhani', sans-serif; font-size: 1.3em; font-weight: 700; color: var(--yellow); text-align: center; margin-bottom: 16px; letter-spacing: 1px; }
         .mural-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
@@ -2384,9 +2384,9 @@ async function loadVotePage() {
     const muralHtml = `
         <div class="mural-container" style="margin-top:24px;">
             <div style="border-top:1px solid rgba(255,255,255,0.06);margin-bottom:20px;"></div>
-            <div class="mural-title">⚖️ Mural da Acusação</div>
+            <div class="mural-title">📢 Ouvidoria MiRB</div>
             <div class="mural-form">
-                <input type="text" id="muralText" placeholder="Mande sua acusação" maxlength="200">
+                <input type="text" id="muralText" placeholder="Registre sua reclamação..." maxlength="200">
                 <div class="mural-form-actions">
                     <div style="position:relative;flex:1;">
                         <button type="button" id="muralTargetBtn" onclick="toggleMuralDropdown()" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-dim);font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;">Sobre quem? ▾</button>
@@ -2480,7 +2480,7 @@ async function loadVotePage() {
 }
 
 // ╔══════════════════════════════════╗
-// ║   MURAL DA ACUSAÇÃO             ║
+// ║   OUVIDORIA MIRB                ║
 // ╚══════════════════════════════════╝
 async function initMural() {
     // Populate player dropdown
@@ -2522,7 +2522,7 @@ async function initMural() {
             });
 
             if (validDocs.length === 0) {
-                postsEl.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:20px;font-size:13px;">Nenhuma acusação ainda... Seja o primeiro! 😈</p>';
+                postsEl.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:20px;font-size:13px;">Nenhuma reclamação ainda... Seja o primeiro! 😈</p>';
                 return;
             }
 
@@ -2665,8 +2665,8 @@ async function postMural() {
     const text = textInput.value.trim();
     const target = targetSelect.value;
 
-    if (!text) { toast('Escreva uma acusação!', 'error'); return; }
-    if (!target) { toast('Selecione sobre quem é a acusação!', 'error'); return; }
+    if (!text) { toast('Escreva sua reclamação!', 'error'); return; }
+    if (!target) { toast('Selecione sobre quem é a reclamação!', 'error'); return; }
 
     const author = localStorage.getItem('muralAuthor') || 'Anônimo';
 
