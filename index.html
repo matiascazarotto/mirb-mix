@@ -2374,6 +2374,19 @@ async function loadVotePage() {
     const el = document.getElementById('voteContent');
     el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
 
+    const muralHtml = `
+        <div class="mural-container" style="margin-top:24px;">
+            <div style="border-top:1px solid rgba(255,255,255,0.06);margin-bottom:20px;"></div>
+            <div class="mural-title">🏆 Muro da Fama & Vergonha</div>
+            <div class="mural-form">
+                <input type="text" id="muralText" placeholder="Escreva uma acusação engraçada..." maxlength="200">
+                <select id="muralTarget"><option value="">Sobre quem?</option></select>
+                <button class="btn btn-primary btn-small" onclick="postMural()">📤 Postar</button>
+            </div>
+            <div id="muralPosts"></div>
+        </div>
+    `;
+
     try {
         const snap = await db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get();
 
@@ -2383,15 +2396,7 @@ async function loadVotePage() {
                     <div class="icon">🗳️</div>
                     <p>Nenhuma partida aberta para votação.</p>
                 </div>
-                <div class="mural-container">
-                    <div class="mural-title">🏆 Muro da Fama & Vergonha</div>
-                    <div class="mural-form">
-                        <input type="text" id="muralText" placeholder="Escreva uma acusação engraçada..." maxlength="200">
-                        <select id="muralTarget"><option value="">Sobre quem?</option></select>
-                        <button class="btn btn-primary btn-small" onclick="postMural()">📤 Postar</button>
-                    </div>
-                    <div id="muralPosts"></div>
-                </div>
+                ${muralHtml}
             `;
             initMural();
             return;
@@ -2453,7 +2458,8 @@ async function loadVotePage() {
             }
         });
 
-        el.innerHTML = html;
+        el.innerHTML = html + muralHtml;
+        initMural();
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Erro ao carregar: ${e.message}</p>`;
     }
@@ -2475,20 +2481,40 @@ async function initMural() {
             select.appendChild(opt);
         });
     }
-    // Check if user already has a name saved
-    const savedName = localStorage.getItem('muralAuthor');
-    // Listen for posts in real-time
+    // Listen for posts in real-time (last 15 minutes only)
+    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
     muralUnsubscribe = db.collection('mural')
-        .orderBy('laughs', 'desc')
+        .where('createdAt', '>=', fifteenMinAgo)
+        .orderBy('createdAt', 'desc')
         .limit(50)
         .onSnapshot(snap => {
             const postsEl = document.getElementById('muralPosts');
             if (!postsEl) return;
-            if (snap.empty) {
+
+            // Filter out expired posts client-side (in case listener started before expiry)
+            const now = Date.now();
+            const validDocs = [];
+            snap.docs.forEach(doc => {
+                const d = doc.data();
+                if (!d.createdAt) { validDocs.push(doc); return; }
+                const age = now - d.createdAt.toDate().getTime();
+                if (age > 15 * 60 * 1000) {
+                    // Cleanup: delete expired post
+                    db.collection('mural').doc(doc.id).delete().catch(() => {});
+                } else {
+                    validDocs.push(doc);
+                }
+            });
+
+            if (validDocs.length === 0) {
                 postsEl.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:20px;font-size:13px;">Nenhuma acusação ainda... Seja o primeiro! 😈</p>';
                 return;
             }
-            postsEl.innerHTML = snap.docs.map(doc => {
+
+            // Sort by laughs desc (since query orders by createdAt for the where filter)
+            validDocs.sort((a, b) => (b.data().laughs || 0) - (a.data().laughs || 0));
+
+            postsEl.innerHTML = validDocs.map(doc => {
                 const d = doc.data();
                 const id = doc.id;
                 const hasLaughed = localStorage.getItem(`laughed_${id}`);
