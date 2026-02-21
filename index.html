@@ -1779,15 +1779,17 @@ async function loadAdminMatches() {
                     if (s.teamName && !byIdx[idx].teamA) { byIdx[idx].teamA = s.teamName; byIdx[idx].scoreA = s.teamScore; }
                     else if (s.teamName && s.teamName !== byIdx[idx].teamA && !byIdx[idx].teamB) { byIdx[idx].teamB = s.teamName; byIdx[idx].scoreB = s.teamScore; }
                 });
-                gcScoreHtml = Object.keys(byIdx).sort((a,b)=>a-b).map(idx => {
+                const idxKeys = Object.keys(byIdx).sort((a,b)=>a-b);
+                gcScoreHtml = idxKeys.map(idx => {
                     const g = byIdx[idx];
                     if (!g.teamA || !g.teamB || g.scoreA == null || g.scoreB == null) return '';
                     const aWin = g.scoreA > g.scoreB;
-                    const prefix = Object.keys(byIdx).length > 1 ? '<span style="color:var(--ct-blue);font-weight:600;font-size:11px;">GC#' + idx + '</span> ' : '';
+                    const prefix = idxKeys.length > 1 ? '<span style="color:var(--ct-blue);font-weight:600;font-size:11px;">GC#' + idx + '</span> ' : '';
+                    const removeBtn = '<span onclick="unlinkGCMatch(\'' + matchId + '\',' + idx + ')" style="color:var(--red);cursor:pointer;opacity:0.5;margin-left:4px;font-size:10px;" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="Remover GC#' + idx + '">✕</span>';
                     return '<span style="font-size:12px;">' + prefix +
                         '<span style="color:' + (aWin ? 'var(--green)' : 'var(--text-dim)') + ';font-weight:600;">' + g.teamA + ' ' + g.scoreA + '</span>' +
                         '<span style="color:var(--text-dim);"> x </span>' +
-                        '<span style="color:' + (!aWin ? 'var(--green)' : 'var(--text-dim)') + ';font-weight:600;">' + g.scoreB + ' ' + g.teamB + '</span></span>';
+                        '<span style="color:' + (!aWin ? 'var(--green)' : 'var(--text-dim)') + ';font-weight:600;">' + g.scoreB + ' ' + g.teamB + '</span>' + removeBtn + '</span>';
                 }).filter(Boolean).join('<span style="color:var(--text-dim);margin:0 6px;">|</span>');
             }
 
@@ -2035,7 +2037,8 @@ async function clearGCStatsForMatch(matchId, matchName) {
         await db.collection('matches').doc(matchId).update({
             gcStats: firebase.firestore.FieldValue.delete(),
             gcRawJsons: firebase.firestore.FieldValue.delete(),
-            gcMatchCount: firebase.firestore.FieldValue.delete()
+            gcMatchCount: firebase.firestore.FieldValue.delete(),
+            gcMatchIds: firebase.firestore.FieldValue.delete()
         });
         toast(`Stats GC de "${matchName}" removidas!`, 'success');
         showOutdatedMatches();
@@ -2489,7 +2492,7 @@ async function initMural() {
     if (dropdown) {
         const snap = await db.collection('players').orderBy('name').get();
         const sortedPlayers = snap.docs.map(d => d.data()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
-        const otherOption = `<div onclick="selectMuralTargetCustom()" style="padding:8px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:var(--ct-blue);transition:background 0.15s;font-weight:600;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">✏️ Outro...</div><div style="border-top:1px solid rgba(255,255,255,0.08);margin:4px 0;"></div>`;
+        const otherOption = `<div onclick="event.stopPropagation();selectMuralTargetCustom()" style="padding:8px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:var(--ct-blue);transition:background 0.15s;font-weight:600;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">✏️ Outro...</div><div style="border-top:1px solid rgba(255,255,255,0.08);margin:4px 0;"></div>`;
         const playerOptions = sortedPlayers.map(p => {
             return `<div onclick="selectMuralTarget('${escapeHtml(p.name)}')" style="padding:8px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:var(--text);transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">${p.name}</div>`;
         }).join('');
@@ -3929,8 +3932,9 @@ function openGCImport(matchId) {
     db.collection('matches').doc(matchId).get().then(doc => {
         const m = doc.data();
         if (m.gcRawJsons && m.gcRawJsons.length > 0) {
-            m.gcRawJsons.forEach(rawJson => {
-                addGCImportSlot(rawJson);
+            const existingIds = m.gcMatchIds || [];
+            m.gcRawJsons.forEach((rawJson, i) => {
+                addGCImportSlot(rawJson, existingIds[i] || '');
             });
             // Add one empty slot for the new match
             addGCImportSlot();
@@ -3942,7 +3946,7 @@ function openGCImport(matchId) {
     });
 }
 
-function addGCImportSlot(prefillJson) {
+function addGCImportSlot(prefillJson, gcMatchId) {
     gcImportSlotCount++;
     const idx = gcImportSlotCount;
     const container = document.getElementById('gcImportSlots');
@@ -3962,6 +3966,7 @@ function addGCImportSlot(prefillJson) {
         </div>
         <textarea id="gcImpJson-${idx}" rows="2" placeholder='Cole o JSON da partida GC ${idx}...'
             oninput="validateGCImportSlot(${idx})"
+            data-gc-match-id="${gcMatchId || ''}"
             style="width:100%;padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-family:monospace;font-size:11px;resize:vertical;"></textarea>
     `;
     container.appendChild(slot);
@@ -4036,7 +4041,7 @@ async function processAllGCImports() {
         try {
             const data = JSON.parse(raw);
             if (!Array.isArray(data) || !data.length) throw new Error();
-            allParsed.push({ slotId, data });
+            allParsed.push({ slotId, data, gcMatchId: textarea.dataset.gcMatchId || '' });
         } catch {
             errors.push(`Partida GC ${slotId}`);
         }
@@ -4168,6 +4173,41 @@ async function saveGCImport() {
     }
 
     try {
+        // ── Duplicate check: verify gcMatchIds aren't already linked anywhere ──
+        const gcMatchIdsFromSlots = allParsed.map(p => p.gcMatchId || '');
+        const nonEmptyIds = gcMatchIdsFromSlots.filter(Boolean);
+        for (const gId of nonEmptyIds) {
+            // Check 1: matches with gcMatchIds field (new format)
+            const dupSnap = await db.collection('matches')
+                .where('gcMatchIds', 'array-contains', gId)
+                .get();
+            const dupDoc = dupSnap.docs.find(d => d.id !== gcImportMatchId);
+            if (dupDoc) {
+                toast(`⚠️ Partida GC #${gId} já está vinculada ao confronto "${dupDoc.data().name || dupDoc.id}"!`, 'error');
+                return;
+            }
+            // Check 2: gc-imports already linked (backward compat for old data)
+            const impSnap = await db.collection('gc-imports')
+                .where('gcMatchId', '==', gId)
+                .where('status', '==', 'used')
+                .get();
+            const linkedImp = impSnap.docs.find(d => d.data().linkedMatchId && d.data().linkedMatchId !== gcImportMatchId);
+            if (linkedImp) {
+                const linkedMatchId = linkedImp.data().linkedMatchId;
+                const linkedDoc = await db.collection('matches').doc(linkedMatchId).get();
+                if (linkedDoc.exists) {
+                    const ld = linkedDoc.data();
+                    // Verify match still has this GC match linked (not stale)
+                    const hasInIds = (ld.gcMatchIds || []).includes(gId);
+                    const hasGcData = !ld.gcMatchIds && (ld.gcStats || []).length > 0;
+                    if (hasInIds || hasGcData) {
+                        toast(`⚠️ Partida GC #${gId} já está vinculada ao confronto "${ld.name || linkedMatchId}"!`, 'error');
+                        return;
+                    }
+                }
+            }
+        }
+
         const batch = db.batch();
 
         // Link gcIds on players that need it
@@ -4212,7 +4252,7 @@ async function saveGCImport() {
 
         // Sync result teams with GC teams
         const matchData = (await db.collection('matches').doc(gcImportMatchId).get()).data();
-        const updateData = { gcStats, gcMatchCount: allParsed.length, gcRawJsons };
+        const updateData = { gcStats, gcMatchCount: allParsed.length, gcRawJsons, gcMatchIds: gcMatchIdsFromSlots };
 
         if (matchData.result && matchData.result.teamA && matchData.result.teamB) {
             const teamNames = [...new Set(gcStats.map(s => s.teamName).filter(Boolean))];
@@ -4609,50 +4649,66 @@ async function dismissExtensionImport(docId) {
 }
 
 // Also add extension imports inside the GC Import modal for matches
-function loadGCExtensionImportsForModal() {
+async function loadGCExtensionImportsForModal() {
     const el = document.getElementById('gcImportExtensionSlots');
     if (!el) return;
 
-    db.collection('gc-imports')
-        .where('status', '==', 'pending')
-        .orderBy('createdAt', 'desc')
-        .get()
-        .then(snap => {
-            if (snap.empty) {
-                el.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">Nenhuma partida pendente da extensão.</p>';
-                return;
-            }
-            let html = '';
-            snap.docs.forEach(doc => {
-                const d = doc.data();
-                const teamA = d.teamA || '?';
-                const teamB = d.teamB || '?';
-                const scoreA = d.scoreA || 0;
-                const scoreB = d.scoreB || 0;
-                const map = d.map || '';
-                html += `
-                    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.15);border-radius:6px;margin-bottom:6px;font-size:12px;">
-                        <span>
-                            <b>${teamA} ${scoreA} x ${scoreB} ${teamB}</b>
-                            <span style="color:var(--text-dim);margin-left:6px;">${map} | GC #${d.gcMatchId}</span>
-                        </span>
+    try {
+        const importsSnap = await db.collection('gc-imports')
+            .where('status', '==', 'pending')
+            .orderBy('createdAt', 'desc')
+            .get();
+
+        if (importsSnap.empty) {
+            el.innerHTML = '<p style="color:var(--text-dim);font-size:12px;">Nenhuma partida pendente da extensão.</p>';
+            return;
+        }
+
+        let html = '';
+        importsSnap.docs.forEach(doc => {
+            const d = doc.data();
+            const teamA = d.teamA || '?';
+            const teamB = d.teamB || '?';
+            const scoreA = d.scoreA || 0;
+            const scoreB = d.scoreB || 0;
+            const map = d.map || '';
+            html += `
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.15);border-radius:6px;margin-bottom:6px;font-size:12px;gap:8px;">
+                    <span>
+                        <b>${teamA} ${scoreA} x ${scoreB} ${teamB}</b>
+                        <span style="color:var(--text-dim);margin-left:6px;">${map} | GC #${d.gcMatchId}</span>
+                    </span>
+                    <div style="display:flex;gap:4px;flex-shrink:0;">
                         <button class="btn btn-primary btn-small" onclick="useExtensionImportInModal('${doc.id}')" style="font-size:11px;">Usar</button>
+                        <button class="btn btn-danger btn-small" onclick="dismissExtensionImportInModal('${doc.id}')" style="font-size:11px;padding:4px 8px;min-width:0;">✕</button>
                     </div>
-                `;
-            });
-            el.innerHTML = html;
+                </div>
+            `;
         });
+
+        el.innerHTML = html;
+    } catch (e) {
+        console.error('loadGCExtensionImportsForModal error:', e);
+        el.innerHTML = '';
+    }
 }
 
 function useExtensionImportInModal(docId) {
     db.collection('gc-imports').doc(docId).get().then(doc => {
         if (!doc.exists) return;
         const d = doc.data();
-        addGCImportSlot(d.playersJson);
+        addGCImportSlot(d.playersJson, d.gcMatchId || '');
         db.collection('gc-imports').doc(docId).update({ status: 'used' });
         toast(`Partida GC #${d.gcMatchId} carregada!`, 'success');
         loadGCExtensionImportsForModal();
     });
+}
+
+async function dismissExtensionImportInModal(docId) {
+    if (!confirm('Descartar esta importação?')) return;
+    await db.collection('gc-imports').doc(docId).delete();
+    toast('Import descartado.', 'success');
+    loadGCExtensionImportsForModal();
 }
 
 // ╔════════════════════════════════════════╗
@@ -4697,11 +4753,24 @@ async function loadPendingGCImports() {
             const gcPlayers = d.playersJson ? JSON.parse(d.playersJson) : [];
             const createdAt = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleString('pt-BR') : '';
 
-            // Score each MiRB match by how many GC players match
+            // Build GC team sets (map gcPlayer → systemPlayerId, grouped by teamName)
+            const gcDate = d.createdAt?.toDate ? d.createdAt.toDate().toLocaleDateString('pt-BR') : '';
+            const gcTeamNames = [...new Set(gcPlayers.map(p => p.teamName).filter(Boolean))];
+            const gcTeamSets = {};
+            gcPlayers.forEach(gcp => {
+                if (!gcp.teamName) return;
+                const sysP = gcp.gcId
+                    ? systemPlayers.find(sp => sp.gcId === gcp.gcId)
+                    : systemPlayers.find(sp => sp.name.toLowerCase() === gcp.name.toLowerCase());
+                if (sysP) {
+                    if (!gcTeamSets[gcp.teamName]) gcTeamSets[gcp.teamName] = new Set();
+                    gcTeamSets[gcp.teamName].add(sysP.id);
+                }
+            });
+
             const scored = closedMatches.map(m => {
                 let matchCount = 0;
                 gcPlayers.forEach(gcp => {
-                    // Find system player linked to this GC player
                     const sysPlayer = gcp.gcId
                         ? systemPlayers.find(sp => sp.gcId === gcp.gcId)
                         : systemPlayers.find(sp => sp.name.toLowerCase() === gcp.name.toLowerCase());
@@ -4709,18 +4778,40 @@ async function loadPendingGCImports() {
                         matchCount++;
                     }
                 });
-                return { ...m, matchCount };
+                const mDate = m.createdAt?.toDate ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '';
+                const sameDate = gcDate && mDate && gcDate === mDate;
+
+                // Check if GC teams match MiRB result teams
+                let teamsMatch = false;
+                if (m.result && m.result.teamA && m.result.teamB && gcTeamNames.length === 2) {
+                    const mirbA = new Set(m.result.teamA.map(p => p.id));
+                    const mirbB = new Set(m.result.teamB.map(p => p.id));
+                    const gcSets = Object.values(gcTeamSets);
+                    if (gcSets.length === 2) {
+                        const [gcA, gcB] = gcSets;
+                        const setsEqual = (a, b) => a.size === b.size && [...a].every(id => b.has(id));
+                        teamsMatch = (setsEqual(gcA, mirbA) && setsEqual(gcB, mirbB)) ||
+                                     (setsEqual(gcA, mirbB) && setsEqual(gcB, mirbA));
+                    }
+                }
+
+                return { ...m, matchCount, sameDate, teamsMatch };
             });
 
-            // Sort: most matches first, then by date (newest first)
+            // Sort: teams match first, then exact players + same date, then match count, then date
             scored.sort((a, b) => {
+                if (b.teamsMatch !== a.teamsMatch) return b.teamsMatch ? 1 : -1;
+                const aExact = a.matchCount === gcPlayers.length && a.sameDate ? 1 : 0;
+                const bExact = b.matchCount === gcPlayers.length && b.sameDate ? 1 : 0;
+                if (bExact !== aExact) return bExact - aExact;
                 if (b.matchCount !== a.matchCount) return b.matchCount - a.matchCount;
                 const ta = a.createdAt?.toDate ? a.createdAt.toDate() : 0;
                 const tb = b.createdAt?.toDate ? b.createdAt.toDate() : 0;
                 return tb - ta;
             });
 
-            const bestMatch = scored[0]?.matchCount > 0 ? scored[0] : null;
+            // Only recommend if ALL players match AND same date AND teams match
+            const bestMatch = scored[0]?.matchCount === gcPlayers.length && scored[0]?.sameDate && scored[0]?.teamsMatch ? scored[0] : null;
 
             html += `
                 <div style="border:1px solid rgba(0,200,83,0.2);border-radius:10px;padding:16px;margin-bottom:12px;background:rgba(0,200,83,0.03);">
@@ -4748,9 +4839,9 @@ async function loadPendingGCImports() {
 
                     ${bestMatch ? `
                     <div style="padding:8px 12px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;margin-bottom:10px;font-size:12px;">
-                        <span style="color:var(--green);font-weight:600;">Recomendada:</span>
+                        <span style="color:var(--green);font-weight:600;">⭐ Recomendada:</span>
                         <span style="color:var(--text);">${bestMatch.name}</span>
-                        <span style="color:var(--green);margin-left:4px;">(${bestMatch.matchCount}/${gcPlayers.length} jogadores)</span>
+                        <span style="color:var(--green);margin-left:4px;">(times iguais)</span>
                     </div>
                     ` : ''}
 
@@ -4759,10 +4850,10 @@ async function loadPendingGCImports() {
                             <option value="">— Selecionar partida do MiRB —</option>
                             ${scored.map(m => {
                                 const existingGC = m.gcMatchCount || 0;
-                                const gcLabel = existingGC > 0 ? ` [${existingGC} GC vinculada${existingGC > 1 ? 's' : ''}]` : '';
-                                const label = m.matchCount > 0
-                                    ? `${m.name} (${m.matchCount}/${gcPlayers.length} jogadores)${gcLabel}`
-                                    : `${m.name}${gcLabel}`;
+                                const gcLabel = existingGC > 0 ? ` [${existingGC} GC]` : '';
+                                const teamTag = m.teamsMatch ? ' ✅ times iguais' : '';
+                                const playerTag = m.matchCount > 0 ? ` (${m.matchCount}/${gcPlayers.length})` : '';
+                                const label = `${m.name}${playerTag}${teamTag}${gcLabel}`;
                                 const isRecommended = m === bestMatch;
                                 return `<option value="${m.id}" ${isRecommended ? 'selected' : ''}>${isRecommended ? '⭐ ' : ''}${label}</option>`;
                             }).join('')}
@@ -4903,6 +4994,41 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
         const existingStats = matchData.gcStats || [];
         const existingRawJsons = matchData.gcRawJsons || [];
         const existingCount = matchData.gcMatchCount || 0;
+        const existingGcMatchIds = matchData.gcMatchIds || [];
+
+        // ── Duplicate check: verify gcMatchId isn't already linked anywhere ──
+        const gcMatchId = importData.gcMatchId || '';
+        if (gcMatchId) {
+            // Check 1: matches with gcMatchIds field (new format)
+            const dupSnap = await db.collection('matches')
+                .where('gcMatchIds', 'array-contains', gcMatchId)
+                .get();
+            if (dupSnap.size > 0) {
+                const dupDoc = dupSnap.docs[0];
+                toast(`⚠️ Partida GC #${gcMatchId} já está vinculada ao confronto "${dupDoc.data().name || dupDoc.id}"!`, 'error');
+                return;
+            }
+            // Check 2: gc-imports already linked (backward compat for old data)
+            const impSnap = await db.collection('gc-imports')
+                .where('gcMatchId', '==', gcMatchId)
+                .where('status', '==', 'used')
+                .get();
+            const linkedImp = impSnap.docs.find(d => d.data().linkedMatchId && d.data().linkedMatchId !== matchId);
+            if (linkedImp) {
+                const linkedMatchId = linkedImp.data().linkedMatchId;
+                const linkedDoc = await db.collection('matches').doc(linkedMatchId).get();
+                if (linkedDoc.exists) {
+                    const ld = linkedDoc.data();
+                    // Verify match still has this GC match linked (not stale)
+                    const hasInIds = (ld.gcMatchIds || []).includes(gcMatchId);
+                    const hasGcData = !ld.gcMatchIds && (ld.gcStats || []).length > 0;
+                    if (hasInIds || hasGcData) {
+                        toast(`⚠️ Partida GC #${gcMatchId} já está vinculada ao confronto "${ld.name || linkedMatchId}"!`, 'error');
+                        return;
+                    }
+                }
+            }
+        }
 
         // Determine next gcMatchIdx
         const nextIdx = existingCount > 0 ? existingCount + 1 : 1;
@@ -4948,13 +5074,15 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
         // Merge with existing stats
         const mergedStats = [...existingStats, ...newStats];
         const mergedRawJsons = [...existingRawJsons, JSON.stringify(gcPlayers)];
+        const mergedGcMatchIds = [...existingGcMatchIds, gcMatchId || ''];
         const newCount = existingCount > 0 ? existingCount + 1 : 1;
 
         // ── Sync result teams with GC teams ──
         const updateData = {
             gcStats: mergedStats,
             gcMatchCount: newCount,
-            gcRawJsons: mergedRawJsons
+            gcRawJsons: mergedRawJsons,
+            gcMatchIds: mergedGcMatchIds
         };
 
         if (matchData.result && matchData.result.teamA && matchData.result.teamB) {
@@ -5024,6 +5152,7 @@ async function unlinkGCMatch(matchId, gcMatchIdx) {
         const m = doc.data();
         const remaining = (m.gcStats || []).filter(s => (s.gcMatchIdx || 1) !== gcMatchIdx);
         const remainingRaw = (m.gcRawJsons || []).filter((_, i) => (i + 1) !== gcMatchIdx);
+        const remainingIds = (m.gcMatchIds || []).filter((_, i) => (i + 1) !== gcMatchIdx);
 
         // Reindex gcMatchIdx sequentially
         let currentIdx = 0;
@@ -5042,13 +5171,15 @@ async function unlinkGCMatch(matchId, gcMatchIdx) {
             await db.collection('matches').doc(matchId).update({
                 gcStats: firebase.firestore.FieldValue.delete(),
                 gcMatchCount: firebase.firestore.FieldValue.delete(),
-                gcRawJsons: firebase.firestore.FieldValue.delete()
+                gcRawJsons: firebase.firestore.FieldValue.delete(),
+                gcMatchIds: firebase.firestore.FieldValue.delete()
             });
         } else {
             await db.collection('matches').doc(matchId).update({
                 gcStats: remaining,
                 gcMatchCount: newCount,
-                gcRawJsons: remainingRaw
+                gcRawJsons: remainingRaw,
+                gcMatchIds: remainingIds
             });
         }
 
