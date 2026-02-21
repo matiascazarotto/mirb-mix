@@ -2725,21 +2725,59 @@ function renderDashModules() {
         entries = entries.filter(p => p.name === playerFilter);
     }
 
+    const isSinglePlayer = !!playerFilter && entries.length === 1;
     let html = '';
 
-    // ═══ OVERVIEW ═══
+    // ═══ OVERVIEW / PLAYER PROFILE ═══
     if (modules.includes('overview')) {
+      if (isSinglePlayer) {
+        // ── Single player profile card ──
+        const p = entries[0];
+        const avgAdr = (p.adrSum / p.matches).toFixed(1);
+        const avgKdr = (p.deaths > 0 ? p.kills / p.deaths : p.kills).toFixed(2);
+        const avgKast = (p.kastSum / p.matches).toFixed(0);
+        const wr = p.matches > 0 ? ((p.wins / p.matches) * 100).toFixed(0) : 0;
+        const wrColor = wr >= 60 ? 'var(--green)' : wr >= 40 ? 'var(--yellow)' : 'var(--red)';
+        const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+        const rpColor = p.rpTotal >= 0 ? 'var(--green)' : 'var(--red)';
+        const avgFk = (p.fk / p.matches).toFixed(1);
+        const diffPerMatch = (p.diff / p.matches).toFixed(1);
+
+        html += `
+        <div class="card" style="border:1px solid rgba(255,193,7,0.15);background:linear-gradient(135deg,rgba(255,193,7,0.04),transparent);">
+            <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+                ${p.avatar ? `<img src="${p.avatar}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--yellow);box-shadow:0 0 20px rgba(255,193,7,0.2);">` : ''}
+                <div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--yellow);line-height:1;">${p.name}</div>
+                    <div style="color:var(--text-dim);font-size:13px;margin-top:4px;">Perfil individual • ${p.matches} partida(s) GC</div>
+                </div>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;">
+                ${dashStatBox('🎮', 'Partidas', p.matches, '')}
+                ${dashStatBox('🏆', 'Vitórias', p.wins, 'var(--green)')}
+                ${dashStatBox('💔', 'Derrotas', p.losses, 'var(--red)')}
+                ${dashStatBox('📊', 'Win Rate', wr + '%', wrColor)}
+                ${dashStatBox('🔫', 'Kills', p.kills, 'var(--green)')}
+                ${dashStatBox('💀', 'Deaths', p.deaths, 'var(--red)')}
+                ${dashStatBox('🎯', 'K/D', avgKdr, kdrColor)}
+                ${dashStatBox('💥', 'ADR Média', avgAdr, 'var(--yellow)')}
+                ${dashStatBox('🛡️', 'KAST Médio', avgKast + '%', 'var(--blue)')}
+                ${dashStatBox('⚡', 'First Kills', p.fk, 'var(--yellow)')}
+                ${dashStatBox('➕', 'Diff Total', (p.diff > 0 ? '+' : '') + p.diff, p.diff >= 0 ? 'var(--green)' : 'var(--red)')}
+                ${dashStatBox('📈', 'RP Total', (p.rpTotal > 0 ? '+' : '') + p.rpTotal, rpColor)}
+            </div>
+        </div>`;
+      } else {
+        // ── Global overview (multiple players) ──
         const totalKills = entries.reduce((s, p) => s + p.kills, 0);
         const uniquePlayers = entries.length;
         const totalGCMatches = matches.reduce((s, m) => s + (m.gcMatchCount || 1), 0);
         const totalConfrontos = matchCount;
 
-        // ADR média geral (média das médias de ADR de cada jogador, ponderada por partidas)
         const totalAdrWeighted = entries.reduce((s, p) => s + p.adrSum, 0);
         const totalMatchesPlayed = entries.reduce((s, p) => s + p.matches, 0);
         const avgAdrGeral = totalMatchesPlayed > 0 ? (totalAdrWeighted / totalMatchesPlayed).toFixed(1) : '0';
 
-        // KAST médio geral
         const totalKastWeighted = entries.reduce((s, p) => s + p.kastSum, 0);
         const avgKastGeral = totalMatchesPlayed > 0 ? (totalKastWeighted / totalMatchesPlayed).toFixed(0) : '0';
 
@@ -2755,10 +2793,11 @@ function renderDashModules() {
                 ${dashStatBox('🎯', 'KAST Médio', avgKastGeral + '%', 'var(--blue)')}
             </div>
         </div>`;
+      }
     }
 
-    // ═══ RANKING ═══
-    if (modules.includes('ranking')) {
+    // ═══ RANKING ═══ (hidden for single player)
+    if (modules.includes('ranking') && !isSinglePlayer) {
         // ── Rating MiRB 1.0 ──
         // Pesos: ADR 28%, KAST 28%, K/D 22%, FK 17%, WIN 5%
         const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.17, W_WIN = 0.05;
@@ -2892,8 +2931,8 @@ function renderDashModules() {
         html += '</tbody></table></div>';
     }
 
-    // ═══ HIGHLIGHTS ═══
-    if (modules.includes('highlights') && entries.length > 1) {
+    // ═══ HIGHLIGHTS ═══ (hidden for single player)
+    if (modules.includes('highlights') && entries.length > 1 && !isSinglePlayer) {
         const byWins = [...entries].sort((a, b) => b.wins - a.wins);
         const byKills = [...entries].sort((a, b) => b.kills - a.kills);
         const byRp = [...entries].sort((a, b) => b.rpTotal - a.rpTotal);
@@ -2917,8 +2956,8 @@ function renderDashModules() {
         </div>`;
     }
 
-    // ═══ SHAME WALL (single worst ADR player spotlight) ═══
-    if (modules.includes('shame') && entries.length > 1) {
+    // ═══ SHAME WALL ═══ (hidden for single player)
+    if (modules.includes('shame') && entries.length > 1 && !isSinglePlayer) {
         const worstAdrPlayer = [...entries].sort((a, b) => (a.adrSum/a.matches) - (b.adrSum/b.matches))[0];
         const wp = worstAdrPlayer;
         const avgAdr = (wp.adrSum / wp.matches).toFixed(1);
@@ -2966,8 +3005,8 @@ function renderDashModules() {
         </div>`;
     }
 
-    // ═══ WORST STATS ═══
-    if (modules.includes('worstStats') && entries.length > 1) {
+    // ═══ WORST STATS ═══ (hidden for single player)
+    if (modules.includes('worstStats') && entries.length > 1 && !isSinglePlayer) {
         const byLosses = [...entries].sort((a, b) => b.losses - a.losses);
         const byDeaths = [...entries].sort((a, b) => b.deaths - a.deaths);
         const byRpLoss = [...entries].sort((a, b) => a.rpTotal - b.rpTotal);
@@ -2991,6 +3030,28 @@ function renderDashModules() {
 
     // ═══ RECORDS ═══
     if (modules.includes('records') && records.bestKills) {
+      if (isSinglePlayer) {
+        // Only show records held by this player
+        const pName = entries[0].name;
+        const myRecs = [
+            ['🔫 Mais Kills', records.bestKills],
+            ['💥 Maior ADR', records.bestAdr],
+            ['🎯 Maior KDR', records.bestKdr],
+            ['📈 Mais RP Ganhos', records.bestRp],
+            ['➕ Melhor Diff', records.bestDiff],
+            ['⚡ Mais First Kills', records.bestFk]
+        ].filter(([, r]) => r && r.name === pName);
+
+        if (myRecs.length > 0) {
+            html += `
+            <div class="card" style="border:1px solid rgba(255,193,7,0.15);">
+                <div class="card-title">🎖️ Recordes que ${pName} detém</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                    ${myRecs.map(([t, r]) => dashRecord(t, r)).join('')}
+                </div>
+            </div>`;
+        }
+      } else {
         html += `
         <div class="card">
             <div class="card-title">🎖️ Recordes (melhor partida individual)</div>
@@ -3003,10 +3064,32 @@ function renderDashModules() {
                 ${dashRecord('⚡ Mais First Kills', records.bestFk)}
             </div>
         </div>`;
+      }
     }
 
     // ═══ WORST RECORDS ═══
     if (modules.includes('worstRecords') && records.worstKills) {
+      if (isSinglePlayer) {
+        const pName = entries[0].name;
+        const myWorst = [
+            ['😴 Menos Kills', records.worstKills],
+            ['🐌 Menor ADR', records.worstAdr],
+            ['📉 Menor KDR', records.worstKdr],
+            ['🧊 Menor KAST', records.worstKast],
+            ['📉 Mais RP Perdidos', records.worstRp],
+            ['➖ Pior Diff', records.worstDiff]
+        ].filter(([, r]) => r && r.name === pName);
+
+        if (myWorst.length > 0) {
+            html += `
+            <div class="card" style="border:1px solid rgba(255,61,61,0.15);">
+                <div class="card-title">🗑️ Piores Recordes de ${pName}</div>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+                    ${myWorst.map(([t, r]) => dashRecord(t, r)).join('')}
+                </div>
+            </div>`;
+        }
+      } else {
         html += `
         <div class="card">
             <div class="card-title">🗑️ Piores Recordes (pior partida individual)</div>
@@ -3019,10 +3102,70 @@ function renderDashModules() {
                 ${dashRecord('➖ Pior Diff', records.worstDiff)}
             </div>
         </div>`;
+      }
     }
 
     // ═══ HISTORY ═══
     if (modules.includes('history')) {
+      if (isSinglePlayer) {
+        // ── Single player match history with individual stats ──
+        const p = entries[0];
+        const matchHistory = p.matchList.sort((a, b) => {
+            // Sort by date descending (most recent first)
+            const da = a.date.split('/').reverse().join('');
+            const db = b.date.split('/').reverse().join('');
+            return db.localeCompare(da);
+        });
+
+        html += `
+        <div class="card">
+            <div class="card-title">📋 Histórico de Partidas de ${p.name}</div>
+            <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead>
+                    <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
+                        <th style="padding:8px 6px;text-align:left;">Partida</th>
+                        <th style="padding:8px 6px;text-align:center;">Data</th>
+                        <th style="padding:8px 6px;text-align:center;">Resultado</th>
+                        <th style="padding:8px 6px;text-align:center;">K</th>
+                        <th style="padding:8px 6px;text-align:center;">D</th>
+                        <th style="padding:8px 6px;text-align:center;">+/-</th>
+                        <th style="padding:8px 6px;text-align:center;">ADR</th>
+                        <th style="padding:8px 6px;text-align:center;">KDR</th>
+                        <th style="padding:8px 6px;text-align:center;">KAST</th>
+                        <th style="padding:8px 6px;text-align:center;">FK</th>
+                        <th style="padding:8px 6px;text-align:center;">RP</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        matchHistory.forEach(g => {
+            const isWin = g.win != null ? g.win : (g.rp >= 0);
+            const resultText = isWin ? 'V' : 'D';
+            const resultColor = isWin ? 'var(--green)' : 'var(--red)';
+            const kdrColor = g.kdr >= 1 ? 'var(--green)' : 'var(--yellow)';
+            const rpColor = g.rp >= 0 ? 'var(--green)' : 'var(--red)';
+            const diffColor = g.diff >= 0 ? 'var(--green)' : 'var(--red)';
+            const score = g.teamScore != null && g.enemyScore != null ? `${g.teamScore}-${g.enemyScore}` : '';
+
+            html += `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${isWin ? 'background:rgba(0,200,83,0.03);' : 'background:rgba(255,61,61,0.03);'}">
+                    <td style="padding:8px 6px;font-size:13px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${g.matchName}</td>
+                    <td style="padding:8px 6px;text-align:center;color:var(--text-dim);font-size:12px;">${g.date}</td>
+                    <td style="padding:8px 6px;text-align:center;font-weight:700;color:${resultColor};">${resultText} ${score ? `<span style="font-weight:400;font-size:11px;color:var(--text-dim);">(${score})</span>` : ''}</td>
+                    <td style="padding:8px 6px;text-align:center;color:var(--green);font-weight:600;">${g.k}</td>
+                    <td style="padding:8px 6px;text-align:center;color:var(--red);">${g.d}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${diffColor};font-weight:600;">${g.diff > 0 ? '+' : ''}${g.diff}</td>
+                    <td style="padding:8px 6px;text-align:center;">${g.adr.toFixed(1)}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${kdrColor};font-weight:600;">${g.kdr.toFixed(2)}</td>
+                    <td style="padding:8px 6px;text-align:center;">${g.kast.toFixed(0)}%</td>
+                    <td style="padding:8px 6px;text-align:center;">${g.fk}</td>
+                    <td style="padding:8px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;">${g.rp > 0 ? '+' : ''}${g.rp}</td>
+                </tr>`;
+        });
+        html += '</tbody></table></div></div>';
+      } else {
+        // ── Global history ──
         html += `
         <div class="card">
             <div class="card-title">📋 Histórico de Partidas</div>
@@ -3045,6 +3188,7 @@ function renderDashModules() {
                 </div>`;
         });
         html += '</div></div>';
+      }
     }
 
     if (!html) {
