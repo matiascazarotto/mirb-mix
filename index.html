@@ -353,18 +353,25 @@
         .admin-tab-content.active { display: block; }
 
         /* ── Player Selector (Match) ── */
+        .player-selection-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 8px;
+        }
+
         .player-selector {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            gap: 14px;
-            padding: 12px 16px;
+            gap: 4px;
+            padding: 10px 8px;
             background: rgba(255,255,255,0.03);
             border: 2px solid transparent;
             border-radius: 8px;
-            margin-bottom: 6px;
             cursor: pointer;
             transition: all 0.2s;
             user-select: none;
+            text-align: center;
         }
 
         .player-selector:hover { background: rgba(255,255,255,0.06); }
@@ -374,12 +381,45 @@
             background: rgba(0,200,83,0.08);
         }
 
-        .player-selector input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--green);
-            cursor: pointer;
+        .player-selector .player-name {
+            font-size: 14px;
+            font-weight: 700;
         }
+
+        .player-selector .player-meta {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .player-selector .player-meta .badge {
+            font-size: 10px;
+            padding: 1px 6px;
+        }
+
+        .player-selector input[type="checkbox"] {
+            display: none;
+        }
+
+        .player-selector.selected .player-name::before {
+            content: '✅ ';
+        }
+
+        .player-filter-input {
+            width: 100%;
+            padding: 10px 14px 10px 36px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            margin-bottom: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        .player-filter-input:focus { border-color: var(--green); }
+        .player-filter-input::placeholder { color: var(--text-dim); }
 
         .selection-counter {
             text-align: center;
@@ -1399,7 +1439,11 @@ function renderAdminPanel() {
                 <div class="selection-counter">
                     <span class="count" id="adminSelectedCount">0</span> / 10 jogadores
                 </div>
-                <div id="adminPlayerSelection"></div>
+                <div style="position:relative;">
+                    <span style="position:absolute;left:12px;top:10px;font-size:14px;color:var(--text-dim);pointer-events:none;">🔍</span>
+                    <input type="text" class="player-filter-input" id="playerFilterInput" placeholder="Filtrar jogador..." oninput="filterPlayerSelection()">
+                </div>
+                <div id="adminPlayerSelection" class="player-selection-grid"></div>
                 <button class="btn btn-primary" id="createMatchBtn" onclick="createMatch()" disabled style="margin-top:16px;">
                     Criar Partida
                 </button>
@@ -1612,19 +1656,27 @@ function renderPlayerSelectionForMatch() {
     if (!el) return;
     selectedForMatch = [];
     updateMatchSelectionCount();
+    const filterInput = document.getElementById('playerFilterInput');
+    if (filterInput) filterInput.value = '';
 
     el.innerHTML = players.map(p => `
-        <div class="player-selector" id="sel-${p.id}" onclick="toggleMatchPlayer('${p.id}')">
+        <div class="player-selector" id="sel-${p.id}" onclick="toggleMatchPlayer('${p.id}')" data-name="${p.name.toLowerCase()}">
             <input type="checkbox" id="chk-${p.id}">
-            <div>
-                <div class="player-name">${p.name}</div>
-                <div class="player-meta">
-                    <span class="badge badge-role">${p.role}</span>
-                    <span class="badge badge-style-${p.playstyle || 'Normal'}">${(p.playstyle || 'Normal') === 'Agressivo' ? '⚡' : (p.playstyle || 'Normal') === 'Lento' ? '🐢' : '🎯'} ${p.playstyle || 'Normal'}</span>
-                </div>
+            <div class="player-name">${p.name}</div>
+            <div class="player-meta">
+                <span class="badge badge-role">${p.role}</span>
+                <span class="badge badge-style-${p.playstyle || 'Normal'}">${(p.playstyle || 'Normal') === 'Agressivo' ? '⚡' : (p.playstyle || 'Normal') === 'Lento' ? '🐢' : '🎯'} ${p.playstyle || 'Normal'}</span>
             </div>
         </div>
     `).join('');
+}
+
+function filterPlayerSelection() {
+    const query = (document.getElementById('playerFilterInput')?.value || '').toLowerCase();
+    document.querySelectorAll('#adminPlayerSelection .player-selector').forEach(el => {
+        const name = el.dataset.name || '';
+        el.style.display = name.includes(query) ? '' : 'none';
+    });
 }
 
 function toggleMatchPlayer(id) {
