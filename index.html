@@ -541,8 +541,9 @@
         .match-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 14px;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
         }
 
         .match-title {
@@ -2457,11 +2458,50 @@ async function loadMatchesPage() {
         for (const doc of snap.docs) {
             const m = doc.data();
             const matchId = doc.id;
-            const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+            const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '';
+            const hasGC = !!m.gcStats;
+            const gcCount = m.gcMatchCount || 0;
+            const playerCount = m.players ? m.players.length : 0;
 
-            // Compute MVP and worst player from gcStats (aggregated per player)
+            // ── Extract score from gcStats (team names + scores) ──
+            let scoreHtml = '';
+            if (m.gcStats && m.gcStats.length > 0) {
+                const byIdx = {};
+                m.gcStats.forEach(s => {
+                    const idx = s.gcMatchIdx || 1;
+                    if (!byIdx[idx]) byIdx[idx] = { teamA: null, teamB: null, scoreA: null, scoreB: null };
+                    if (s.teamName && !byIdx[idx].teamA) {
+                        byIdx[idx].teamA = s.teamName;
+                        byIdx[idx].scoreA = s.teamScore;
+                    } else if (s.teamName && s.teamName !== byIdx[idx].teamA && !byIdx[idx].teamB) {
+                        byIdx[idx].teamB = s.teamName;
+                        byIdx[idx].scoreB = s.teamScore;
+                    }
+                });
+                const idxKeys = Object.keys(byIdx).sort((a, b) => a - b);
+                const scoreItems = idxKeys.map(idx => {
+                    const g = byIdx[idx];
+                    if (g.teamA && g.teamB && g.scoreA != null && g.scoreB != null) {
+                        const aWin = g.scoreA > g.scoreB;
+                        return `<div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:8px;flex-wrap:wrap;">
+                            ${idxKeys.length > 1 ? `<span style="font-size:10px;color:var(--ct-blue);font-weight:700;margin-right:4px;">GC#${idx}</span>` : ''}
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:${aWin ? 'var(--green)' : 'var(--text-dim)'};">${g.teamA}</span>
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${aWin ? 'var(--green)' : 'var(--red)'};">${g.scoreA}</span>
+                            <span style="font-size:12px;color:var(--text-dim);">x</span>
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;color:${!aWin ? 'var(--green)' : 'var(--red)'};">${g.scoreB}</span>
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:14px;color:${!aWin ? 'var(--green)' : 'var(--text-dim)'};">${g.teamB}</span>
+                        </div>`;
+                    }
+                    return '';
+                }).filter(Boolean);
+
+                if (scoreItems.length > 0) {
+                    scoreHtml = `<div style="display:flex;flex-direction:column;gap:6px;margin:10px 0;">${scoreItems.join('')}</div>`;
+                }
+            }
+
+            // ── Compute MVP and worst player from gcStats ──
             let mvpHtml = '';
-            let worstHtml = '';
             if (m.gcStats && m.gcStats.length > 0) {
                 const agg = {};
                 m.gcStats.forEach(s => {
@@ -2477,50 +2517,51 @@ async function loadMatchesPage() {
                 const entries = Object.values(agg);
                 const byAdr = [...entries].sort((a, b) => (b.adrSum / b.matches) - (a.adrSum / a.matches));
                 const mvp = byAdr[0];
-                const worst = byAdr[byAdr.length - 1];
+                const worst = byAdr.length > 1 ? byAdr[byAdr.length - 1] : null;
                 const mvpAdr = (mvp.adrSum / mvp.matches).toFixed(1);
                 const mvpKdr = (mvp.deaths > 0 ? mvp.kills / mvp.deaths : mvp.kills).toFixed(2);
-                const worstAdr = (worst.adrSum / worst.matches).toFixed(1);
-                const worstKdr = (worst.deaths > 0 ? worst.kills / worst.deaths : worst.kills).toFixed(2);
 
-                mvpHtml = `
-                    <div style="display:flex;gap:12px;margin-top:12px;flex-wrap:wrap;">
-                        <div style="flex:1;min-width:180px;padding:10px 14px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.2);border-radius:8px;display:flex;align-items:center;gap:10px;">
-                            <div style="font-size:24px;">⭐</div>
-                            ${mvp.avatar ? `<img src="${mvp.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--green);">` : ''}
-                            <div>
-                                <div style="font-size:10px;color:var(--green);text-transform:uppercase;letter-spacing:1px;font-weight:600;">MVP</div>
-                                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--yellow);">${mvp.name}</div>
-                                <div style="font-size:11px;color:var(--text-dim);">${mvp.kills}K • ADR ${mvpAdr} • KDR ${mvpKdr}</div>
-                            </div>
-                        </div>
-                        <div style="flex:1;min-width:180px;padding:10px 14px;background:rgba(255,61,61,0.06);border:1px solid rgba(255,61,61,0.2);border-radius:8px;display:flex;align-items:center;gap:10px;">
-                            <div style="font-size:24px;">🗑️</div>
-                            ${worst.avatar ? `<img src="${worst.avatar}" style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--red);">` : ''}
-                            <div>
-                                <div style="font-size:10px;color:var(--red);text-transform:uppercase;letter-spacing:1px;font-weight:600;">Pior Jogador</div>
-                                <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--yellow);">${worst.name}</div>
-                                <div style="font-size:11px;color:var(--text-dim);">${worst.kills}K • ADR ${worstAdr} • KDR ${worstKdr}</div>
-                            </div>
+                mvpHtml = `<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;font-size:12px;">
+                    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.15);border-radius:6px;flex:1;min-width:160px;">
+                        ${mvp.avatar ? `<img src="${mvp.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : '<span style="font-size:16px;">⭐</span>'}
+                        <div>
+                            <span style="color:var(--green);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">MVP</span>
+                            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:14px;line-height:1;">${mvp.name}</div>
+                            <div style="color:var(--text-dim);font-size:11px;">${mvp.kills}K • ADR ${mvpAdr}</div>
                         </div>
                     </div>`;
-            }
 
-            const gcCount = m.gcMatchCount || 0;
-            const hasGC = !!m.gcStats;
+                if (worst && worst.name !== mvp.name) {
+                    const worstAdr = (worst.adrSum / worst.matches).toFixed(1);
+                    mvpHtml += `
+                    <div style="display:flex;align-items:center;gap:6px;padding:6px 10px;background:rgba(255,61,61,0.06);border:1px solid rgba(255,61,61,0.15);border-radius:6px;flex:1;min-width:160px;">
+                        ${worst.avatar ? `<img src="${worst.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : '<span style="font-size:16px;">🗑️</span>'}
+                        <div>
+                            <span style="color:var(--red);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">Pior</span>
+                            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:14px;line-height:1;">${worst.name}</div>
+                            <div style="color:var(--text-dim);font-size:11px;">${worst.kills}K • ADR ${worstAdr}</div>
+                        </div>
+                    </div>`;
+                }
+                mvpHtml += '</div>';
+            }
 
             html += `
                 <div class="match-card ${m.status}">
                     <div class="match-header">
-                        <div class="match-title">${m.name}</div>
-                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Votação Aberta' : '🔴 Encerrada'}</span>
+                        <div>
+                            <div class="match-title">${m.name}</div>
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:12px;color:var(--text-dim);">
+                                ${date ? `<span>📅 ${date}</span>` : ''}
+                                <span>👥 ${playerCount} jogadores</span>
+                                ${gcCount > 1 ? `<span>🎮 MD${gcCount}</span>` : ''}
+                            </div>
+                        </div>
+                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : '🔴 Encerrada'}</span>
                     </div>
-                    <div class="match-players">
-                        ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
-                    </div>
-                    <div class="vote-count-info">📊 ${votesSnap.size} voto(s)</div>
+                    ${scoreHtml}
                     ${mvpHtml}
-                    <div class="btn-group" style="margin-top:12px;">
+                    <div class="btn-group" style="margin-top:10px;">
                         ${m.status === 'closed' && m.result && !hasGC ? `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
                         ` : ''}
