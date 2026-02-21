@@ -1763,13 +1763,19 @@ async function loadAdminMatches() {
                         ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
                         <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
                     </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);align-items:center;">
                         <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
                         ${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? `<span style="color:var(--yellow);font-size:11px;font-weight:600;padding:4px 8px;background:rgba(255,214,0,0.1);border-radius:4px;white-space:nowrap;display:inline-flex;align-items:center;">⚠️ reimportar</span>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')">📹 Adicionar VOD</button>
+                        ${(function() {
+                            const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+                            return vods.map((url, i) => `<div style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;"><a href="${url}" target="_blank" style="color:var(--green);font-size:12px;font-weight:600;text-decoration:none;">📹 VOD${vods.length > 1 ? ' ' + (i + 1) : ''} ✅</a><button class="btn btn-danger btn-small" onclick="removeVod('${matchId}',${i})" style="padding:1px 5px;font-size:9px;line-height:1;" title="Remover">✕</button></div>`).join('');
+                        })()}
                         <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
                         <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:linear-gradient(135deg,#5c6370,#8892a4);color:#fff;box-shadow:none;padding:8px 16px;font-size:13px;border:none;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
+                    <div id="vodNewInputs-${matchId}"></div>
                     ` : `
                     <div class="btn-group">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
@@ -1813,29 +1819,6 @@ async function loadAdminMatches() {
                                 '</div>';
                             }).join('');
                         })()}
-                    </div>
-                    ` : ''}
-                    ${m.status === 'closed' ? `
-                    <div id="vodContainer-${matchId}" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
-                        ${(function() {
-                            const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
-                            let vodHtml = '';
-                            if (vods.length > 0) {
-                                vodHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
-                                    vods.map((url, i) => `
-                                        <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;" data-vod-saved="${url}">
-                                            <a href="${url}" target="_blank" style="color:var(--green);font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px;">📹 VOD ${vods.length > 1 ? i + 1 : ''} ✅</a>
-                                            <button class="btn btn-danger btn-small" onclick="removeVod('${matchId}',${i})" style="padding:2px 6px;font-size:10px;line-height:1;" title="Remover">✕</button>
-                                        </div>
-                                    `).join('') +
-                                '</div>';
-                            }
-                            return vodHtml;
-                        })()}
-                        <div id="vodNewInputs-${matchId}"></div>
-                        <div style="display:flex;gap:8px;align-items:center;margin-top:2px;">
-                            <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')" style="font-size:11px;">➕ Adicionar VOD</button>
-                        </div>
                     </div>
                     ` : ''}
                     ${isFinished ? (function() {
