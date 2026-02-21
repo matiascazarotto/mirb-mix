@@ -1784,7 +1784,7 @@ async function loadAdminMatches() {
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                             <span class="match-status ${m.status}" style="white-space:nowrap;">${statusLabel}</span>
-                            ${isClosed ? `<button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:var(--green);color:#fff;border:none;box-shadow:0 0 10px rgba(76,175,80,0.3);padding:6px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>` : ''}
+                            ${isClosed ? `<button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:var(--green);color:#000;border:none;box-shadow:0 0 10px rgba(76,175,80,0.3);padding:6px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>` : ''}
                             <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')" style="padding:5px 8px;font-size:11px;min-width:0;" title="Excluir">🗑️</button>
                         </div>
                     </div>
