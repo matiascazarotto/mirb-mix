@@ -950,9 +950,6 @@
     <button class="nav-btn" onclick="showPage('dashboard')">
         <span class="icon">🏆</span> Stats
     </button>
-    <button class="nav-btn" onclick="showPage('stats')">
-        <span class="icon">🎮</span> GC
-    </button>
     <button class="nav-btn" onclick="showPage('h2h')">
         <span class="icon">⚔️</span> 1 vs 1
     </button>
@@ -1097,48 +1094,6 @@
             </div>
             <div id="h2hResult"></div>
         </div>
-    </div>
-    <div id="page-stats" class="page">
-        <div class="card">
-            <div class="card-title">📊 Stats Gamers Club</div>
-            <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;">
-                Importe partidas via <b>extensão Chrome</b> ou cole o JSON manualmente.
-            </p>
-
-            <!-- Extension imports -->
-            <div id="gcExtensionImports" style="margin-bottom:16px;"></div>
-
-            <!-- Manual: Paste JSONs per match -->
-            <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:16px;margin-bottom:16px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <span style="color:var(--yellow);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;letter-spacing:1px;">Importar Manualmente</span>
-                    <div style="display:flex;gap:6px;">
-                        <button class="btn btn-secondary btn-small" onclick="addGCMatchSlot()" style="padding:6px 14px;font-size:12px;">＋ Partida</button>
-                        <button class="btn btn-secondary btn-small" onclick="document.getElementById('snippetDetails').style.display=document.getElementById('snippetDetails').style.display==='none'?'block':'none'" style="font-size:11px;">Snippet</button>
-                    </div>
-                </div>
-                <div id="snippetDetails" style="display:none;margin-bottom:12px;">
-                    <p style="color:var(--text-dim);font-size:12px;margin-bottom:10px;">
-                        Abra a partida no <b>Gamers Club</b> (logado) → F12 → Console → cole o snippet e Enter.
-                    </p>
-                    <div style="position:relative;">
-                        <pre id="gcSnippet" style="background:rgba(0,0,0,0.4);padding:12px;border-radius:6px;font-size:11px;color:var(--green);overflow-x:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;cursor:pointer;border:1px solid rgba(0,200,83,0.15);" onclick="copySnippet()">javascript:void((async()=>{const u=window.location.href;const m=u.match(/partida\/(\d+)/);if(!m){alert('\u274c Abra uma partida da GC primeiro!');return}const id=m[1];try{const r=await fetch('/lobby/match/'+id+'/1',{credentials:'include'});if(!r.ok)throw new Error('Status '+r.status);const data=await r.json();if(!data.success)throw new Error('API error');const j=data.jogos;const sA=parseInt(j.score_a)||0,sB=parseInt(j.score_b)||0;const d=[];const proc=(pl,tn,ts,w)=>{if(!pl)return;pl.forEach(p=>{d.push({name:p.player?.nick||'',gcId:String(p.idplayer||p.player?.id||''),avatar:p.player?.avatar?'https://static.gamersclub.com.br/'+p.player.avatar+'_medium.jpg':'',k:parseInt(p.nb_kill)||0,a:parseInt(p.assist)||0,d:parseInt(p.death)||0,diff:parseInt(p.diff)||0,adr:parseFloat(p.adr)||0,kdr:parseFloat(p.kdr)||0,kast:parseInt(p.pkast)||0,fk:parseInt(p.firstkill)||0,rp:parseInt(p.rating_points)||0,win:w,teamName:tn,teamScore:ts,_v:4})})};proc(j.players.team_a,data.time_a||'Time A',sA,sA>sB);proc(j.players.team_b,data.time_b||'Time B',sB,sB>sA);const txt=JSON.stringify(d);const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);ta.focus();ta.select();document.execCommand('copy');ta.remove();alert('\u2705 '+d.length+' jogadores copiados via API!\\n'+(data.time_a||'A')+' '+sA+' x '+sB+' '+(data.time_b||'B')+'\\nMapa: '+(j.map_name||'?'))}catch(e){alert('\u274c Erro: '+e.message+'\\nVerifique se est\u00e1 logado na GC.')}})())</pre>
-                        <button class="btn btn-secondary btn-small" onclick="copySnippet()" style="position:absolute;top:8px;right:8px;padding:4px 10px;font-size:11px;">📋 Copiar</button>
-                    </div>
-                </div>
-                <p style="color:var(--text-dim);font-size:12px;margin-bottom:10px;">
-                    Cole o <b>JSON</b> copiado pelo snippet para cada partida GC.
-                </p>
-                <div id="gcMatchSlots"></div>
-            </div>
-
-            <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn btn-primary" onclick="processAllGCMatches()">📊 Processar Todas</button>
-                <button class="btn btn-secondary" onclick="clearGCStats()">🗑️ Limpar Tudo</button>
-            </div>
-        </div>
-
-        <div id="gcStatsResult"></div>
     </div>
 </div>
 
@@ -1302,7 +1257,6 @@ function showPage(name) {
     if (name === 'admin' && isAdmin) renderAdminPanel();
     if (name === 'dashboard') loadDashboard();
     if (name === 'h2h') loadH2HPage();
-    if (name === 'stats') loadGCExtensionImports();
 }
 
 // ╔══════════════════════════════════╗
