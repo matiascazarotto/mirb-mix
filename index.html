@@ -1728,6 +1728,40 @@ async function loadAdminMatches() {
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
+                    ${m.gcStats && m.gcStats.length > 0 ? `
+                    <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;">
+                        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600;">🔗 Partidas GC Vinculadas</div>
+                        ${(function() {
+                            const byIdx = {};
+                            m.gcStats.forEach(s => {
+                                const idx = s.gcMatchIdx || 1;
+                                if (!byIdx[idx]) byIdx[idx] = { players: [], teamA: null, teamB: null, scoreA: null, scoreB: null };
+                                byIdx[idx].players.push(s);
+                                if (s.teamName && !byIdx[idx].teamA) {
+                                    byIdx[idx].teamA = s.teamName;
+                                    byIdx[idx].scoreA = s.teamScore;
+                                } else if (s.teamName && s.teamName !== byIdx[idx].teamA && !byIdx[idx].teamB) {
+                                    byIdx[idx].teamB = s.teamName;
+                                    byIdx[idx].scoreB = s.teamScore;
+                                }
+                            });
+                            return Object.keys(byIdx).sort((a, b) => a - b).map(idx => {
+                                const g = byIdx[idx];
+                                const hasScore = g.teamA && g.teamB && g.scoreA != null && g.scoreB != null;
+                                const scoreLabel = hasScore
+                                    ? '<span style="color:' + (g.scoreA > g.scoreB ? 'var(--green)' : 'var(--red)') + '">' + g.teamA + ' ' + g.scoreA + '</span> x <span style="color:' + (g.scoreB > g.scoreA ? 'var(--green)' : 'var(--red)') + '">' + g.scoreB + ' ' + g.teamB + '</span>'
+                                    : g.players.length + ' jogadores';
+                                return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;">' +
+                                    '<div style="font-size:12px;">' +
+                                        '<span style="color:var(--ct-blue);font-weight:600;">GC #' + idx + '</span> ' +
+                                        '<span style="margin-left:6px;">' + scoreLabel + '</span>' +
+                                    '</div>' +
+                                    '<button class="btn btn-danger btn-small" onclick="unlinkGCMatch(\'' + matchId + '\',' + idx + ')" style="padding:2px 8px;font-size:10px;" title="Desvincular">✕</button>' +
+                                '</div>';
+                            }).join('');
+                        })()}
+                    </div>
+                    ` : ''}
                     ${m.status === 'closed' ? `
                     <div id="vodContainer-${matchId}" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
                         ${(function() {
@@ -4339,6 +4373,48 @@ async function deleteGCImport(docId) {
     await db.collection('gc-imports').doc(docId).delete();
     toast('Import descartado.', 'success');
     loadPendingGCImports();
+}
+
+async function unlinkGCMatch(matchId, gcMatchIdx) {
+    if (!confirm(`Desvincular partida GC #${gcMatchIdx} deste confronto?`)) return;
+    try {
+        const doc = await db.collection('matches').doc(matchId).get();
+        const m = doc.data();
+        const remaining = (m.gcStats || []).filter(s => (s.gcMatchIdx || 1) !== gcMatchIdx);
+        const remainingRaw = (m.gcRawJsons || []).filter((_, i) => (i + 1) !== gcMatchIdx);
+
+        // Reindex gcMatchIdx sequentially
+        let currentIdx = 0;
+        let lastIdx = 0;
+        remaining.forEach(s => {
+            if ((s.gcMatchIdx || 1) !== lastIdx) {
+                currentIdx++;
+                lastIdx = s.gcMatchIdx || 1;
+            }
+            s.gcMatchIdx = currentIdx;
+        });
+
+        const newCount = currentIdx;
+
+        if (remaining.length === 0) {
+            await db.collection('matches').doc(matchId).update({
+                gcStats: firebase.firestore.FieldValue.delete(),
+                gcMatchCount: firebase.firestore.FieldValue.delete(),
+                gcRawJsons: firebase.firestore.FieldValue.delete()
+            });
+        } else {
+            await db.collection('matches').doc(matchId).update({
+                gcStats: remaining,
+                gcMatchCount: newCount,
+                gcRawJsons: remainingRaw
+            });
+        }
+
+        toast('✅ Partida GC desvinculada!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
 }
 
 function addGCMatchSlot() {
