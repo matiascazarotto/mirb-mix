@@ -1802,7 +1802,7 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')">📹 VOD</button>
-                        <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir</button>
+                        <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="openGCImport('${matchId}')" style="padding:5px 10px;font-size:11px;opacity:0.6;">🔄 GC${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? ' ⚠️' : ''}</button>` : `<button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Importar GC</button>`}
                         <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(136,146,164,0.2);color:var(--text-dim);border:1px solid rgba(136,146,164,0.3);box-shadow:none;padding:8px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
                     </div>
@@ -1819,7 +1819,7 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
-                        <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Reabrir</button>
+                        <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Editar Confronto</button>
                         <button class="btn btn-secondary btn-small" onclick="openGCImport('${matchId}')" style="padding:5px 10px;font-size:11px;opacity:0.6;">🔄 GC</button>
                     </div>
                     `}
