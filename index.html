@@ -2385,6 +2385,7 @@ async function loadVotePage() {
         <div class="mural-container" style="margin-top:24px;">
             <div style="border-top:1px solid rgba(255,255,255,0.06);margin-bottom:20px;"></div>
             <div class="mural-title">📢 Ouvidoria MiRB</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:-10px;margin-bottom:14px;opacity:0.6;">mensagens expiram em 20 minutos</div>
             <div class="mural-form">
                 <input type="text" id="muralText" placeholder="Registre sua reclamação..." maxlength="200">
                 <div class="mural-form-actions">
@@ -2496,10 +2497,10 @@ async function initMural() {
     }
     // Show author line
     updateMuralAuthorLine();
-    // Listen for posts in real-time (last 15 minutes only)
-    const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000);
+    // Listen for posts in real-time (last 20 minutes only)
+    const ttlMinAgo = new Date(Date.now() - 20 * 60 * 1000);
     muralUnsubscribe = db.collection('mural')
-        .where('createdAt', '>=', fifteenMinAgo)
+        .where('createdAt', '>=', ttlMinAgo)
         .orderBy('createdAt', 'desc')
         .limit(50)
         .onSnapshot(snap => {
@@ -2513,7 +2514,7 @@ async function initMural() {
                 const d = doc.data();
                 if (!d.createdAt) { validDocs.push(doc); return; }
                 const age = now - d.createdAt.toDate().getTime();
-                if (age > 15 * 60 * 1000) {
+                if (age > 20 * 60 * 1000) {
                     // Cleanup: delete expired post
                     db.collection('mural').doc(doc.id).delete().catch(() => {});
                 } else {
