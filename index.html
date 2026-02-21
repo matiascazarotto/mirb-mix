@@ -925,6 +925,22 @@
 
         .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
 
+        /* ── Mural da Fama & Vergonha ── */
+        .mural-container { max-width: 600px; margin: 0 auto; padding: 0 16px; }
+        .mural-title { font-family: 'Rajdhani', sans-serif; font-size: 1.3em; font-weight: 700; color: var(--yellow); text-align: center; margin-bottom: 16px; letter-spacing: 1px; }
+        .mural-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+        .mural-form input[type="text"] { flex: 1; min-width: 200px; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit; }
+        .mural-form input[type="text"]:focus { border-color: var(--yellow); outline: none; }
+        .mural-form select { padding: 10px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit; cursor: pointer; }
+        .mural-post { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; transition: border-color 0.2s; }
+        .mural-post:hover { border-color: rgba(255,255,255,0.15); }
+        .mural-post-text { color: var(--text); font-size: 14px; line-height: 1.4; margin-bottom: 8px; }
+        .mural-post-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-dim); }
+        .mural-laugh-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 4px 12px; cursor: pointer; font-size: 13px; color: var(--text-dim); transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        .mural-laugh-btn:hover { background: rgba(255,214,0,0.1); border-color: rgba(255,214,0,0.3); }
+        .mural-laugh-btn.voted { background: rgba(255,214,0,0.15); border-color: rgba(255,214,0,0.4); color: var(--yellow); }
+        .mural-target { color: var(--yellow); font-weight: 600; }
+
         .btn-group {
             display: flex;
             gap: 8px;
@@ -1257,6 +1273,7 @@ let isAdmin = false;
 let currentMatchVoting = null; // match id being voted on
 let players = []; // cached players
 let unsubscribers = []; // firestore listeners
+let muralUnsubscribe = null; // mural listener
 
 // ╔══════════════════════════════════╗
 // ║         NAVIGATION              ║
@@ -2353,6 +2370,7 @@ function copyResultWhatsApp(encoded) {
 // ║       VOTING PAGE (Public)      ║
 // ╚══════════════════════════════════╝
 async function loadVotePage() {
+    destroyMural();
     const el = document.getElementById('voteContent');
     el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
 
@@ -2365,7 +2383,17 @@ async function loadVotePage() {
                     <div class="icon">🗳️</div>
                     <p>Nenhuma partida aberta para votação.</p>
                 </div>
+                <div class="mural-container">
+                    <div class="mural-title">🏆 Muro da Fama & Vergonha</div>
+                    <div class="mural-form">
+                        <input type="text" id="muralText" placeholder="Escreva uma acusação engraçada..." maxlength="200">
+                        <select id="muralTarget"><option value="">Sobre quem?</option></select>
+                        <button class="btn btn-primary btn-small" onclick="postMural()">📤 Postar</button>
+                    </div>
+                    <div id="muralPosts"></div>
+                </div>
             `;
+            initMural();
             return;
         }
 
@@ -2429,6 +2457,127 @@ async function loadVotePage() {
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Erro ao carregar: ${e.message}</p>`;
     }
+}
+
+// ╔══════════════════════════════════╗
+// ║   MURO DA FAMA & VERGONHA      ║
+// ╚══════════════════════════════════╝
+async function initMural() {
+    // Populate player select
+    const select = document.getElementById('muralTarget');
+    if (select) {
+        const snap = await db.collection('players').orderBy('name').get();
+        snap.docs.forEach(d => {
+            const p = d.data();
+            const opt = document.createElement('option');
+            opt.value = p.name;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+        });
+    }
+    // Check if user already has a name saved
+    const savedName = localStorage.getItem('muralAuthor');
+    // Listen for posts in real-time
+    muralUnsubscribe = db.collection('mural')
+        .orderBy('laughs', 'desc')
+        .limit(50)
+        .onSnapshot(snap => {
+            const postsEl = document.getElementById('muralPosts');
+            if (!postsEl) return;
+            if (snap.empty) {
+                postsEl.innerHTML = '<p style="text-align:center;color:var(--text-dim);padding:20px;font-size:13px;">Nenhuma acusação ainda... Seja o primeiro! 😈</p>';
+                return;
+            }
+            postsEl.innerHTML = snap.docs.map(doc => {
+                const d = doc.data();
+                const id = doc.id;
+                const hasLaughed = localStorage.getItem(`laughed_${id}`);
+                const timeAgo = d.createdAt ? getTimeAgo(d.createdAt.toDate()) : '';
+                return `
+                    <div class="mural-post">
+                        <div class="mural-post-text">"${escapeHtml(d.text)}" — sobre <span class="mural-target">${escapeHtml(d.targetPlayer)}</span></div>
+                        <div class="mural-post-meta">
+                            <span>por ${escapeHtml(d.authorName || 'Anônimo')} ${timeAgo ? '· ' + timeAgo : ''}</span>
+                            <button class="mural-laugh-btn ${hasLaughed ? 'voted' : ''}" onclick="laughMural('${id}')">
+                                😂 ${d.laughs || 0}
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        });
+}
+
+function destroyMural() {
+    if (muralUnsubscribe) {
+        muralUnsubscribe();
+        muralUnsubscribe = null;
+    }
+}
+
+async function postMural() {
+    const textInput = document.getElementById('muralText');
+    const targetSelect = document.getElementById('muralTarget');
+    const text = textInput.value.trim();
+    const target = targetSelect.value;
+
+    if (!text) { toast('Escreva uma acusação!', 'error'); return; }
+    if (!target) { toast('Selecione sobre quem é a acusação!', 'error'); return; }
+
+    let author = localStorage.getItem('muralAuthor');
+    if (!author) {
+        author = prompt('Qual seu nome? (será salvo para próximas vezes)');
+        if (!author || !author.trim()) { toast('Nome é obrigatório!', 'error'); return; }
+        author = author.trim();
+        localStorage.setItem('muralAuthor', author);
+    }
+
+    try {
+        await db.collection('mural').add({
+            text,
+            targetPlayer: target,
+            authorName: author,
+            laughs: 0,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        textInput.value = '';
+        targetSelect.value = '';
+    } catch (e) {
+        toast('Erro ao postar: ' + e.message, 'error');
+    }
+}
+
+async function laughMural(docId) {
+    const key = `laughed_${docId}`;
+    const hasLaughed = localStorage.getItem(key);
+    try {
+        if (hasLaughed) {
+            await db.collection('mural').doc(docId).update({ laughs: firebase.firestore.FieldValue.increment(-1) });
+            localStorage.removeItem(key);
+        } else {
+            await db.collection('mural').doc(docId).update({ laughs: firebase.firestore.FieldValue.increment(1) });
+            localStorage.setItem(key, '1');
+        }
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    if (seconds < 60) return 'agora';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `há ${minutes}min`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `há ${hours}h`;
+    const days = Math.floor(hours / 24);
+    return `há ${days}d`;
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
 }
 
 function toggleVoteSkip(matchId, playerId) {
