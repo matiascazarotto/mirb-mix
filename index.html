@@ -1750,27 +1750,37 @@ async function loadAdminMatches() {
                         ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
                     </div>
                     <div class="vote-count-info">📊 ${voteCount} voto(s) recebido(s)</div>
+                    ${m.status === 'voting' ? `
                     <div class="btn-group">
-                        ${m.status === 'voting' ? `
-                            <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
-                            <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
-                            <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
-                        ` : m.status === 'closed' ? `
-                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
-                            <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
-                            ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
-                            ${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? `<span style="color:var(--yellow);font-size:11px;font-weight:600;padding:4px 8px;background:rgba(255,214,0,0.1);border-radius:4px;white-space:nowrap;">⚠️ reimportar</span>` : ''}
-                            <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
-                            <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
-                            <button class="btn btn-primary btn-small" onclick="finishMatch('${matchId}')" style="background:linear-gradient(135deg,#5c6370,#8892a4);color:#fff;box-shadow:none;">✅ Finalizar</button>
-                        ` : `
-                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
-                            ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
-                            <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Reimportar GC</button>
-                            <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')" style="font-size:11px;">🔓 Reabrir</button>
-                        `}
+                        <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
+                        <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
+                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
+                    ` : m.status === 'closed' ? `
+                    <div class="btn-group">
+                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
+                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
+                        <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
+                        ${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? `<span style="color:var(--yellow);font-size:11px;font-weight:600;padding:4px 8px;background:rgba(255,214,0,0.1);border-radius:4px;white-space:nowrap;display:inline-flex;align-items:center;">⚠️ reimportar</span>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
+                        <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:linear-gradient(135deg,#5c6370,#8892a4);color:#fff;box-shadow:none;padding:8px 16px;font-size:13px;border:none;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
+                        <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
+                    </div>
+                    ` : `
+                    <div class="btn-group">
+                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
+                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
+                        <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Reimportar GC</button>
+                        <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Reabrir</button>
+                        <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
+                    </div>
+                    `}
                     ${m.gcStats && m.gcStats.length > 0 ? `
                     <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;">
                         <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600;">🔗 Partidas GC Vinculadas</div>
