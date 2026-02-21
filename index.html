@@ -2670,7 +2670,7 @@ async function loadDashboard() {
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
 
     try {
-        const snap = await db.collection('matches').where('status', '==', 'closed').orderBy('createdAt', 'desc').get();
+        const snap = await db.collection('matches').where('status', 'in', ['closed', 'finished']).orderBy('createdAt', 'desc').get();
         let allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
 
         // ── Populate month dropdown ──
@@ -4328,7 +4328,7 @@ async function loadPendingGCImports() {
         // Load pending imports and closed matches in parallel
         const [importsSnap, matchesSnap] = await Promise.all([
             db.collection('gc-imports').where('status', '==', 'pending').orderBy('createdAt', 'desc').get(),
-            db.collection('matches').where('status', '==', 'closed').orderBy('createdAt', 'desc').get()
+            db.collection('matches').where('status', 'in', ['closed', 'finished']).orderBy('createdAt', 'desc').get()
         ]);
 
         if (importsSnap.empty) {
