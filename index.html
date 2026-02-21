@@ -3901,12 +3901,12 @@ async function saveGCImport() {
         const matchData = (await db.collection('matches').doc(gcImportMatchId).get()).data();
         const updateData = { gcStats, gcMatchCount: allParsed.length, gcRawJsons };
 
-        if (matchData.result && matchData.players) {
+        if (matchData.result && matchData.result.teamA && matchData.result.teamB) {
             const teamNames = [...new Set(gcStats.map(s => s.teamName).filter(Boolean))];
             if (teamNames.length === 2) {
                 const playersInA = new Set(gcStats.filter(s => s.teamName === teamNames[0]).map(s => s.playerId));
                 const playersInB = new Set(gcStats.filter(s => s.teamName === teamNames[1]).map(s => s.playerId));
-                const allPlayers = matchData.players;
+                const allPlayers = [...matchData.result.teamA, ...matchData.result.teamB];
                 const newTeamA = allPlayers.filter(p => playersInA.has(p.id));
                 const newTeamB = allPlayers.filter(p => playersInB.has(p.id));
                 if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === allPlayers.length) {
@@ -4627,7 +4627,7 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
             gcRawJsons: mergedRawJsons
         };
 
-        if (matchData.result && matchData.players) {
+        if (matchData.result && matchData.result.teamA && matchData.result.teamB) {
             const teamNames = [...new Set(newStats.map(s => s.teamName).filter(Boolean))];
             if (teamNames.length === 2) {
                 const gcTeamA = teamNames[0];
@@ -4635,7 +4635,7 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
                 const playersInA = new Set(newStats.filter(s => s.teamName === gcTeamA).map(s => s.playerId));
                 const playersInB = new Set(newStats.filter(s => s.teamName === gcTeamB).map(s => s.playerId));
 
-                const allPlayers = matchData.players;
+                const allPlayers = [...matchData.result.teamA, ...matchData.result.teamB];
                 const newTeamA = allPlayers.filter(p => playersInA.has(p.id));
                 const newTeamB = allPlayers.filter(p => playersInB.has(p.id));
 
