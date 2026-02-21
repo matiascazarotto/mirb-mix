@@ -2660,12 +2660,7 @@ async function postMural() {
     if (!text) { toast('Escreva uma acusação!', 'error'); return; }
     if (!target) { toast('Selecione sobre quem é a acusação!', 'error'); return; }
 
-    let author = localStorage.getItem('muralAuthor');
-    if (!author) {
-        toast('Primeiro defina seu nome!', 'error');
-        changeMuralAuthor();
-        return;
-    }
+    const author = localStorage.getItem('muralAuthor') || 'Anônimo';
 
     try {
         await db.collection('mural').add({
