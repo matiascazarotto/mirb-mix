@@ -1739,95 +1739,91 @@ async function loadAdminMatches() {
 
             const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
             const isFinished = m.status === 'finished';
+            const isClosed = m.status === 'closed';
+            const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '';
+            const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+            const hasGC = !!m.gcStats;
+            const gcCount = m.gcMatchCount || 0;
+
+            // ── Build GC score summary ──
+            let gcScoreHtml = '';
+            if (hasGC && m.gcStats.length > 0) {
+                const byIdx = {};
+                m.gcStats.forEach(s => {
+                    const idx = s.gcMatchIdx || 1;
+                    if (!byIdx[idx]) byIdx[idx] = { teamA: null, teamB: null, scoreA: null, scoreB: null };
+                    if (s.teamName && !byIdx[idx].teamA) { byIdx[idx].teamA = s.teamName; byIdx[idx].scoreA = s.teamScore; }
+                    else if (s.teamName && s.teamName !== byIdx[idx].teamA && !byIdx[idx].teamB) { byIdx[idx].teamB = s.teamName; byIdx[idx].scoreB = s.teamScore; }
+                });
+                gcScoreHtml = Object.keys(byIdx).sort((a,b)=>a-b).map(idx => {
+                    const g = byIdx[idx];
+                    if (!g.teamA || !g.teamB || g.scoreA == null || g.scoreB == null) return '';
+                    const aWin = g.scoreA > g.scoreB;
+                    const prefix = Object.keys(byIdx).length > 1 ? '<span style="color:var(--ct-blue);font-weight:600;font-size:11px;">GC#' + idx + '</span> ' : '';
+                    return '<span style="font-size:12px;">' + prefix +
+                        '<span style="color:' + (aWin ? 'var(--green)' : 'var(--text-dim)') + ';font-weight:600;">' + g.teamA + ' ' + g.scoreA + '</span>' +
+                        '<span style="color:var(--text-dim);"> x </span>' +
+                        '<span style="color:' + (!aWin ? 'var(--green)' : 'var(--text-dim)') + ';font-weight:600;">' + g.scoreB + ' ' + g.teamB + '</span></span>';
+                }).filter(Boolean).join('<span style="color:var(--text-dim);margin:0 6px;">|</span>');
+            }
 
             html += `
                 <div class="match-card ${m.status}">
-                    <div class="match-header">
-                        <div class="match-title">${m.name}</div>
-                        <span class="match-status ${m.status}">${statusLabel}</span>
+                    <!-- Header -->
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">
+                        <div>
+                            <div class="match-title">${m.name}</div>
+                            <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:3px;font-size:12px;color:var(--text-dim);align-items:center;">
+                                ${date ? `<span>📅 ${date}</span>` : ''}
+                                <span>👥 ${m.players.length}</span>
+                                <span>📊 ${voteCount} votos</span>
+                                ${gcCount > 1 ? `<span>🎮 MD${gcCount}</span>` : ''}
+                                ${vods.length > 0 ? vods.map((url, i) => `<a href="${url}" target="_blank" style="color:var(--green);text-decoration:none;font-weight:600;">📹 VOD${vods.length > 1 ? ' '+(i+1) : ''}</a>`).join('') : ''}
+                            </div>
+                            ${gcScoreHtml ? `<div style="margin-top:6px;">${gcScoreHtml}</div>` : ''}
+                        </div>
+                        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+                            <span class="match-status ${m.status}" style="white-space:nowrap;">${statusLabel}</span>
+                            <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')" style="padding:5px 8px;font-size:11px;min-width:0;" title="Excluir">🗑️</button>
+                        </div>
                     </div>
-                    <div class="match-players">
-                        ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
-                    </div>
-                    <div class="vote-count-info">📊 ${voteCount} voto(s) recebido(s)</div>
+
+                    <!-- Actions -->
                     ${m.status === 'voting' ? `
-                    <div class="btn-group">
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;">
                         <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
                         <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
-                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
-                        <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
+                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>
                     </div>
-                    ` : m.status === 'closed' ? `
-                    <div class="btn-group">
-                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
-                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
-                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
+                    ` : isClosed ? `
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
+                        ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>
+                        <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
+                        <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">${hasGC ? '🔄 Reimportar GC' : '📊 Importar GC'}</button>
+                        ${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? `<span style="color:var(--yellow);font-size:11px;font-weight:600;">⚠️</span>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')">📹 VOD</button>
+                        <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir</button>
+                        <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(136,146,164,0.2);color:var(--text-dim);border:1px solid rgba(136,146,164,0.3);box-shadow:none;padding:8px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
                     </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);align-items:center;">
-                        <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
-                        ${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? `<span style="color:var(--yellow);font-size:11px;font-weight:600;padding:4px 8px;background:rgba(255,214,0,0.1);border-radius:4px;white-space:nowrap;display:inline-flex;align-items:center;">⚠️ reimportar</span>` : ''}
-                        <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')">📹 Adicionar VOD</button>
-                        ${(function() {
-                            const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
-                            return vods.map((url, i) => `<div style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;"><a href="${url}" target="_blank" style="color:var(--green);font-size:12px;font-weight:600;text-decoration:none;">📹 VOD${vods.length > 1 ? ' ' + (i + 1) : ''} ✅</a><button class="btn btn-danger btn-small" onclick="removeVod('${matchId}',${i})" style="padding:1px 5px;font-size:9px;line-height:1;" title="Remover">✕</button></div>`).join('');
-                        })()}
-                        <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
-                        <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:linear-gradient(135deg,#5c6370,#8892a4);color:#fff;box-shadow:none;padding:8px 16px;font-size:13px;border:none;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
-                        <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
-                    </div>
-                    <div id="vodNewInputs-${matchId}"></div>
+                    <div id="vodNewInputs-${matchId}" style="margin-top:6px;"></div>
+                    ${hasGC ? (() => {
+                        const indices = [...new Set(m.gcStats.map(s => s.gcMatchIdx || 1))].sort((a,b)=>a-b);
+                        return `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;font-size:11px;align-items:center;color:var(--text-dim);">
+                            <span style="font-weight:600;">GC:</span>
+                            ${indices.map(idx => `<span style="padding:2px 8px;background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.2);border-radius:4px;color:var(--ct-blue);font-weight:600;">#${idx} <button class="btn btn-danger btn-small" onclick="unlinkGCMatch('${matchId}',${idx})" style="padding:0 4px;font-size:9px;line-height:1;min-width:0;margin-left:2px;" title="Desvincular">✕</button></span>`).join('')}
+                        </div>`;
+                    })() : ''}
                     ` : `
-                    <div class="btn-group">
-                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
-                        ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
-                    </div>
-                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.05);">
-                        <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Reimportar GC</button>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
+                        ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
+                        <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
+                        <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">🔄 Reimportar GC</button>
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Reabrir</button>
-                        <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
                     `}
-                    ${m.gcStats && m.gcStats.length > 0 ? `
-                    <div style="margin-top:10px;padding:10px 12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.06);border-radius:8px;">
-                        <div style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;font-weight:600;">🔗 Partidas GC Vinculadas</div>
-                        ${(function() {
-                            const byIdx = {};
-                            m.gcStats.forEach(s => {
-                                const idx = s.gcMatchIdx || 1;
-                                if (!byIdx[idx]) byIdx[idx] = { players: [], teamA: null, teamB: null, scoreA: null, scoreB: null };
-                                byIdx[idx].players.push(s);
-                                if (s.teamName && !byIdx[idx].teamA) {
-                                    byIdx[idx].teamA = s.teamName;
-                                    byIdx[idx].scoreA = s.teamScore;
-                                } else if (s.teamName && s.teamName !== byIdx[idx].teamA && !byIdx[idx].teamB) {
-                                    byIdx[idx].teamB = s.teamName;
-                                    byIdx[idx].scoreB = s.teamScore;
-                                }
-                            });
-                            return Object.keys(byIdx).sort((a, b) => a - b).map(idx => {
-                                const g = byIdx[idx];
-                                const hasScore = g.teamA && g.teamB && g.scoreA != null && g.scoreB != null;
-                                const scoreLabel = hasScore
-                                    ? '<span style="color:' + (g.scoreA > g.scoreB ? 'var(--green)' : 'var(--red)') + '">' + g.teamA + ' ' + g.scoreA + '</span> x <span style="color:' + (g.scoreB > g.scoreA ? 'var(--green)' : 'var(--red)') + '">' + g.scoreB + ' ' + g.teamB + '</span>'
-                                    : g.players.length + ' jogadores';
-                                return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;">' +
-                                    '<div style="font-size:12px;">' +
-                                        '<span style="color:var(--ct-blue);font-weight:600;">GC #' + idx + '</span> ' +
-                                        '<span style="margin-left:6px;">' + scoreLabel + '</span>' +
-                                    '</div>' +
-                                    (isFinished ? '' : '<button class="btn btn-danger btn-small" onclick="unlinkGCMatch(\'' + matchId + '\',' + idx + ')" style="padding:2px 8px;font-size:10px;" title="Desvincular">✕</button>') +
-                                '</div>';
-                            }).join('');
-                        })()}
-                    </div>
-                    ` : ''}
-                    ${isFinished ? (function() {
-                        const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
-                        if (vods.length === 0) return '';
-                        return '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
-                            vods.map((url, i) => `<a href="${url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;color:var(--green);font-size:12px;font-weight:600;text-decoration:none;">📹 VOD ${vods.length > 1 ? i + 1 : ''}</a>`).join('') +
-                        '</div>';
-                    })() : ''}
                 </div>
             `;
         }
