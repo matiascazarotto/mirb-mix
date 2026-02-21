@@ -2561,11 +2561,30 @@ function selectMuralTarget(name) {
 }
 
 function selectMuralTargetCustom() {
-    document.getElementById('muralDropdown').style.display = 'none';
-    const custom = prompt('Sobre quem/o quê?');
-    if (custom && custom.trim()) {
-        selectMuralTarget(custom.trim());
-    }
+    const dropdown = document.getElementById('muralDropdown');
+    // Replace dropdown content with input
+    const prev = dropdown.innerHTML;
+    dropdown.innerHTML = `
+        <div style="padding:8px;">
+            <div style="font-size:12px;color:var(--text-dim);margin-bottom:6px;">Sobre quem/o quê?</div>
+            <div style="display:flex;gap:6px;">
+                <input type="text" id="muralCustomTarget" placeholder="Ex: A Galinha, O Servidor..." maxlength="50" style="flex:1;padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:6px;color:var(--text);font-size:13px;font-family:inherit;" onkeydown="if(event.key==='Enter'){confirmMuralCustomTarget();}" autofocus>
+                <button class="btn btn-primary btn-small" onclick="confirmMuralCustomTarget()" style="padding:6px 12px;font-size:12px;">OK</button>
+            </div>
+        </div>
+    `;
+    dropdown._prevHtml = prev;
+    setTimeout(() => document.getElementById('muralCustomTarget')?.focus(), 50);
+}
+
+function confirmMuralCustomTarget() {
+    const input = document.getElementById('muralCustomTarget');
+    const val = input ? input.value.trim() : '';
+    if (!val) return;
+    selectMuralTarget(val);
+    // Restore dropdown for next time
+    const dropdown = document.getElementById('muralDropdown');
+    if (dropdown._prevHtml) dropdown.innerHTML = dropdown._prevHtml;
 }
 
 function updateMuralAuthorLine() {
@@ -2580,12 +2599,25 @@ function updateMuralAuthorLine() {
 }
 
 function changeMuralAuthor() {
+    const el = document.getElementById('muralAuthorLine');
+    if (!el) return;
     const current = localStorage.getItem('muralAuthor') || '';
-    const newName = prompt('Alterar seu nome:', current);
-    if (newName && newName.trim()) {
-        localStorage.setItem('muralAuthor', newName.trim());
-        updateMuralAuthorLine();
+    el.innerHTML = `
+        <div style="display:inline-flex;gap:6px;align-items:center;">
+            <input type="text" id="muralAuthorInput" value="${escapeHtml(current)}" placeholder="Seu nome" maxlength="30" style="padding:4px 8px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);border-radius:4px;color:var(--text);font-size:12px;font-family:inherit;width:120px;" onkeydown="if(event.key==='Enter'){confirmMuralAuthor();}">
+            <button class="btn btn-primary btn-small" onclick="confirmMuralAuthor()" style="padding:3px 10px;font-size:11px;">OK</button>
+        </div>
+    `;
+    setTimeout(() => { const i = document.getElementById('muralAuthorInput'); if (i) { i.focus(); i.select(); } }, 50);
+}
+
+function confirmMuralAuthor() {
+    const input = document.getElementById('muralAuthorInput');
+    const val = input ? input.value.trim() : '';
+    if (val) {
+        localStorage.setItem('muralAuthor', val);
     }
+    updateMuralAuthorLine();
 }
 
 async function postMural() {
@@ -2599,11 +2631,9 @@ async function postMural() {
 
     let author = localStorage.getItem('muralAuthor');
     if (!author) {
-        author = prompt('Qual seu nome? (será salvo para próximas vezes)');
-        if (!author || !author.trim()) { toast('Nome é obrigatório!', 'error'); return; }
-        author = author.trim();
-        localStorage.setItem('muralAuthor', author);
-        updateMuralAuthorLine();
+        toast('Primeiro defina seu nome!', 'error');
+        changeMuralAuthor();
+        return;
     }
 
     try {
