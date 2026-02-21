@@ -1784,6 +1784,7 @@ async function loadAdminMatches() {
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                             <span class="match-status ${m.status}" style="white-space:nowrap;">${statusLabel}</span>
+                            ${isClosed ? `<button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(136,146,164,0.2);color:var(--text-dim);border:1px solid rgba(136,146,164,0.3);box-shadow:none;padding:5px 10px;font-size:11px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>` : ''}
                             <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')" style="padding:5px 8px;font-size:11px;min-width:0;" title="Excluir">🗑️</button>
                         </div>
                     </div>
@@ -1804,7 +1805,6 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')">📹 VOD</button>
                         <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
                         <button class="btn btn-secondary btn-small" onclick="openGCImport('${matchId}')">📊 Add Partida GC${hasGC && m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? ' ⚠️' : ''}</button>
-                        <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(136,146,164,0.2);color:var(--text-dim);border:1px solid rgba(136,146,164,0.3);box-shadow:none;padding:8px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
                     </div>
                     <div id="vodNewInputs-${matchId}" style="margin-top:6px;"></div>
                     ` : `
