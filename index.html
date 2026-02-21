@@ -2259,38 +2259,14 @@ async function viewMatchResult(matchId) {
             toast('Resultado não disponível.', 'error');
             return;
         }
-        showResultModal(match.name, match.result, match.gcStats || []);
+        showResultModal(match.name, match.result);
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
     }
 }
 
-function showResultModal(title, teams, gcStats) {
+function showResultModal(title, teams) {
     const diff = Math.abs(teams.sumA - teams.sumB);
-    // Build GC level lookup (RP from first GC match per player)
-    const gcLevelMap = {};
-    if (gcStats && gcStats.length > 0) {
-        gcStats.forEach(s => {
-            if (!gcLevelMap[s.playerId]) gcLevelMap[s.playerId] = s.rp;
-        });
-    }
-    const hasGC = Object.keys(gcLevelMap).length > 0;
-
-    const renderPlayer = (p) => {
-        const gcRp = gcLevelMap[p.id];
-        const gcBadge = gcRp != null ? `<span class="badge" style="background:rgba(79,195,247,0.12);color:var(--ct-blue);border:1px solid rgba(79,195,247,0.25);font-size:11px;">GC ${gcRp >= 0 ? '+' : ''}${gcRp}</span>` : '';
-        return `
-            <div class="team-player">
-                <span class="team-player-name">${p.name}</span>
-                <div class="team-player-info">
-                    <span class="badge badge-role">${p.role}</span>
-                    <span class="badge badge-level">Nv.${p.currentLevel != null ? p.currentLevel : '?'}</span>
-                    ${gcBadge}
-                </div>
-            </div>
-        `;
-    };
-
     const overlay = document.getElementById('editModal');
     overlay.querySelector('.modal-box').innerHTML = `
         <div class="card-title">
@@ -2301,16 +2277,31 @@ function showResultModal(title, teams, gcStats) {
             Diferença: <span class="diff-value">${diff}</span> ponto(s)
             ${diff <= 2 ? '<br><span style="color:var(--green);font-size:14px;">✅ Times Balanceados!</span>' : ''}
         </div>
-        ${hasGC ? '<div style="text-align:center;margin-bottom:8px;font-size:11px;color:var(--text-dim);">Nv = Votação · GC = Rating da partida</div>' : ''}
         <div class="teams-grid">
             <div class="team-card ct">
                 <div class="team-label">Time A</div>
-                ${teams.teamA.map(renderPlayer).join('')}
+                ${teams.teamA.map(p => `
+                    <div class="team-player">
+                        <span class="team-player-name">${p.name}</span>
+                        <div class="team-player-info">
+                            <span class="badge badge-role">${p.role}</span>
+                            <span class="badge badge-level">Nv.${p.currentLevel != null ? p.currentLevel : '?'}</span>
+                        </div>
+                    </div>
+                `).join('')}
                 <div class="team-total" style="color:var(--ct-blue)">Total: ${teams.sumA}</div>
             </div>
             <div class="team-card tr">
                 <div class="team-label">Time B</div>
-                ${teams.teamB.map(renderPlayer).join('')}
+                ${teams.teamB.map(p => `
+                    <div class="team-player">
+                        <span class="team-player-name">${p.name}</span>
+                        <div class="team-player-info">
+                            <span class="badge badge-role">${p.role}</span>
+                            <span class="badge badge-level">Nv.${p.currentLevel != null ? p.currentLevel : '?'}</span>
+                        </div>
+                    </div>
+                `).join('')}
                 <div class="team-total" style="color:var(--tr-gold)">Total: ${teams.sumB}</div>
             </div>
         </div>
