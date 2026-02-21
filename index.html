@@ -4612,12 +4612,36 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
         const mergedRawJsons = [...existingRawJsons, JSON.stringify(gcPlayers)];
         const newCount = existingCount > 0 ? existingCount + 1 : 1;
 
-        // Save on match
-        batch.update(db.collection('matches').doc(matchId), {
+        // ── Sync result teams with GC teams (first GC link only) ──
+        const updateData = {
             gcStats: mergedStats,
             gcMatchCount: newCount,
             gcRawJsons: mergedRawJsons
-        });
+        };
+
+        if (nextIdx === 1 && matchData.result && matchData.players) {
+            const teamNames = [...new Set(newStats.map(s => s.teamName).filter(Boolean))];
+            if (teamNames.length === 2) {
+                const gcTeamA = teamNames[0];
+                const gcTeamB = teamNames[1];
+                const playersInA = new Set(newStats.filter(s => s.teamName === gcTeamA).map(s => s.playerId));
+                const playersInB = new Set(newStats.filter(s => s.teamName === gcTeamB).map(s => s.playerId));
+
+                const allPlayers = matchData.players;
+                const newTeamA = allPlayers.filter(p => playersInA.has(p.id));
+                const newTeamB = allPlayers.filter(p => playersInB.has(p.id));
+
+                // Only override if all players were matched to a GC team
+                if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === allPlayers.length) {
+                    const sumA = newTeamA.reduce((s, p) => s + (p.currentLevel || 10), 0);
+                    const sumB = newTeamB.reduce((s, p) => s + (p.currentLevel || 10), 0);
+                    updateData.result = { teamA: newTeamA, teamB: newTeamB, sumA, sumB };
+                }
+            }
+        }
+
+        // Save on match
+        batch.update(db.collection('matches').doc(matchId), updateData);
 
         // Mark import as used
         batch.update(db.collection('gc-imports').doc(importDocId), { status: 'used', linkedMatchId: matchId });
