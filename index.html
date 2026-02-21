@@ -2550,6 +2550,11 @@ function destroyMural() {
 function toggleMuralDropdown() {
     const dd = document.getElementById('muralDropdown');
     if (!dd) return;
+    // Restore original options if was in custom input mode
+    if (dd._prevHtml) {
+        dd.innerHTML = dd._prevHtml;
+        dd._prevHtml = null;
+    }
     dd.style.display = dd.style.display === 'none' ? 'block' : 'none';
 }
 
