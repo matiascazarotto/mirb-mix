@@ -535,7 +535,7 @@
         }
 
         .match-card.closed::before {
-            background: linear-gradient(90deg, var(--red), #ff6d3d);
+            background: linear-gradient(90deg, var(--yellow), #ffab00);
         }
 
         .match-card.finished::before {
@@ -577,9 +577,9 @@
         }
 
         .match-status.closed {
-            background: rgba(255,61,61,0.15);
-            color: var(--red);
-            border: 1px solid rgba(255,61,61,0.3);
+            background: rgba(255,214,0,0.15);
+            color: var(--yellow);
+            border: 1px solid rgba(255,214,0,0.3);
         }
 
         .match-status.finished {
@@ -1737,7 +1737,7 @@ async function loadAdminMatches() {
             const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
             const voteCount = votesSnap.size;
 
-            const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🔴 Encerrada';
+            const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
             const isFinished = m.status === 'finished';
 
             html += `
@@ -2619,7 +2619,7 @@ async function loadMatchesPage() {
                                 ${gcCount > 1 ? `<span>🎮 MD${gcCount}</span>` : ''}
                             </div>
                         </div>
-                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🔴 Encerrada'}</span>
+                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento'}</span>
                     </div>
                     ${scoreHtml}
                     ${mvpHtml}
