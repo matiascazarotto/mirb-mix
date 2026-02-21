@@ -2479,9 +2479,11 @@ async function initMural() {
     if (dropdown) {
         const snap = await db.collection('players').orderBy('name').get();
         const sortedPlayers = snap.docs.map(d => d.data()).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
-        dropdown.innerHTML = sortedPlayers.map(p => {
+        const otherOption = `<div onclick="selectMuralTargetCustom()" style="padding:8px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:var(--ct-blue);transition:background 0.15s;font-weight:600;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">✏️ Outro...</div><div style="border-top:1px solid rgba(255,255,255,0.08);margin:4px 0;"></div>`;
+        const playerOptions = sortedPlayers.map(p => {
             return `<div onclick="selectMuralTarget('${escapeHtml(p.name)}')" style="padding:8px 12px;cursor:pointer;border-radius:6px;font-size:13px;color:var(--text);transition:background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">${p.name}</div>`;
         }).join('');
+        dropdown.innerHTML = otherOption + playerOptions;
     }
     // Show author line
     updateMuralAuthorLine();
@@ -2556,6 +2558,14 @@ function selectMuralTarget(name) {
     document.getElementById('muralTargetBtn').textContent = name + ' ▾';
     document.getElementById('muralTargetBtn').style.color = 'var(--yellow)';
     document.getElementById('muralDropdown').style.display = 'none';
+}
+
+function selectMuralTargetCustom() {
+    document.getElementById('muralDropdown').style.display = 'none';
+    const custom = prompt('Sobre quem/o quê?');
+    if (custom && custom.trim()) {
+        selectMuralTarget(custom.trim());
+    }
 }
 
 function updateMuralAuthorLine() {
