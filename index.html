@@ -1873,18 +1873,33 @@ async function reopenMatch(matchId) {
     }
 }
 
-function addVodRow(matchId) {
+async function addVodRow(matchId) {
     const inputsContainer = document.getElementById(`vodNewInputs-${matchId}`);
-    const row = document.createElement('div');
-    row.setAttribute('data-vod-new', '');
-    row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
-    row.innerHTML = `
+    // Toggle: if already open, close it
+    if (inputsContainer.children.length > 0) {
+        inputsContainer.innerHTML = '';
+        return;
+    }
+    // Fetch existing VODs
+    const doc = await db.collection('matches').doc(matchId).get();
+    const m = doc.data();
+    const existing = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+
+    let html = '';
+    // Show existing VODs
+    existing.forEach((url, i) => {
+        html += `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+            <a href="${url}" target="_blank" style="flex:1;color:var(--green);font-size:12px;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">📹 VOD ${existing.length > 1 ? (i+1) : ''} — ${url}</a>
+            <button class="btn btn-danger btn-small" onclick="removeVod('${matchId}', ${i})" style="padding:4px 8px;font-size:11px;min-width:0;" title="Remover">✕</button>
+        </div>`;
+    });
+    // Add new VOD input
+    html += `<div data-vod-new style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
         <input type="text" value="" placeholder="Cole o link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:16px;" class="vod-new-input">
         <button class="btn btn-primary btn-small" onclick="saveNewVod('${matchId}', this.parentElement)" style="padding:4px 10px;font-size:11px;white-space:nowrap;">Salvar</button>
-        <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Cancelar">✕</button>
-    `;
-    inputsContainer.appendChild(row);
-    row.querySelector('input').focus();
+    </div>`;
+    inputsContainer.innerHTML = html;
+    inputsContainer.querySelector('.vod-new-input').focus();
 }
 
 async function saveNewVod(matchId, rowEl) {
