@@ -1786,25 +1786,22 @@ async function loadAdminMatches() {
                     <div id="vodContainer-${matchId}" style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">
                         ${(function() {
                             const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
-                            let vodHtml = vods.map((url, i) => `
-                                <div style="display:flex;gap:6px;align-items:center;" data-vod-row>
-                                    <input type="text" value="${url}" placeholder="Link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:16px;" class="vod-input-${matchId}">
-                                    <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Remover">✕</button>
-                                    <span style="color:var(--green);font-size:11px;">✅</span>
-                                </div>
-                            `).join('');
-                            if (vods.length === 0) {
-                                vodHtml = `
-                                <div style="display:flex;gap:6px;align-items:center;" data-vod-row>
-                                    <input type="text" value="" placeholder="Link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:16px;" class="vod-input-${matchId}">
-                                    <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Remover">✕</button>
-                                </div>`;
+                            let vodHtml = '';
+                            if (vods.length > 0) {
+                                vodHtml = '<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">' +
+                                    vods.map((url, i) => `
+                                        <div style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;" data-vod-saved="${url}">
+                                            <a href="${url}" target="_blank" style="color:var(--green);font-size:12px;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px;">📹 VOD ${vods.length > 1 ? i + 1 : ''} ✅</a>
+                                            <button class="btn btn-danger btn-small" onclick="removeVod('${matchId}',${i})" style="padding:2px 6px;font-size:10px;line-height:1;" title="Remover">✕</button>
+                                        </div>
+                                    `).join('') +
+                                '</div>';
                             }
                             return vodHtml;
                         })()}
+                        <div id="vodNewInputs-${matchId}"></div>
                         <div style="display:flex;gap:8px;align-items:center;margin-top:2px;">
                             <button class="btn btn-secondary btn-small" onclick="addVodRow('${matchId}')" style="font-size:11px;">➕ Adicionar VOD</button>
-                            <button class="btn btn-secondary btn-small" onclick="saveVodUrls('${matchId}')" style="white-space:nowrap;font-size:11px;">📹 Salvar VOD</button>
                         </div>
                     </div>
                     ` : ''}
@@ -1844,28 +1841,50 @@ async function reopenVoting(matchId) {
 }
 
 function addVodRow(matchId) {
-    const container = document.getElementById(`vodContainer-${matchId}`);
-    const btnRow = container.querySelector('div:last-child');
+    const inputsContainer = document.getElementById(`vodNewInputs-${matchId}`);
     const row = document.createElement('div');
-    row.setAttribute('data-vod-row', '');
-    row.style.cssText = 'display:flex;gap:6px;align-items:center;';
+    row.setAttribute('data-vod-new', '');
+    row.style.cssText = 'display:flex;gap:6px;align-items:center;margin-bottom:4px;';
     row.innerHTML = `
-        <input type="text" value="" placeholder="Link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:16px;" class="vod-input-${matchId}">
-        <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Remover">✕</button>
+        <input type="text" value="" placeholder="Cole o link da VOD (YouTube)" style="flex:1;min-width:180px;padding:6px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text);font-size:16px;" class="vod-new-input">
+        <button class="btn btn-primary btn-small" onclick="saveNewVod('${matchId}', this.parentElement)" style="padding:4px 10px;font-size:11px;white-space:nowrap;">Salvar</button>
+        <button class="btn btn-danger btn-small" onclick="this.parentElement.remove()" style="padding:4px 8px;font-size:11px;" title="Cancelar">✕</button>
     `;
-    container.insertBefore(row, btnRow);
+    inputsContainer.appendChild(row);
+    row.querySelector('input').focus();
 }
 
-async function saveVodUrls(matchId) {
-    const container = document.getElementById(`vodContainer-${matchId}`);
-    const inputs = container.querySelectorAll(`[data-vod-row] input`);
-    const urls = Array.from(inputs).map(i => i.value.trim()).filter(u => u);
+async function saveNewVod(matchId, rowEl) {
+    const input = rowEl.querySelector('input');
+    const url = input.value.trim();
+    if (!url) { toast('Cole um link de VOD.', 'error'); return; }
     try {
+        const doc = await db.collection('matches').doc(matchId).get();
+        const m = doc.data();
+        const existing = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+        const urls = [...existing, url];
         await db.collection('matches').doc(matchId).update({
             vodUrls: urls,
-            vodUrl: urls.length > 0 ? urls[0] : firebase.firestore.FieldValue.delete()
+            vodUrl: urls[0]
         });
-        toast(urls.length ? `📹 ${urls.length} VOD(s) salva(s)!` : '📹 VODs removidas.', 'success');
+        toast('📹 VOD salva!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function removeVod(matchId, vodIndex) {
+    try {
+        const doc = await db.collection('matches').doc(matchId).get();
+        const m = doc.data();
+        const existing = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+        existing.splice(vodIndex, 1);
+        await db.collection('matches').doc(matchId).update({
+            vodUrls: existing,
+            vodUrl: existing.length > 0 ? existing[0] : firebase.firestore.FieldValue.delete()
+        });
+        toast('📹 VOD removida.', 'success');
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
