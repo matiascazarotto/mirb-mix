@@ -1752,9 +1752,16 @@ async function loadAdminMatches() {
             return;
         }
 
+        // Assign display names for duplicate match names
+        const allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        assignDisplayNames(allMatches);
+        const displayNameMap = {};
+        allMatches.forEach(m => { displayNameMap[m.id] = m.displayName; });
+
         let html = '';
         for (const doc of snap.docs) {
             const m = doc.data();
+            m.displayName = displayNameMap[doc.id];
             const matchId = doc.id;
 
             // Count votes
@@ -1798,7 +1805,7 @@ async function loadAdminMatches() {
                     <!-- Header -->
                     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;">
                         <div>
-                            <div class="match-title">${m.name}</div>
+                            <div class="match-title">${m.displayName || m.name}</div>
                             <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:3px;font-size:12px;color:var(--text-dim);align-items:center;">
                                 ${date ? `<span>📅 ${date}</span>` : ''}
                                 <span>👥 ${m.players.length}</span>
@@ -2420,9 +2427,16 @@ async function loadVotePage() {
             return;
         }
 
+        // Assign display names for duplicate match names
+        const votingMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        assignDisplayNames(votingMatches);
+        const voteNameMap = {};
+        votingMatches.forEach(m => { voteNameMap[m.id] = m.displayName; });
+
         let html = '';
         snap.docs.forEach(doc => {
             const m = doc.data();
+            m.displayName = voteNameMap[doc.id];
             const matchId = doc.id;
             const hasVoted = localStorage.getItem(`voted_${matchId}`);
 
@@ -2430,7 +2444,7 @@ async function loadVotePage() {
                 html += `
                     <div class="match-card">
                         <div class="match-header">
-                            <div class="match-title">${m.name}</div>
+                            <div class="match-title">${m.displayName || m.name}</div>
                             <span class="match-status voting">🟢 Aberta</span>
                         </div>
                         <div style="text-align:center;padding:20px;color:var(--green);">
@@ -2442,7 +2456,7 @@ async function loadVotePage() {
                 html += `
                     <div class="match-card">
                         <div class="match-header">
-                            <div class="match-title">${m.name}</div>
+                            <div class="match-title">${m.displayName || m.name}</div>
                             <span class="match-status voting">🟢 Aberta</span>
                         </div>
                         <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;">
@@ -2724,6 +2738,25 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+function assignDisplayNames(matches) {
+    const nameCounts = {};
+    matches.forEach(m => { nameCounts[m.name] = (nameCounts[m.name] || 0) + 1; });
+    const nameIdx = {};
+    const sorted = [...matches].sort((a, b) => {
+        const ta = a.createdAt?.toDate ? a.createdAt.toDate().getTime() : 0;
+        const tb = b.createdAt?.toDate ? b.createdAt.toDate().getTime() : 0;
+        return ta - tb;
+    });
+    sorted.forEach(m => {
+        if (nameCounts[m.name] > 1) {
+            nameIdx[m.name] = (nameIdx[m.name] || 0) + 1;
+            m.displayName = `${m.name} (${nameIdx[m.name]})`;
+        } else {
+            m.displayName = m.name;
+        }
+    });
+}
+
 function toggleVoteSkip(matchId, playerId) {
     const checkbox = document.getElementById(`skip-${matchId}-${playerId}`);
     const row = document.getElementById(`voteRow-${matchId}-${playerId}`);
@@ -2821,9 +2854,16 @@ async function loadMatchesPage() {
             return;
         }
 
+        // Assign display names for duplicate match names
+        const allMatchesPage = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        assignDisplayNames(allMatchesPage);
+        const pageNameMap = {};
+        allMatchesPage.forEach(m => { pageNameMap[m.id] = m.displayName; });
+
         let html = '';
         for (const doc of snap.docs) {
             const m = doc.data();
+            m.displayName = pageNameMap[doc.id];
             const matchId = doc.id;
             const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '';
             const hasGC = !!m.gcStats;
@@ -2917,7 +2957,7 @@ async function loadMatchesPage() {
                 <div class="match-card ${m.status}">
                     <div class="match-header">
                         <div>
-                            <div class="match-title">${m.name}</div>
+                            <div class="match-title">${m.displayName || m.name}</div>
                             <div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:12px;color:var(--text-dim);">
                                 ${date ? `<span>📅 ${date}</span>` : ''}
                                 <span>👥 ${playerCount} jogadores</span>
@@ -4738,6 +4778,7 @@ async function loadPendingGCImports() {
 
         // Build match list and load system players for matching
         const closedMatches = matchesSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        assignDisplayNames(closedMatches);
         const playersSnap = await db.collection('players').orderBy('name').get();
         const systemPlayers = playersSnap.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -4840,7 +4881,7 @@ async function loadPendingGCImports() {
                     ${bestMatch ? `
                     <div style="padding:8px 12px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;margin-bottom:10px;font-size:12px;">
                         <span style="color:var(--green);font-weight:600;">⭐ Recomendada:</span>
-                        <span style="color:var(--text);">${bestMatch.name}</span>
+                        <span style="color:var(--text);">${bestMatch.displayName || bestMatch.name}</span>
                         <span style="color:var(--green);margin-left:4px;">(times iguais)</span>
                     </div>
                     ` : ''}
@@ -4853,7 +4894,7 @@ async function loadPendingGCImports() {
                                 const gcLabel = existingGC > 0 ? ` [${existingGC} GC]` : '';
                                 const teamTag = m.teamsMatch ? ' ✅ times iguais' : '';
                                 const playerTag = m.matchCount > 0 ? ` (${m.matchCount}/${gcPlayers.length})` : '';
-                                const label = `${m.name}${playerTag}${teamTag}${gcLabel}`;
+                                const label = `${m.displayName || m.name}${playerTag}${teamTag}${gcLabel}`;
                                 const isRecommended = m === bestMatch;
                                 return `<option value="${m.id}" ${isRecommended ? 'selected' : ''}>${isRecommended ? '⭐ ' : ''}${label}</option>`;
                             }).join('')}
