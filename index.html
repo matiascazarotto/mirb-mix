@@ -538,6 +538,14 @@
             background: linear-gradient(90deg, var(--red), #ff6d3d);
         }
 
+        .match-card.finished::before {
+            background: linear-gradient(90deg, var(--text-dim), rgba(136,146,164,0.4));
+        }
+
+        .match-card.finished {
+            opacity: 0.75;
+        }
+
         .match-header {
             display: flex;
             justify-content: space-between;
@@ -572,6 +580,12 @@
             background: rgba(255,61,61,0.15);
             color: var(--red);
             border: 1px solid rgba(255,61,61,0.3);
+        }
+
+        .match-status.finished {
+            background: rgba(136,146,164,0.15);
+            color: var(--text-dim);
+            border: 1px solid rgba(136,146,164,0.3);
         }
 
         .match-players {
@@ -1723,11 +1737,14 @@ async function loadAdminMatches() {
             const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
             const voteCount = votesSnap.size;
 
+            const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🔴 Encerrada';
+            const isFinished = m.status === 'finished';
+
             html += `
                 <div class="match-card ${m.status}">
                     <div class="match-header">
                         <div class="match-title">${m.name}</div>
-                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Votação Aberta' : '🔴 Encerrada'}</span>
+                        <span class="match-status ${m.status}">${statusLabel}</span>
                     </div>
                     <div class="match-players">
                         ${m.players.map(p => `<span class="match-player-tag">${p.name}</span>`).join('')}
@@ -1738,13 +1755,19 @@ async function loadAdminMatches() {
                             <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
                             <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                             <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
-                        ` : `
+                        ` : m.status === 'closed' ? `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
                             <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 ${m.gcStats ? 'Reimportar' : 'Importar'} Stats GC</button>
                             ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
                             ${m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null ? `<span style="color:var(--yellow);font-size:11px;font-weight:600;padding:4px 8px;background:rgba(255,214,0,0.1);border-radius:4px;white-space:nowrap;">⚠️ reimportar</span>` : ''}
                             <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Ver Log</button>
                             <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
+                            <button class="btn btn-primary btn-small" onclick="finishMatch('${matchId}')" style="background:linear-gradient(135deg,#5c6370,#8892a4);color:#fff;box-shadow:none;">✅ Finalizar</button>
+                        ` : `
+                            <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Ver Equipes</button>
+                            ${m.gcStats ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${m.gcMatchCount > 1 ? ' (' + m.gcMatchCount + ')' : ''}</button>` : ''}
+                            <button class="btn btn-primary btn-small" onclick="openGCImport('${matchId}')">📊 Reimportar GC</button>
+                            <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')" style="font-size:11px;">🔓 Reabrir</button>
                         `}
                         <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')">🗑️</button>
                     </div>
@@ -1776,7 +1799,7 @@ async function loadAdminMatches() {
                                         '<span style="color:var(--ct-blue);font-weight:600;">GC #' + idx + '</span> ' +
                                         '<span style="margin-left:6px;">' + scoreLabel + '</span>' +
                                     '</div>' +
-                                    '<button class="btn btn-danger btn-small" onclick="unlinkGCMatch(\'' + matchId + '\',' + idx + ')" style="padding:2px 8px;font-size:10px;" title="Desvincular">✕</button>' +
+                                    (isFinished ? '' : '<button class="btn btn-danger btn-small" onclick="unlinkGCMatch(\'' + matchId + '\',' + idx + ')" style="padding:2px 8px;font-size:10px;" title="Desvincular">✕</button>') +
                                 '</div>';
                             }).join('');
                         })()}
@@ -1805,6 +1828,13 @@ async function loadAdminMatches() {
                         </div>
                     </div>
                     ` : ''}
+                    ${isFinished ? (function() {
+                        const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
+                        if (vods.length === 0) return '';
+                        return '<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">' +
+                            vods.map((url, i) => `<a href="${url}" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:rgba(0,200,83,0.08);border:1px solid rgba(0,200,83,0.2);border-radius:6px;color:var(--green);font-size:12px;font-weight:600;text-decoration:none;">📹 VOD ${vods.length > 1 ? i + 1 : ''}</a>`).join('') +
+                        '</div>';
+                    })() : ''}
                 </div>
             `;
         }
@@ -1834,6 +1864,26 @@ async function reopenVoting(matchId) {
     try {
         await db.collection('matches').doc(matchId).update({ status: 'voting', result: firebase.firestore.FieldValue.delete() });
         toast('Votação reaberta!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function finishMatch(matchId) {
+    try {
+        await db.collection('matches').doc(matchId).update({ status: 'finished' });
+        toast('✅ Partida finalizada!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function reopenMatch(matchId) {
+    try {
+        await db.collection('matches').doc(matchId).update({ status: 'closed' });
+        toast('🔓 Partida reaberta para edição.', 'success');
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -2576,12 +2626,12 @@ async function loadMatchesPage() {
                                 ${gcCount > 1 ? `<span>🎮 MD${gcCount}</span>` : ''}
                             </div>
                         </div>
-                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : '🔴 Encerrada'}</span>
+                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🔴 Encerrada'}</span>
                     </div>
                     ${scoreHtml}
                     ${mvpHtml}
                     <div class="btn-group" style="margin-top:10px;">
-                        ${m.status === 'closed' && m.result && !hasGC ? `
+                        ${(m.status === 'closed' || m.status === 'finished') && m.result && !hasGC ? `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
                         ` : ''}
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
