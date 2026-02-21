@@ -1807,13 +1807,6 @@ async function loadAdminMatches() {
                         <button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(136,146,164,0.2);color:var(--text-dim);border:1px solid rgba(136,146,164,0.3);box-shadow:none;padding:8px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;">✅ Finalizar</button>
                     </div>
                     <div id="vodNewInputs-${matchId}" style="margin-top:6px;"></div>
-                    ${hasGC ? (() => {
-                        const indices = [...new Set(m.gcStats.map(s => s.gcMatchIdx || 1))].sort((a,b)=>a-b);
-                        return `<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px;font-size:11px;align-items:center;color:var(--text-dim);">
-                            <span style="font-weight:600;">GC:</span>
-                            ${indices.map(idx => `<span style="padding:2px 8px;background:rgba(79,195,247,0.08);border:1px solid rgba(79,195,247,0.2);border-radius:4px;color:var(--ct-blue);font-weight:600;">#${idx} <button class="btn btn-danger btn-small" onclick="unlinkGCMatch('${matchId}',${idx})" style="padding:0 4px;font-size:9px;line-height:1;min-width:0;margin-left:2px;" title="Desvincular">✕</button></span>`).join('')}
-                        </div>`;
-                    })() : ''}
                     ` : `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
