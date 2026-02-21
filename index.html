@@ -4122,9 +4122,11 @@ async function loadPendingGCImports() {
                         <select id="linkMatch-${doc.id}" style="flex:1;min-width:200px;padding:8px 10px;background:#0a0e17;border:1px solid rgba(255,255,255,0.2);border-radius:6px;color:#e8eaf0;font-size:13px;">
                             <option value="">— Selecionar partida do MiRB —</option>
                             ${scored.map(m => {
+                                const existingGC = m.gcMatchCount || 0;
+                                const gcLabel = existingGC > 0 ? ` [${existingGC} GC vinculada${existingGC > 1 ? 's' : ''}]` : '';
                                 const label = m.matchCount > 0
-                                    ? `${m.name} (${m.matchCount}/${gcPlayers.length} jogadores)`
-                                    : `${m.name}`;
+                                    ? `${m.name} (${m.matchCount}/${gcPlayers.length} jogadores)${gcLabel}`
+                                    : `${m.name}${gcLabel}`;
                                 const isRecommended = m === bestMatch;
                                 return `<option value="${m.id}" ${isRecommended ? 'selected' : ''}>${isRecommended ? '⭐ ' : ''}${label}</option>`;
                             }).join('')}
@@ -4259,6 +4261,16 @@ async function confirmLinkResolution() {
 
 async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, importData) {
     try {
+        // Read existing match data to check for existing gcStats
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const matchData = matchDoc.data();
+        const existingStats = matchData.gcStats || [];
+        const existingRawJsons = matchData.gcRawJsons || [];
+        const existingCount = matchData.gcMatchCount || 0;
+
+        // Determine next gcMatchIdx
+        const nextIdx = existingCount > 0 ? existingCount + 1 : 1;
+
         const batch = db.batch();
 
         // Link gcIds on players that need it
@@ -4275,13 +4287,13 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
             gcToPlayer[key] = entry;
         });
 
-        // Build gcStats
-        const gcStats = [];
+        // Build new gcStats entries
+        const newStats = [];
         gcPlayers.forEach(gc => {
             const key = gc.gcId || gc.name.toLowerCase();
             const linked = gcToPlayer[key];
             if (!linked) return;
-            gcStats.push({
+            newStats.push({
                 playerId: linked.player.id,
                 playerName: linked.player.name,
                 gcName: gc.name,
@@ -4293,22 +4305,28 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
                 win: gc.win != null ? gc.win : (gc.rp >= 0),
                 teamName: gc.teamName || '',
                 teamScore: gc.teamScore != null ? gc.teamScore : null,
-                gcMatchIdx: 1
+                gcMatchIdx: nextIdx
             });
         });
 
+        // Merge with existing stats
+        const mergedStats = [...existingStats, ...newStats];
+        const mergedRawJsons = [...existingRawJsons, JSON.stringify(gcPlayers)];
+        const newCount = existingCount > 0 ? existingCount + 1 : 1;
+
         // Save on match
         batch.update(db.collection('matches').doc(matchId), {
-            gcStats,
-            gcMatchCount: 1,
-            gcRawJsons: [JSON.stringify(gcPlayers)]
+            gcStats: mergedStats,
+            gcMatchCount: newCount,
+            gcRawJsons: mergedRawJsons
         });
 
         // Mark import as used
         batch.update(db.collection('gc-imports').doc(importDocId), { status: 'used', linkedMatchId: matchId });
 
         await batch.commit();
-        toast(`✅ Stats vinculadas com sucesso! (${gcStats.length} jogadores)`, 'success');
+        const label = newCount > 1 ? ` (partida GC #${nextIdx})` : '';
+        toast(`✅ Stats vinculadas com sucesso! (${newStats.length} jogadores)${label}`, 'success');
         loadPendingGCImports();
         loadAdminMatches();
     } catch (e) {
