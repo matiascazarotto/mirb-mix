@@ -2388,7 +2388,7 @@ async function loadVotePage() {
         <div class="mural-container" style="margin-top:24px;">
             <div style="border-top:1px solid rgba(255,255,255,0.06);margin-bottom:20px;"></div>
             <div class="mural-title">📢 Ouvidoria MiRB</div>
-            <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:-10px;margin-bottom:14px;opacity:0.6;">mensagens expiram em 20 minutos</div>
+            <div style="text-align:center;font-size:11px;color:var(--text-dim);margin-top:-10px;margin-bottom:14px;opacity:0.6;">mensagens expiram em 24 horas</div>
             <div class="mural-form">
                 <input type="text" id="muralText" placeholder="Registre sua reclamação..." maxlength="200">
                 <div class="mural-form-actions">
@@ -2500,8 +2500,8 @@ async function initMural() {
     }
     // Show author line
     updateMuralAuthorLine();
-    // Listen for posts in real-time (last 20 minutes only)
-    const ttlMinAgo = new Date(Date.now() - 20 * 60 * 1000);
+    // Listen for posts in real-time (last 24 hours only)
+    const ttlMinAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
     muralUnsubscribe = db.collection('mural')
         .where('createdAt', '>=', ttlMinAgo)
         .orderBy('createdAt', 'desc')
@@ -2517,7 +2517,7 @@ async function initMural() {
                 const d = doc.data();
                 if (!d.createdAt) { validDocs.push(doc); return; }
                 const age = now - d.createdAt.toDate().getTime();
-                if (age > 20 * 60 * 1000) {
+                if (age > 24 * 60 * 60 * 1000) {
                     // Cleanup: delete expired post
                     db.collection('mural').doc(doc.id).delete().catch(() => {});
                 } else {
@@ -2530,8 +2530,8 @@ async function initMural() {
                 return;
             }
 
-            // Sort by laughs desc (since query orders by createdAt for the where filter)
-            validDocs.sort((a, b) => (b.data().laughs || 0) - (a.data().laughs || 0));
+            // Sort by most recent first
+            validDocs.sort((a, b) => (b.data().createdAt?.toDate() || 0) - (a.data().createdAt?.toDate() || 0));
 
             postsEl.innerHTML = validDocs.map(doc => {
                 const d = doc.data();
