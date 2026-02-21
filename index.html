@@ -871,6 +871,12 @@
             .card { padding: 16px 12px; }
             .toast { right: 10px; left: 10px; max-width: none; }
             .gc-scoreboard-teams { grid-template-columns: 1fr !important; }
+            .mural-container { padding: 0 8px; }
+            .mural-form { flex-direction: column; }
+            .mural-form input[type="text"] { width: 100%; }
+            .mural-form .mural-form-actions { width: 100%; }
+            .mural-form .mural-form-actions > * { flex: 1; }
+            .mural-post { padding: 12px; }
         }
 
         @media (max-width: 400px) {
@@ -929,14 +935,15 @@
         .mural-container { max-width: 600px; margin: 0 auto; padding: 0 16px; }
         .mural-title { font-family: 'Rajdhani', sans-serif; font-size: 1.3em; font-weight: 700; color: var(--yellow); text-align: center; margin-bottom: 16px; letter-spacing: 1px; }
         .mural-form { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
-        .mural-form input[type="text"] { flex: 1; min-width: 200px; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text); font-size: 14px; font-family: inherit; }
+        .mural-form input[type="text"] { flex: 1; min-width: 0; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text); font-size: 16px; font-family: inherit; }
         .mural-form input[type="text"]:focus { border-color: var(--yellow); outline: none; }
-        .mural-form select { padding: 10px 12px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: var(--text); font-size: 13px; font-family: inherit; cursor: pointer; }
+        .mural-form .mural-form-actions { display: flex; gap: 8px; width: auto; }
         .mural-post { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; transition: border-color 0.2s; }
         .mural-post:hover { border-color: rgba(255,255,255,0.15); }
-        .mural-post-text { color: var(--text); font-size: 14px; line-height: 1.4; margin-bottom: 8px; }
-        .mural-post-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-dim); }
-        .mural-laugh-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 4px 12px; cursor: pointer; font-size: 13px; color: var(--text-dim); transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        .mural-post-text { color: var(--text); font-size: 14px; line-height: 1.4; margin-bottom: 8px; word-break: break-word; }
+        .mural-post-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-dim); gap: 8px; }
+        .mural-post-meta > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+        .mural-laugh-btn { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 4px 12px; cursor: pointer; font-size: 13px; color: var(--text-dim); transition: all 0.2s; display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
         .mural-laugh-btn:hover { background: rgba(255,214,0,0.1); border-color: rgba(255,214,0,0.3); }
         .mural-laugh-btn.voted { background: rgba(255,214,0,0.15); border-color: rgba(255,214,0,0.4); color: var(--yellow); }
         .mural-target { color: var(--yellow); font-weight: 600; }
@@ -2380,12 +2387,14 @@ async function loadVotePage() {
             <div class="mural-title">⚖️ Mural da Acusação</div>
             <div class="mural-form">
                 <input type="text" id="muralText" placeholder="Mande sua acusação" maxlength="200">
-                <div style="position:relative;">
-                    <button type="button" id="muralTargetBtn" onclick="toggleMuralDropdown()" style="padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-dim);font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;">Sobre quem? ▾</button>
-                    <input type="hidden" id="muralTarget" value="">
-                    <div id="muralDropdown" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--card);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px;z-index:100;max-height:200px;overflow-y:auto;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+                <div class="mural-form-actions">
+                    <div style="position:relative;flex:1;">
+                        <button type="button" id="muralTargetBtn" onclick="toggleMuralDropdown()" style="width:100%;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text-dim);font-size:13px;font-family:inherit;cursor:pointer;white-space:nowrap;">Sobre quem? ▾</button>
+                        <input type="hidden" id="muralTarget" value="">
+                        <div id="muralDropdown" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--card);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:6px;z-index:100;max-height:200px;overflow-y:auto;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,0.4);"></div>
+                    </div>
+                    <button class="btn btn-primary btn-small" onclick="postMural()" style="white-space:nowrap;">📤 Postar</button>
                 </div>
-                <button class="btn btn-primary btn-small" onclick="postMural()">📤 Postar</button>
             </div>
             <div id="muralAuthorLine" style="font-size:12px;color:var(--text-dim);margin:-12px 0 16px;"></div>
             <div id="muralPosts"></div>
