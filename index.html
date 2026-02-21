@@ -3906,10 +3906,27 @@ async function saveGCImport() {
             if (teamNames.length === 2) {
                 const playersInA = new Set(gcStats.filter(s => s.teamName === teamNames[0]).map(s => s.playerId));
                 const playersInB = new Set(gcStats.filter(s => s.teamName === teamNames[1]).map(s => s.playerId));
+                // Merge players from both teams, preserving currentLevel from original result
                 const allPlayers = [...matchData.result.teamA, ...matchData.result.teamB];
-                const newTeamA = allPlayers.filter(p => playersInA.has(p.id));
-                const newTeamB = allPlayers.filter(p => playersInB.has(p.id));
-                if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === allPlayers.length) {
+                // If currentLevel is missing, recalculate from votes
+                let levelMap = {};
+                const hasLevels = allPlayers.some(p => p.currentLevel != null);
+                if (!hasLevels && matchData.players) {
+                    const votesSnap = await db.collection('matches').doc(gcImportMatchId).collection('votes').get();
+                    if (!votesSnap.empty) {
+                        const averages = computeAverages(matchData.players, votesSnap.docs);
+                        matchData.players.forEach(p => {
+                            levelMap[p.id] = averages[p.id] ? Math.round(averages[p.id].avg) : 10;
+                        });
+                    }
+                }
+                const enrichedPlayers = allPlayers.map(p => ({
+                    ...p,
+                    currentLevel: p.currentLevel != null ? p.currentLevel : (levelMap[p.id] || 10)
+                }));
+                const newTeamA = enrichedPlayers.filter(p => playersInA.has(p.id));
+                const newTeamB = enrichedPlayers.filter(p => playersInB.has(p.id));
+                if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === enrichedPlayers.length) {
                     const sumA = newTeamA.reduce((s, p) => s + (p.currentLevel || 10), 0);
                     const sumB = newTeamB.reduce((s, p) => s + (p.currentLevel || 10), 0);
                     updateData.result = { teamA: newTeamA, teamB: newTeamB, sumA, sumB };
@@ -4636,11 +4653,27 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
                 const playersInB = new Set(newStats.filter(s => s.teamName === gcTeamB).map(s => s.playerId));
 
                 const allPlayers = [...matchData.result.teamA, ...matchData.result.teamB];
-                const newTeamA = allPlayers.filter(p => playersInA.has(p.id));
-                const newTeamB = allPlayers.filter(p => playersInB.has(p.id));
+                // If currentLevel is missing, recalculate from votes
+                let levelMap = {};
+                const hasLevels = allPlayers.some(p => p.currentLevel != null);
+                if (!hasLevels && matchData.players) {
+                    const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+                    if (!votesSnap.empty) {
+                        const averages = computeAverages(matchData.players, votesSnap.docs);
+                        matchData.players.forEach(p => {
+                            levelMap[p.id] = averages[p.id] ? Math.round(averages[p.id].avg) : 10;
+                        });
+                    }
+                }
+                const enrichedPlayers = allPlayers.map(p => ({
+                    ...p,
+                    currentLevel: p.currentLevel != null ? p.currentLevel : (levelMap[p.id] || 10)
+                }));
+                const newTeamA = enrichedPlayers.filter(p => playersInA.has(p.id));
+                const newTeamB = enrichedPlayers.filter(p => playersInB.has(p.id));
 
                 // Only override if all players were matched to a GC team
-                if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === allPlayers.length) {
+                if (newTeamA.length > 0 && newTeamB.length > 0 && newTeamA.length + newTeamB.length === enrichedPlayers.length) {
                     const sumA = newTeamA.reduce((s, p) => s + (p.currentLevel || 10), 0);
                     const sumB = newTeamB.reduce((s, p) => s + (p.currentLevel || 10), 0);
                     updateData.result = { teamA: newTeamA, teamB: newTeamB, sumA, sumB };
