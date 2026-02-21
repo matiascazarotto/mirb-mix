@@ -1863,6 +1863,7 @@ async function finishMatch(matchId) {
 }
 
 async function reopenMatch(matchId) {
+    if (!confirm('Reabrir esta partida para edição?')) return;
     try {
         await db.collection('matches').doc(matchId).update({ status: 'closed' });
         toast('🔓 Partida reaberta para edição.', 'success');
@@ -1907,6 +1908,7 @@ async function saveNewVod(matchId, rowEl) {
 }
 
 async function removeVod(matchId, vodIndex) {
+    if (!confirm('Remover esta VOD?')) return;
     try {
         const doc = await db.collection('matches').doc(matchId).get();
         const m = doc.data();
