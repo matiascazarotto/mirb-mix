@@ -1849,8 +1849,9 @@ async function deleteMatch(matchId) {
 }
 
 async function reopenVoting(matchId) {
+    if (!confirm('Tem certeza que quer reabrir a votação? Os times serão refeitos ao encerrar novamente.')) return;
     try {
-        await db.collection('matches').doc(matchId).update({ status: 'voting', result: firebase.firestore.FieldValue.delete() });
+        await db.collection('matches').doc(matchId).update({ status: 'voting' });
         toast('Votação reaberta!', 'success');
         loadAdminMatches();
     } catch (e) {
@@ -1859,6 +1860,7 @@ async function reopenVoting(matchId) {
 }
 
 async function finishMatch(matchId) {
+    if (!confirm('Finalizar esta partida? Ela ficará travada (pode reabrir depois se precisar).')) return;
     try {
         await db.collection('matches').doc(matchId).update({ status: 'finished' });
         toast('✅ Partida finalizada!', 'success');
