@@ -2677,6 +2677,52 @@ function clearMuralAuthor() {
     updateMuralAuthorLine();
 }
 
+// ── Filtro de ofensas pessoais ──
+const MURAL_BLOCKED_WORDS = [
+    // Palavrões pesados
+    'puta', 'puto', 'arrombado', 'arrombada', 'cuzao', 'vagabundo', 'vagabunda',
+    'desgraca', 'desgraçado', 'desgraçada', 'infeliz', 'maldito', 'maldita',
+    'filho da puta', 'filha da puta', 'fdp', 'vsf', 'tnc', 'pnc', 'vtnc',
+    'vai se foder', 'vai tomar no cu', 'foda-se', 'fodase',
+    'caralho', 'cacete', 'porra', 'merda', 'bosta',
+    // Ofensas raciais e homofóbicas
+    'macaco', 'macaca', 'crioulo', 'crioula', 'neguinho', 'neguinha',
+    'preto imundo', 'preta imunda', 'negro imundo', 'negra imunda',
+    'viado', 'viada', 'bicha', 'bichona', 'traveco', 'sapatao',
+    'gay' , 'lesbica', 'transexual',
+    // Xingamentos a família
+    'sua mae', 'tua mae', 'sua irma', 'tua irma',
+    'mae solteira', 'filho de chocadeira', 'orfao', 'orfa',
+    // Julgamento físico/pessoal
+    'gordao', 'gordinho', 'gordinha', 'magricelo', 'magrela',
+    'careca', 'calvo', 'banguela', 'feio', 'feia',
+    'orelhudo', 'narigudo', 'dentuco', 'barrigudo',
+    // Outros pessoais
+    'retardado', 'retardada', 'mongol', 'mongoloide', 'autista',
+    'deficiente', 'aleijado', 'aleijada', 'doente mental',
+    'cancer', 'morre', 'morrer', 'se mata', 'suicida'
+];
+
+function normalizeForFilter(text) {
+    let t = text.toLowerCase();
+    t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    t = t.replace(/4/g, 'a').replace(/3/g, 'e').replace(/1/g, 'i')
+         .replace(/0/g, 'o').replace(/5/g, 's').replace(/7/g, 't');
+    t = t.replace(/[^a-z0-9\s]/g, ' ');
+    t = t.replace(/\b(\w)\s+(?=\w\b)/g, '$1');
+    t = t.replace(/(.)\1{2,}/g, '$1$1');
+    t = t.replace(/\s+/g, ' ').trim();
+    return t;
+}
+
+function containsBlockedWord(text) {
+    const normalized = normalizeForFilter(text);
+    return MURAL_BLOCKED_WORDS.some(word => {
+        const nw = normalizeForFilter(word);
+        return normalized.includes(nw);
+    });
+}
+
 async function postMural() {
     const textInput = document.getElementById('muralText');
     const targetSelect = document.getElementById('muralTarget');
@@ -2685,6 +2731,7 @@ async function postMural() {
 
     if (!text) { toast('Escreva sua reclamação!', 'error'); return; }
     if (!target) { toast('Selecione sobre quem é a reclamação!', 'error'); return; }
+    if (containsBlockedWord(text)) { toast('Reclamação sobre jogabilidade, não pessoal! Reformule sua mensagem.', 'error'); return; }
 
     const author = localStorage.getItem('muralAuthor') || 'Anônimo';
 
