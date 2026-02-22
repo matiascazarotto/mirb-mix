@@ -2710,13 +2710,15 @@ async function laughMural(docId) {
     const hasLaughed = localStorage.getItem(key);
     try {
         if (hasLaughed) {
-            await db.collection('mural').doc(docId).update({ laughs: firebase.firestore.FieldValue.increment(-1) });
             localStorage.removeItem(key);
+            await db.collection('mural').doc(docId).update({ laughs: firebase.firestore.FieldValue.increment(-1) });
         } else {
-            await db.collection('mural').doc(docId).update({ laughs: firebase.firestore.FieldValue.increment(1) });
             localStorage.setItem(key, '1');
+            await db.collection('mural').doc(docId).update({ laughs: firebase.firestore.FieldValue.increment(1) });
         }
     } catch (e) {
+        if (hasLaughed) localStorage.setItem(key, '1');
+        else localStorage.removeItem(key);
         toast('Erro: ' + e.message, 'error');
     }
 }
