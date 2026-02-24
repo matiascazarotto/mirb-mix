@@ -2530,12 +2530,29 @@ async function loadVotePage() {
         const voteNameMap = {};
         votingMatches.forEach(m => { voteNameMap[m.id] = m.displayName; });
 
+        // Get voter device ID for server-side dedup check
+        const _voter = await getVoterDeviceId();
+
+        // Check deviceId against existing votes for each match
+        const deviceVotedMap = {};
+        if (_voter.deviceId !== 'unknown_') {
+            await Promise.all(snap.docs.map(async doc => {
+                if (localStorage.getItem(`voted_${doc.id}`)) return; // already known
+                const existing = await db.collection('matches').doc(doc.id)
+                    .collection('votes').where('_meta.deviceId', '==', _voter.deviceId).limit(1).get();
+                if (!existing.empty) {
+                    deviceVotedMap[doc.id] = true;
+                    localStorage.setItem(`voted_${doc.id}`, 'true');
+                }
+            }));
+        }
+
         let html = '';
         snap.docs.forEach(doc => {
             const m = doc.data();
             m.displayName = voteNameMap[doc.id];
             const matchId = doc.id;
-            const hasVoted = localStorage.getItem(`voted_${matchId}`);
+            const hasVoted = localStorage.getItem(`voted_${matchId}`) || deviceVotedMap[matchId];
 
             if (hasVoted) {
                 html += `
@@ -2921,8 +2938,33 @@ function toggleVoteSkip(matchId, playerId) {
     }
 }
 
+// Generate device fingerprint from hardware/system properties (same across browsers on same PC)
+async function getDeviceFingerprint() {
+    const raw = [
+        screen.width, screen.height, screen.colorDepth,
+        navigator.hardwareConcurrency || 'x',
+        navigator.language,
+        navigator.platform,
+        Intl.DateTimeFormat().resolvedOptions().timeZone
+    ].join('|');
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', encoder.encode(raw));
+    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 16);
+}
+
+// Get voter unique ID: IP + device fingerprint
+async function getVoterDeviceId() {
+    let ip = 'unknown';
+    try {
+        const res = await fetch('https://api.ipify.org?format=json');
+        ip = (await res.json()).ip || 'unknown';
+    } catch (_) {}
+    const fp = await getDeviceFingerprint();
+    return { ip, fingerprint: fp, deviceId: ip + '_' + fp };
+}
+
 async function submitVote(matchId) {
-    // Check if already voted
+    // Check if already voted (localStorage — fast client-side check)
     if (localStorage.getItem(`voted_${matchId}`)) {
         toast('Você já votou nesta partida!', 'error');
         return;
@@ -2935,6 +2977,21 @@ async function submitVote(matchId) {
         if (match.status !== 'voting') {
             toast('Votação já encerrada!', 'error');
             return;
+        }
+
+        // Get voter device ID (IP + fingerprint)
+        const voter = await getVoterDeviceId();
+
+        // Check if this device already voted (server-side dedup by deviceId)
+        if (voter.deviceId !== 'unknown_') {
+            const existingVotes = await db.collection('matches').doc(matchId)
+                .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
+            if (!existingVotes.empty) {
+                localStorage.setItem(`voted_${matchId}`, 'true');
+                toast('Você já votou nesta partida!', 'error');
+                loadVotePage();
+                return;
+            }
         }
 
         // Collect votes (only for non-skipped players)
@@ -2956,18 +3013,12 @@ async function submitVote(matchId) {
         // Save vote with a unique random ID
         const voterId = 'anon_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
 
-        // Fetch voter IP
-        let voterIp = 'desconhecido';
-        try {
-            const ipRes = await fetch('https://api.ipify.org?format=json');
-            const ipData = await ipRes.json();
-            voterIp = ipData.ip || 'desconhecido';
-        } catch (_) {}
-
         const voteRecord = {
             ...voteData,
             _meta: {
-                ip: voterIp,
+                ip: voter.ip,
+                fingerprint: voter.fingerprint,
+                deviceId: voter.deviceId,
                 timestamp: new Date().toISOString(),
                 votedOn: Object.keys(voteData).length,
                 skipped: match.players.length - Object.keys(voteData).length
