@@ -1897,7 +1897,7 @@ async function loadAdminMatches() {
                         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
                             <span class="match-status ${m.status}" style="white-space:nowrap;">${statusLabel}</span>
                             ${isClosed ? `<button class="btn btn-small" onclick="finishMatch('${matchId}')" style="background:rgba(76,175,80,0.15);color:var(--green);border:1px solid rgba(76,175,80,0.4);padding:6px 14px;font-size:12px;border-radius:6px;cursor:pointer;font-family:'Rajdhani',sans-serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;box-shadow:none;">✅ Finalizar</button>` : ''}
-                            <button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')" style="padding:5px 8px;font-size:11px;min-width:0;" title="Excluir">🗑️</button>
+                            ${m.status === 'finished' && !isStaff ? '' : `<button class="btn btn-danger btn-small" onclick="deleteMatch('${matchId}')" style="padding:5px 8px;font-size:11px;min-width:0;" title="Excluir">🗑️</button>`}
                         </div>
                     </div>
 
@@ -1937,6 +1937,14 @@ async function loadAdminMatches() {
 }
 
 async function deleteMatch(matchId) {
+    // Block non-staff from deleting finished matches
+    if (!isStaff) {
+        const mDoc = await db.collection('matches').doc(matchId).get();
+        if (mDoc.exists && mDoc.data().status === 'finished') {
+            toast('Apenas staff pode excluir partidas finalizadas!', 'error');
+            return;
+        }
+    }
     if (!confirm('Excluir esta partida e todos os votos?')) return;
     try {
         // Delete votes subcollection
