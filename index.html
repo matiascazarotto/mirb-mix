@@ -1306,17 +1306,6 @@ async function adminLogin() {
     const pw = document.getElementById('adminPassword').value;
     if (!pw) { toast('Digite a senha!', 'error'); return; }
 
-    // Staff login check
-    if (pw === '#Mirb1234') {
-        isAdmin = true;
-        isStaff = true;
-        sessionStorage.setItem('mirb_admin', 'true');
-        sessionStorage.setItem('mirb_staff', 'true');
-        toast('Login de staff realizado!', 'success');
-        renderAdminPanel();
-        return;
-    }
-
     try {
         const doc = await db.collection('config').doc('admin').get();
         if (!doc.exists) {
@@ -1330,8 +1319,15 @@ async function adminLogin() {
             return;
         }
 
-        const stored = doc.data().password;
-        if (pw === stored) {
+        const data = doc.data();
+        if (data.staffPassword && pw === data.staffPassword) {
+            isAdmin = true;
+            isStaff = true;
+            sessionStorage.setItem('mirb_admin', 'true');
+            sessionStorage.setItem('mirb_staff', 'true');
+            toast('Login de staff realizado!', 'success');
+            renderAdminPanel();
+        } else if (pw === data.password) {
             isAdmin = true;
             isStaff = false;
             sessionStorage.setItem('mirb_admin', 'true');
@@ -5732,6 +5728,12 @@ document.addEventListener('DOMContentLoaded', () => {
     addGCMatchSlot();
     // Init live stream listener
     initLiveListener();
+    // Migrate: seed staff password if not set
+    db.collection('config').doc('admin').get().then(doc => {
+        if (doc.exists && !doc.data().staffPassword) {
+            db.collection('config').doc('admin').update({ staffPassword: '#Mirb1234' });
+        }
+    }).catch(() => {});
 });
 
 // Close modal on overlay click
