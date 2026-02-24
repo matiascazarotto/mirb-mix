@@ -1142,44 +1142,45 @@
 <div id="ratingInfoModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)this.style.display='none'">
     <div style="background:#0e1420;border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:520px;width:100%;padding:28px;position:relative;max-height:90vh;overflow-y:auto;">
         <div onclick="document.getElementById('ratingInfoModal').style.display='none'" style="position:absolute;top:12px;right:16px;cursor:pointer;font-size:20px;color:var(--text-dim);line-height:1;">&times;</div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:1.4em;font-weight:700;color:var(--yellow);margin-bottom:16px;letter-spacing:1px;">📊 RATING MiRB 1.0</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:1.4em;font-weight:700;color:var(--yellow);margin-bottom:16px;letter-spacing:1px;">📊 RATING MiRB 1.1</div>
         <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:16px;">
-            O Rating MiRB combina cinco estatísticas individuais com pesos definidos e aplica um fator de confiança baseado na quantidade de partidas jogadas.
+            O Rating MiRB combina seis métricas individuais com pesos definidos e aplica regressão à média para justiça entre jogadores com diferentes quantidades de partidas.
         </p>
         <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pesos</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;">
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">ADR</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">28%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">25%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">KAST</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">28%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">25%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">K/D</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">22%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">20%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
-                <span style="color:var(--text-dim);font-size:13px;">FK</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">17%</span>
+                <span style="color:var(--text-dim);font-size:13px;">FK/Partida</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);font-size:16px;">10%</span>
             </div>
-            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;grid-column:span 2;">
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">WIN%</span>
                 <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);font-size:16px;">5%</span>
+            </div>
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;grid-column:span 2;">
+                <span style="color:var(--text-dim);font-size:13px;">Partidas</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--ct-blue);font-size:16px;">15%</span>
             </div>
         </div>
         <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Fórmula</div>
         <div style="padding:12px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.15);border-radius:8px;margin-bottom:18px;">
-            <code style="font-size:12px;color:var(--green);line-height:1.6;">Rating = (ADR×0.28 + KAST×0.28 + K/D×0.22 + FK×0.17 + WIN%×0.05) × Multiplicador</code>
+            <code style="font-size:11px;color:var(--green);line-height:1.6;">RawRating = ADR×0.25 + KAST×0.25 + K/D×0.20 + FK×0.10 + WIN%×0.05 + Partidas×0.15
+Rating = Confiança × RawRating + (1 - Confiança) × MédiaGeral</code>
         </div>
         <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Normalização</div>
         <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:18px;">
-            Cada estatística é normalizada de 0 a 100 dividindo pelo maior valor registrado na tabela.
-        </p>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Fator de Confiança</div>
-        <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:10px;">
-            Jogadores com poucas partidas recebem um multiplicador que varia de <span style="color:var(--red);font-weight:600;">0.60</span> até <span style="color:var(--green);font-weight:600;">1.00</span>. O limiar de confiança total é 70% do máximo de partidas jogadas.
+            Cada estatística é normalizada de 0 a 100 dividindo pelo maior valor registrado na tabela. FK é calculado como média por partida. Partidas tem piso de 10% (mínimo 0.1). Após o cálculo, aplica-se regressão à média: quem jogou poucas partidas tem o rating puxado em direção à média geral. Confiança total a partir de 70% do máximo de partidas.
         </p>
         <div style="display:flex;gap:8px;margin-top:16px;">
             <div style="flex:1;padding:8px;background:rgba(0,200,83,0.08);border-radius:6px;text-align:center;">
@@ -3391,48 +3392,46 @@ function renderDashModules() {
 
     // ═══ RANKING ═══ (hidden for single player)
     if (modules.includes('ranking') && !isSinglePlayer) {
-        // ── Rating MiRB 1.0 ──
-        // Pesos: ADR 28%, KAST 28%, K/D 22%, FK 17%, WIN 5%
-        const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.17, W_WIN = 0.05;
+        // ── Rating MiRB 1.1 ──
+        // Pesos: ADR 25%, KAST 25%, K/D 20%, FK 10%, WIN 5%, Partidas 15%
+        const W_ADR = 0.25, W_KAST = 0.25, W_KD = 0.20, W_FK = 0.10, W_WIN = 0.05, W_MATCHES = 0.15;
 
-        // Calcular stats médias
+        // Calcular stats médias (FK agora é média por partida)
         entries.forEach(p => {
             p._avgAdr  = p.adrSum / p.matches;
             p._avgKast = p.kastSum / p.matches;
             p._avgKdr  = p.deaths > 0 ? p.kills / p.deaths : p.kills;
+            p._avgFk   = p.matches > 0 ? p.fk / p.matches : 0;
             p._winPct  = p.matches > 0 ? (p.wins / p.matches) * 100 : 0;
         });
 
         // Máximos para normalização
-        const _maxAdr  = Math.max(...entries.map(p => p._avgAdr));
-        const _maxKast = Math.max(...entries.map(p => p._avgKast));
-        const _maxKd   = Math.max(...entries.map(p => p._avgKdr));
-        const _maxFk   = Math.max(...entries.map(p => p.fk));
-        const _maxWin  = Math.max(...entries.map(p => p._winPct));
-
-        // Multiplicador de Partidas (Fator de Confiança)
+        const _maxAdr     = Math.max(...entries.map(p => p._avgAdr));
+        const _maxKast    = Math.max(...entries.map(p => p._avgKast));
+        const _maxKd      = Math.max(...entries.map(p => p._avgKdr));
+        const _maxFk      = Math.max(...entries.map(p => p._avgFk));
+        const _maxWin     = Math.max(...entries.map(p => p._winPct));
         const _maxMatches = Math.max(...entries.map(p => p.matches));
-        const _minMatches = Math.min(...entries.map(p => p.matches));
-        const _threshold  = Math.ceil(_maxMatches * 0.7);
+
+        // Calcular rating bruto de cada jogador
+        entries.forEach(p => {
+            const nAdr     = _maxAdr     > 0 ? (p._avgAdr  / _maxAdr)     * 100 : 0;
+            const nKast    = _maxKast    > 0 ? (p._avgKast / _maxKast)    * 100 : 0;
+            const nKd      = _maxKd      > 0 ? (p._avgKdr  / _maxKd)      * 100 : 0;
+            const nFk      = _maxFk      > 0 ? (p._avgFk   / _maxFk)      * 100 : 0;
+            const nWin     = _maxWin     > 0 ? (p._winPct  / _maxWin)     * 100 : 0;
+            const nMatches = _maxMatches > 0 ? Math.max(0.1, p.matches / _maxMatches) * 100 : 0;
+
+            p._rawRating = nAdr * W_ADR + nKast * W_KAST + nKd * W_KD + nFk * W_FK + nWin * W_WIN + nMatches * W_MATCHES;
+        });
+
+        // Regressão à média: puxa rating de quem jogou pouco em direção à média geral
+        const _avgRating = entries.reduce((s, p) => s + p._rawRating, 0) / entries.length;
+        const _regThreshold = Math.ceil(_maxMatches * 0.7); // 70% das partidas = confiança total
 
         entries.forEach(p => {
-            const nAdr  = _maxAdr  > 0 ? (p._avgAdr  / _maxAdr)  * 100 : 0;
-            const nKast = _maxKast > 0 ? (p._avgKast / _maxKast) * 100 : 0;
-            const nKd   = _maxKd   > 0 ? (p._avgKdr  / _maxKd)   * 100 : 0;
-            const nFk   = _maxFk   > 0 ? (p.fk       / _maxFk)   * 100 : 0;
-            const nWin  = _maxWin  > 0 ? (p._winPct  / _maxWin)  * 100 : 0;
-
-            p._rawScore = nAdr * W_ADR + nKast * W_KAST + nKd * W_KD + nFk * W_FK + nWin * W_WIN;
-
-            if (p.matches >= _threshold) {
-                p._multiplier = 1.00;
-            } else if (_threshold <= _minMatches) {
-                p._multiplier = 1.00;
-            } else {
-                p._multiplier = 0.60 + 0.40 * (p.matches - _minMatches) / (_threshold - _minMatches);
-            }
-
-            p._ratingMiRB = p._rawScore * p._multiplier;
+            const confidence = Math.min(1, p.matches / _regThreshold);
+            p._ratingMiRB = confidence * p._rawRating + (1 - confidence) * _avgRating;
         });
 
         const col = dashSortCol || 'rating';
@@ -5554,51 +5553,45 @@ function renderGCStats() {
     const entries = Object.values(gcAggregated);
     if (!entries.length) { el.innerHTML = ''; return; }
 
-    // ── Rating MiRB 1.0 ──
-    // Pesos ajustados: ADR 28%, KAST 28%, K/D 22%, FK 17%, WIN 5%
-    const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.17, W_WIN = 0.05;
+    // ── Rating MiRB 1.1 ──
+    // Pesos: ADR 25%, KAST 25%, K/D 20%, FK 10%, WIN 5%, Partidas 15%
+    const W_ADR = 0.25, W_KAST = 0.25, W_KD = 0.20, W_FK = 0.10, W_WIN = 0.05, W_MATCHES = 0.15;
 
-    // Calcular stats médias de cada jogador
+    // Calcular stats médias de cada jogador (FK média por partida)
     entries.forEach(p => {
         p.avgAdr  = p.adrSum / p.matches;
         p.avgKast = p.kastSum / p.matches;
         p.avgKdr  = p.deaths > 0 ? p.kills / p.deaths : p.kills;
-        p.winPct  = (p.wins / p.matches) * 100;
+        p.avgFk   = p.matches > 0 ? p.fk / p.matches : 0;
+        p.winPct  = p.matches > 0 ? (p.wins / p.matches) * 100 : 0;
     });
 
     // Encontrar máximos para normalização
-    const maxAdr  = Math.max(...entries.map(p => p.avgAdr));
-    const maxKast = Math.max(...entries.map(p => p.avgKast));
-    const maxKd   = Math.max(...entries.map(p => p.avgKdr));
-    const maxFk   = Math.max(...entries.map(p => p.fk));
-    const maxWin  = Math.max(...entries.map(p => p.winPct));
-
-    // Multiplicador de Partidas (Fator de Confiança)
+    const maxAdr     = Math.max(...entries.map(p => p.avgAdr));
+    const maxKast    = Math.max(...entries.map(p => p.avgKast));
+    const maxKd      = Math.max(...entries.map(p => p.avgKdr));
+    const maxFk      = Math.max(...entries.map(p => p.avgFk));
+    const maxWin     = Math.max(...entries.map(p => p.winPct));
     const maxMatches = Math.max(...entries.map(p => p.matches));
-    const minMatches = Math.min(...entries.map(p => p.matches));
-    const threshold  = Math.ceil(maxMatches * 0.7); // limiar = 70% do máximo
 
     entries.forEach(p => {
-        // Normalizar (0-100)
-        const nAdr  = maxAdr  > 0 ? (p.avgAdr  / maxAdr)  * 100 : 0;
-        const nKast = maxKast > 0 ? (p.avgKast / maxKast) * 100 : 0;
-        const nKd   = maxKd   > 0 ? (p.avgKdr  / maxKd)   * 100 : 0;
-        const nFk   = maxFk   > 0 ? (p.fk      / maxFk)   * 100 : 0;
-        const nWin  = maxWin  > 0 ? (p.winPct  / maxWin)  * 100 : 0;
+        const nAdr     = maxAdr     > 0 ? (p.avgAdr  / maxAdr)     * 100 : 0;
+        const nKast    = maxKast    > 0 ? (p.avgKast / maxKast)    * 100 : 0;
+        const nKd      = maxKd      > 0 ? (p.avgKdr  / maxKd)      * 100 : 0;
+        const nFk      = maxFk      > 0 ? (p.avgFk   / maxFk)      * 100 : 0;
+        const nWin     = maxWin     > 0 ? (p.winPct  / maxWin)     * 100 : 0;
+        const nMatches = maxMatches > 0 ? Math.max(0.1, p.matches / maxMatches) * 100 : 0;
 
-        // Raw score
-        p.rawScore = nAdr * W_ADR + nKast * W_KAST + nKd * W_KD + nFk * W_FK + nWin * W_WIN;
+        p.rawScore = nAdr * W_ADR + nKast * W_KAST + nKd * W_KD + nFk * W_FK + nWin * W_WIN + nMatches * W_MATCHES;
+    });
 
-        // Multiplicador de confiança
-        if (p.matches >= threshold) {
-            p.multiplier = 1.00;
-        } else if (threshold <= minMatches) {
-            p.multiplier = 1.00;
-        } else {
-            p.multiplier = 0.60 + 0.40 * (p.matches - minMatches) / (threshold - minMatches);
-        }
+    // Regressão à média
+    const avgRating    = entries.reduce((s, p) => s + p.rawScore, 0) / entries.length;
+    const regThreshold = Math.ceil(maxMatches * 0.7);
 
-        p.ratingMiRB = p.rawScore * p.multiplier;
+    entries.forEach(p => {
+        const confidence = Math.min(1, p.matches / regThreshold);
+        p.ratingMiRB = confidence * p.rawScore + (1 - confidence) * avgRating;
     });
 
     // Ordenar por Rating MiRB
@@ -5643,7 +5636,7 @@ function renderGCStats() {
         const rpColor = p.rp >= 0 ? 'var(--blue)' : 'var(--red)';
         const kdrColor = avgKdr >= 1 ? 'var(--green)' : 'var(--yellow)';
         const ratingColor = p.ratingMiRB >= 70 ? 'var(--green)' : p.ratingMiRB >= 50 ? 'var(--yellow)' : 'var(--red)';
-        const multLabel = p.multiplier < 1.00 ? `<span style="color:var(--red);font-size:10px;margin-left:2px;">×${p.multiplier.toFixed(2)}</span>` : '';
+        const multLabel = '';
 
         html += `
             <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${idx < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
