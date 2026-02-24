@@ -4786,7 +4786,23 @@ function useExtensionImportInModal(docId) {
     db.collection('gc-imports').doc(docId).get().then(doc => {
         if (!doc.exists) return;
         const d = doc.data();
-        addGCImportSlot(d.playersJson, d.gcMatchId || '');
+        // Find first empty slot
+        const container = document.getElementById('gcImportSlots');
+        const textareas = container ? container.querySelectorAll('textarea') : [];
+        let filled = false;
+        for (const ta of textareas) {
+            if (!ta.value.trim()) {
+                ta.value = d.playersJson;
+                ta.dataset.gcMatchId = d.gcMatchId || '';
+                const idx = parseInt(ta.id.replace('gcImpJson-', ''));
+                validateGCImportSlot(idx);
+                filled = true;
+                break;
+            }
+        }
+        if (!filled) {
+            addGCImportSlot(d.playersJson, d.gcMatchId || '');
+        }
         db.collection('gc-imports').doc(docId).update({ status: 'used' });
         toast(`Partida GC #${d.gcMatchId} carregada!`, 'success');
         loadGCExtensionImportsForModal();
