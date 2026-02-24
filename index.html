@@ -540,6 +540,10 @@
             background: linear-gradient(90deg, var(--yellow), #ffab00);
         }
 
+        .match-card.team_vote::before {
+            background: linear-gradient(90deg, var(--ct-blue), var(--green));
+        }
+
         .match-card.finished::before {
             background: linear-gradient(90deg, var(--text-dim), rgba(136,146,164,0.4));
         }
@@ -588,6 +592,84 @@
             background: rgba(136,146,164,0.15);
             color: var(--text-dim);
             border: 1px solid rgba(136,146,164,0.3);
+        }
+
+        .match-status.team_vote {
+            background: rgba(79,195,247,0.15);
+            color: var(--ct-blue);
+            border: 1px solid rgba(79,195,247,0.3);
+        }
+
+        .team-vote-bar {
+            height: 28px;
+            background: rgba(255,255,255,0.06);
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+        }
+        .team-vote-bar-fill {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 700;
+            color: white;
+            min-width: 20px;
+            transition: width 0.4s ease;
+        }
+        .team-vote-bar-fill.keep { background: linear-gradient(90deg, rgba(0,200,83,0.6), var(--green)); }
+        .team-vote-bar-fill.resort { background: linear-gradient(90deg, #c62828, var(--red)); }
+        .team-vote-threshold {
+            position: absolute;
+            left: 60%;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: var(--yellow);
+            opacity: 0.6;
+            z-index: 1;
+        }
+        .team-vote-buttons {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 16px 0;
+        }
+        .team-vote-btn {
+            flex: 1;
+            max-width: 200px;
+            padding: 14px 20px;
+            border-radius: 12px;
+            border: 2px solid transparent;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 16px;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .team-vote-btn.keep {
+            background: rgba(0,200,83,0.1);
+            border-color: rgba(0,200,83,0.4);
+            color: var(--green);
+        }
+        .team-vote-btn.keep:hover {
+            background: rgba(0,200,83,0.2);
+            box-shadow: 0 0 20px rgba(0,200,83,0.15);
+        }
+        .team-vote-btn.resort {
+            background: rgba(255,61,61,0.1);
+            border-color: rgba(255,61,61,0.4);
+            color: var(--red);
+        }
+        .team-vote-btn.resort:hover {
+            background: rgba(255,61,61,0.2);
+            box-shadow: 0 0 20px rgba(255,61,61,0.15);
+        }
+        .team-vote-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .match-players {
@@ -1285,6 +1367,7 @@ let currentMatchVoting = null; // match id being voted on
 let players = []; // cached players
 let unsubscribers = []; // firestore listeners
 let muralUnsubscribe = null; // mural listener
+let teamVoteUnsubscribe = null; // team vote listener
 
 // ╔══════════════════════════════════╗
 // ║         NAVIGATION              ║
@@ -1295,11 +1378,20 @@ function showPage(name) {
     document.getElementById(`page-${name}`).classList.add('active');
     document.querySelector(`.nav-btn[onclick*="${name}"]`).classList.add('active');
 
+    if (name !== 'vote') destroyTeamVoteListener();
+
     if (name === 'vote') loadVotePage();
     if (name === 'matches') loadMatchesPage();
     if (name === 'admin' && isAdmin) renderAdminPanel();
     if (name === 'dashboard') loadDashboard();
     if (name === 'h2h') loadH2HPage();
+}
+
+function destroyTeamVoteListener() {
+    if (teamVoteUnsubscribe) {
+        teamVoteUnsubscribe();
+        teamVoteUnsubscribe = null;
+    }
 }
 
 // ╔══════════════════════════════════╗
@@ -1850,9 +1942,10 @@ async function loadAdminMatches() {
             const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
             const voteCount = votesSnap.size;
 
-            const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
+            const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'team_vote' ? '🔵 Votação de Times' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
             const isFinished = m.status === 'finished';
             const isClosed = m.status === 'closed';
+            const isTeamVote = m.status === 'team_vote';
             const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '';
             const vods = m.vodUrls || (m.vodUrl ? [m.vodUrl] : []);
             const hasGC = !!m.gcStats;
@@ -1911,6 +2004,16 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>
                     </div>
+                    ` : isTeamVote ? `
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
+                        <button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>
+                        <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
+                        <button class="btn btn-primary btn-small" onclick="forceConfirmTeams('${matchId}')">✅ Confirmar</button>
+                        <button class="btn btn-secondary btn-small" onclick="forceResortTeams('${matchId}')">🔄 Re-sort</button>
+                        <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">↩️ Reabrir</button>
+                    </div>
+                    <div id="teamVoteProgress-${matchId}" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
                     ` : isClosed ? `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
@@ -1934,6 +2037,21 @@ async function loadAdminMatches() {
             `;
         }
         el.innerHTML = html;
+
+        // Load team vote progress for team_vote matches
+        snap.docs.forEach(doc => {
+            const m = doc.data();
+            if (m.status === 'team_vote') {
+                const mid = doc.id;
+                db.collection('matches').doc(mid).collection('teamVotes').get().then(tvSnap => {
+                    const progressEl = document.getElementById(`teamVoteProgress-${mid}`);
+                    if (!progressEl) return;
+                    let keepCount = 0, resortCount = 0;
+                    tvSnap.docs.forEach(d => { if (d.data().vote === 'keep') keepCount++; else resortCount++; });
+                    progressEl.innerHTML = `👍 ${keepCount} manter | 👎 ${resortCount} re-sort | Total: ${keepCount + resortCount} votos`;
+                });
+            }
+        });
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red)">Erro: ${e.message}</p>`;
     }
@@ -1950,10 +2068,12 @@ async function deleteMatch(matchId) {
     }
     if (!confirm('Excluir esta partida e todos os votos?')) return;
     try {
-        // Delete votes subcollection
+        // Delete votes and teamVotes subcollections
         const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+        const teamVotesSnap = await db.collection('matches').doc(matchId).collection('teamVotes').get();
         const batch = db.batch();
         votesSnap.docs.forEach(d => batch.delete(d.ref));
+        teamVotesSnap.docs.forEach(d => batch.delete(d.ref));
         batch.delete(db.collection('matches').doc(matchId));
         await batch.commit();
         toast('Partida excluída!', 'success');
@@ -1966,7 +2086,20 @@ async function deleteMatch(matchId) {
 async function reopenVoting(matchId) {
     if (!confirm('Tem certeza que quer reabrir a votação? Os times serão refeitos ao encerrar novamente.')) return;
     try {
-        await db.collection('matches').doc(matchId).update({ status: 'voting' });
+        // Clear teamVotes subcollection
+        const tvSnap = await db.collection('matches').doc(matchId).collection('teamVotes').get();
+        if (!tvSnap.empty) {
+            const batch = db.batch();
+            tvSnap.docs.forEach(d => batch.delete(d.ref));
+            await batch.commit();
+        }
+        localStorage.removeItem(`teamVoted_${matchId}`);
+
+        await db.collection('matches').doc(matchId).update({
+            status: 'voting',
+            teamVoteRound: firebase.firestore.FieldValue.delete(),
+            playersWithLevels: firebase.firestore.FieldValue.delete()
+        });
         toast('Votação reaberta!', 'success');
         loadAdminMatches();
     } catch (e) {
@@ -2268,6 +2401,60 @@ async function viewVoteLog(matchId) {
 // ╔══════════════════════════════════╗
 // ║    CLOSE VOTING & BALANCE       ║
 // ╚══════════════════════════════════╝
+async function resortTeams(matchId) {
+    const matchDoc = await db.collection('matches').doc(matchId).get();
+    const match = matchDoc.data();
+
+    // Get players with levels (stored or reconstruct from result)
+    let playersWithLevels = match.playersWithLevels;
+    if (!playersWithLevels) {
+        playersWithLevels = [...match.result.teamA, ...match.result.teamB];
+    }
+
+    // Re-run balance
+    const newTeams = balanceTeams(playersWithLevels);
+
+    // Clear teamVotes subcollection
+    const tvSnap = await db.collection('matches').doc(matchId).collection('teamVotes').get();
+    if (!tvSnap.empty) {
+        const batch = db.batch();
+        tvSnap.docs.forEach(d => batch.delete(d.ref));
+        await batch.commit();
+    }
+
+    // Update match with new teams and increment round
+    const currentRound = match.teamVoteRound || 1;
+    await db.collection('matches').doc(matchId).update({
+        result: newTeams,
+        teamVoteRound: currentRound + 1,
+        status: 'team_vote'
+    });
+
+    localStorage.removeItem(`teamVoted_${matchId}`);
+}
+
+async function forceConfirmTeams(matchId) {
+    if (!confirm('Forçar confirmação dos times atuais?')) return;
+    try {
+        await db.collection('matches').doc(matchId).update({ status: 'closed' });
+        toast('Times confirmados pelo admin!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function forceResortTeams(matchId) {
+    if (!confirm('Forçar novo sorteio de times?')) return;
+    try {
+        await resortTeams(matchId);
+        toast('Times re-sorteados pelo admin!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
 async function closeVotingAndBalance(matchId) {
     try {
         const matchDoc = await db.collection('matches').doc(matchId).get();
@@ -2290,13 +2477,15 @@ async function closeVotingAndBalance(matchId) {
         // Balance teams
         const teams = balanceTeams(playersWithLevels);
 
-        // Save result
+        // Save result and open team confirmation vote
         await db.collection('matches').doc(matchId).update({
-            status: 'closed',
-            result: teams
+            status: 'team_vote',
+            result: teams,
+            playersWithLevels: playersWithLevels,
+            teamVoteRound: 1
         });
 
-        toast('Votação encerrada! Times balanceados.', 'success');
+        toast('Times sorteados! Votação de confirmação aberta.', 'success');
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -2510,9 +2699,13 @@ async function loadVotePage() {
     ` : '';
 
     try {
-        const snap = await db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get();
+        // Query both voting and team_vote matches
+        const [votingSnap, teamVoteSnap] = await Promise.all([
+            db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get(),
+            db.collection('matches').where('status', '==', 'team_vote').orderBy('createdAt', 'desc').get()
+        ]);
 
-        if (snap.empty) {
+        if (votingSnap.empty && teamVoteSnap.empty) {
             el.innerHTML = `
                 <div class="empty-state">
                     <div class="icon">🗳️</div>
@@ -2524,20 +2717,122 @@ async function loadVotePage() {
             return;
         }
 
+        // Get voter device ID once for both sections
+        const _voter = await getVoterDeviceId();
+
+        // ── Team Vote Cards ──
+        let teamVoteHtml = '';
+        const teamVoteMatchIds = [];
+
+        for (const doc of teamVoteSnap.docs) {
+            const m = doc.data();
+            const matchId = doc.id;
+
+            // Check eligibility: did this device vote in level votes?
+            let isEligible = false;
+            if (_voter.deviceId !== 'unknown_') {
+                const existingLevelVote = await db.collection('matches').doc(matchId)
+                    .collection('votes').where('_meta.deviceId', '==', _voter.deviceId).limit(1).get();
+                isEligible = !existingLevelVote.empty;
+            }
+
+            // Check if already team-voted (localStorage + server)
+            let alreadyVoted = !!localStorage.getItem(`teamVoted_${matchId}`);
+            if (!alreadyVoted && isEligible && _voter.deviceId !== 'unknown_') {
+                const existingTeamVote = await db.collection('matches').doc(matchId)
+                    .collection('teamVotes').where('_meta.deviceId', '==', _voter.deviceId).limit(1).get();
+                if (!existingTeamVote.empty) {
+                    alreadyVoted = true;
+                    localStorage.setItem(`teamVoted_${matchId}`, 'true');
+                }
+            }
+
+            const round = m.teamVoteRound || 1;
+            const diff = m.result ? Math.abs(m.result.sumA - m.result.sumB) : 0;
+
+            teamVoteHtml += `
+                <div class="match-card team_vote">
+                    <div class="match-header">
+                        <div class="match-title">${m.name}</div>
+                        <span class="match-status team_vote">🔵 Confirmação${round > 1 ? ' #' + round : ''}</span>
+                    </div>
+
+                    <div style="text-align:center;margin:12px 0;padding:10px;border-radius:8px;background:rgba(0,0,0,0.3);">
+                        <span style="color:var(--text-dim);font-size:13px;">Diferença: </span>
+                        <span style="font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;color:${diff <= 2 ? 'var(--green)' : 'var(--yellow)'};">${diff}</span>
+                        <span style="color:var(--text-dim);font-size:13px;"> ponto(s)</span>
+                        ${diff <= 2 ? '<br><span style="color:var(--green);font-size:12px;">✅ Times Balanceados!</span>' : ''}
+                    </div>
+
+                    <div class="teams-grid">
+                        <div class="team-card ct">
+                            <div class="team-label">Time A</div>
+                            ${m.result.teamA.map(p => `
+                                <div class="team-player">
+                                    <span class="team-player-name">${p.name}</span>
+                                    <div class="team-player-info">
+                                        <span class="badge badge-role">${p.role}</span>
+                                        <span class="badge badge-level">Nv.${p.currentLevel != null ? p.currentLevel : '?'}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            <div class="team-total" style="color:var(--ct-blue)">Total: ${m.result.sumA}</div>
+                        </div>
+                        <div class="team-card tr">
+                            <div class="team-label">Time B</div>
+                            ${m.result.teamB.map(p => `
+                                <div class="team-player">
+                                    <span class="team-player-name">${p.name}</span>
+                                    <div class="team-player-info">
+                                        <span class="badge badge-role">${p.role}</span>
+                                        <span class="badge badge-level">Nv.${p.currentLevel != null ? p.currentLevel : '?'}</span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                            <div class="team-total" style="color:var(--tr-gold)">Total: ${m.result.sumB}</div>
+                        </div>
+                    </div>
+
+                    <!-- Vote progress (live via onSnapshot) -->
+                    <div id="tvProgress-${matchId}" style="margin:16px 0;">
+                        <div style="text-align:center;color:var(--text-dim);font-size:12px;">Carregando votos...</div>
+                    </div>
+
+                    ${!isEligible ? `
+                        <div style="text-align:center;padding:16px;color:var(--text-dim);font-size:13px;">
+                            ⚠️ Você não votou nos níveis desta partida.
+                        </div>
+                    ` : alreadyVoted ? `
+                        <div style="text-align:center;padding:16px;color:var(--green);">
+                            ✅ Você já votou nesta confirmação!
+                        </div>
+                    ` : `
+                        <div class="team-vote-buttons">
+                            <button class="team-vote-btn keep" onclick="submitTeamVote('${matchId}', 'keep')">
+                                👍 Manter Times
+                            </button>
+                            <button class="team-vote-btn resort" onclick="submitTeamVote('${matchId}', 'resort')">
+                                👎 Sortear Novamente
+                            </button>
+                        </div>
+                    `}
+                </div>
+            `;
+            teamVoteMatchIds.push(matchId);
+        }
+
+        // ── Level Voting Cards ──
         // Assign display names for duplicate match names
-        const votingMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const votingMatches = votingSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         assignDisplayNames(votingMatches);
         const voteNameMap = {};
         votingMatches.forEach(m => { voteNameMap[m.id] = m.displayName; });
 
-        // Get voter device ID for server-side dedup check
-        const _voter = await getVoterDeviceId();
-
         // Check deviceId against existing votes for each match
         const deviceVotedMap = {};
         if (_voter.deviceId !== 'unknown_') {
-            await Promise.all(snap.docs.map(async doc => {
-                if (localStorage.getItem(`voted_${doc.id}`)) return; // already known
+            await Promise.all(votingSnap.docs.map(async doc => {
+                if (localStorage.getItem(`voted_${doc.id}`)) return;
                 const existing = await db.collection('matches').doc(doc.id)
                     .collection('votes').where('_meta.deviceId', '==', _voter.deviceId).limit(1).get();
                 if (!existing.empty) {
@@ -2548,7 +2843,7 @@ async function loadVotePage() {
         }
 
         let html = '';
-        snap.docs.forEach(doc => {
+        votingSnap.docs.forEach(doc => {
             const m = doc.data();
             m.displayName = voteNameMap[doc.id];
             const matchId = doc.id;
@@ -2604,8 +2899,50 @@ async function loadVotePage() {
             }
         });
 
-        el.innerHTML = html + muralHtml;
+        // Team vote cards first, then level voting, then ouvidoria
+        el.innerHTML = teamVoteHtml + html + muralHtml;
         if (ouvidoriaEnabled) initMural();
+
+        // Start real-time listeners for team vote progress
+        destroyTeamVoteListener();
+        if (teamVoteMatchIds.length > 0) {
+            const unsubscribers = [];
+            teamVoteMatchIds.forEach(matchId => {
+                const unsub = db.collection('matches').doc(matchId).collection('teamVotes')
+                    .onSnapshot(tvSnap => {
+                        const progressEl = document.getElementById(`tvProgress-${matchId}`);
+                        if (!progressEl) return;
+
+                        let keepCount = 0, resortCount = 0;
+                        tvSnap.docs.forEach(d => {
+                            if (d.data().vote === 'keep') keepCount++; else resortCount++;
+                        });
+                        const total = keepCount + resortCount;
+                        const keepPct = total > 0 ? Math.round((keepCount / total) * 100) : 0;
+                        const resortPct = total > 0 ? Math.round((resortCount / total) * 100) : 0;
+
+                        progressEl.innerHTML = `
+                            <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px;">
+                                <span style="color:var(--green);">👍 Manter (${keepCount})</span>
+                                <span style="color:var(--text-dim);">${total} voto${total !== 1 ? 's' : ''}</span>
+                                <span style="color:var(--red);">👎 Re-sort (${resortCount})</span>
+                            </div>
+                            <div class="team-vote-bar">
+                                <div class="team-vote-threshold"></div>
+                                ${total > 0 ? `
+                                    <div style="display:flex;height:100%;">
+                                        <div class="team-vote-bar-fill keep" style="width:${keepPct}%;">${keepPct >= 15 ? keepPct + '%' : ''}</div>
+                                        <div class="team-vote-bar-fill resort" style="width:${resortPct}%;">${resortPct >= 15 ? resortPct + '%' : ''}</div>
+                                    </div>
+                                ` : '<div style="text-align:center;line-height:28px;font-size:11px;color:var(--text-dim);">Nenhum voto ainda</div>'}
+                            </div>
+                            <div style="text-align:center;font-size:10px;color:var(--text-dim);margin-top:4px;">Maioria: 60%</div>
+                        `;
+                    });
+                unsubscribers.push(unsub);
+            });
+            teamVoteUnsubscribe = () => unsubscribers.forEach(u => u());
+        }
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Erro ao carregar: ${e.message}</p>`;
     }
@@ -3038,6 +3375,113 @@ async function submitVote(matchId) {
 }
 
 // ╔══════════════════════════════════╗
+// ║      TEAM VOTE SUBMISSION       ║
+// ╚══════════════════════════════════╝
+async function submitTeamVote(matchId, vote) {
+    if (localStorage.getItem(`teamVoted_${matchId}`)) {
+        toast('Você já votou nesta confirmação!', 'error');
+        return;
+    }
+
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+
+        if (match.status !== 'team_vote') {
+            toast('Votação de times já encerrada!', 'error');
+            loadVotePage();
+            return;
+        }
+
+        const voter = await getVoterDeviceId();
+
+        // Check eligibility: must have voted in level votes
+        if (voter.deviceId !== 'unknown_') {
+            const levelVote = await db.collection('matches').doc(matchId)
+                .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
+            if (levelVote.empty) {
+                toast('Você não votou nos níveis e não pode participar!', 'error');
+                return;
+            }
+        }
+
+        // Server-side dedup
+        if (voter.deviceId !== 'unknown_') {
+            const existing = await db.collection('matches').doc(matchId)
+                .collection('teamVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
+            if (!existing.empty) {
+                localStorage.setItem(`teamVoted_${matchId}`, 'true');
+                toast('Você já votou nesta confirmação!', 'error');
+                loadVotePage();
+                return;
+            }
+        }
+
+        // Save vote
+        const voterId = 'tv_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+        await db.collection('matches').doc(matchId).collection('teamVotes').doc(voterId).set({
+            vote: vote,
+            _meta: {
+                ip: voter.ip,
+                fingerprint: voter.fingerprint,
+                deviceId: voter.deviceId,
+                timestamp: new Date().toISOString()
+            }
+        });
+
+        localStorage.setItem(`teamVoted_${matchId}`, 'true');
+        toast(vote === 'keep' ? '👍 Voto para manter registrado!' : '👎 Voto para re-sort registrado!', 'success');
+
+        // Check threshold
+        await checkTeamVoteThreshold(matchId);
+
+        loadVotePage();
+    } catch (e) {
+        toast('Erro ao votar: ' + e.message, 'error');
+    }
+}
+
+async function checkTeamVoteThreshold(matchId) {
+    const matchDoc = await db.collection('matches').doc(matchId).get();
+    if (!matchDoc.exists || matchDoc.data().status !== 'team_vote') return;
+
+    const tvSnap = await db.collection('matches').doc(matchId).collection('teamVotes').get();
+
+    let keepCount = 0, resortCount = 0;
+    tvSnap.docs.forEach(d => {
+        if (d.data().vote === 'keep') keepCount++; else resortCount++;
+    });
+
+    const total = keepCount + resortCount;
+    if (total === 0) return;
+
+    const THRESHOLD = 0.6;
+
+    if (keepCount / total >= THRESHOLD) {
+        // Keep wins: confirm teams
+        await db.collection('matches').doc(matchId).update({ status: 'closed' });
+        toast('✅ Times confirmados pela votação! (60%+ manter)', 'success');
+    } else if (resortCount / total >= THRESHOLD) {
+        // Resort wins: re-sort and open new round
+        await resortTeams(matchId);
+        toast('🔄 Maioria votou re-sort! Novos times sorteados.', 'success');
+    } else {
+        // Check if all eligible voters have voted (tie-breaker)
+        const levelVotesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+        const eligibleDevices = new Set();
+        levelVotesSnap.docs.forEach(d => {
+            const meta = d.data()._meta;
+            if (meta && meta.deviceId) eligibleDevices.add(meta.deviceId);
+        });
+        if (total >= eligibleDevices.size && keepCount === resortCount) {
+            // All voted, tie → resort
+            await resortTeams(matchId);
+            toast('🔄 Empate com todos os votos! Times re-sorteados.', 'success');
+        }
+    }
+}
+
+// ╔══════════════════════════════════╗
 // ║       MATCHES PAGE (Public)     ║
 // ╚══════════════════════════════════╝
 async function loadMatchesPage() {
@@ -3161,12 +3605,12 @@ async function loadMatchesPage() {
                                 ${gcCount > 1 ? `<span>🎮 MD${gcCount}</span>` : ''}
                             </div>
                         </div>
-                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento'}</span>
+                        <span class="match-status ${m.status}">${m.status === 'voting' ? '🟢 Aberta' : m.status === 'team_vote' ? '🔵 Confirmação' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento'}</span>
                     </div>
                     ${scoreHtml}
                     ${mvpHtml}
                     <div class="btn-group" style="margin-top:10px;">
-                        ${(m.status === 'closed' || m.status === 'finished') && m.result && !hasGC ? `
+                        ${(m.status === 'closed' || m.status === 'finished' || m.status === 'team_vote') && m.result && !hasGC ? `
                             <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">🏆 Ver Equipes</button>
                         ` : ''}
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Ver Resultado${gcCount > 1 ? ' (' + gcCount + ')' : ''}</button>` : ''}
