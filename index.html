@@ -4169,7 +4169,19 @@ async function loadDashboard() {
         const currentVal = sel.value;
         sel.innerHTML = '<option value="">Todos</option>' + Object.values(ps).sort((a,b) => a.name.localeCompare(b.name)).map(p => `<option value="${p.name}" ${p.name === currentVal ? 'selected' : ''}>${p.name}</option>`).join('');
 
-        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet };
+        // ── Buscar badges do jornal mais recente ──
+        const _badgeMap = {};
+        try {
+            const jornalSnap = await db.collection('jornal').orderBy('createdAt','desc').limit(1).get();
+            if (!jornalSnap.empty) {
+                (jornalSnap.docs[0].data().badges || []).forEach(b => {
+                    if (!_badgeMap[b.player]) _badgeMap[b.player] = [];
+                    _badgeMap[b.player].push({ emoji: b.emoji, label: b.label });
+                });
+            }
+        } catch(e) {}
+
+        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet, _badgeMap };
         renderDashModules();
         populateH2HDropdowns();
     } catch (e) {
@@ -4327,6 +4339,13 @@ function renderDashModules() {
             return dir === 'desc' ? vb - va : va - vb;
         });
 
+        // ── Badges do jornal ──
+        const badgeMap = dashData._badgeMap || {};
+        const getDashBadgeHtml = (name) => {
+            if (!badgeMap[name]) return '';
+            return ' ' + badgeMap[name].map(b => `<span title="${b.label}" style="cursor:help;font-size:13px;">${b.emoji}</span>`).join('');
+        };
+
         const arrow = (c) => col === c ? (dir === 'desc' ? ' ▼' : ' ▲') : '';
         const thStyle = 'padding:10px 6px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;';
         const activeStyle = (c) => col === c ? 'color:var(--yellow);' : '';
@@ -4374,7 +4393,7 @@ function renderDashModules() {
                     <td style="padding:10px 6px;">
                         <div style="display:flex;align-items:center;gap:6px;">
                             ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
-                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>${getDashBadgeHtml(p.name)}
                         </div>
                     </td>
                     <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>
