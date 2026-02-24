@@ -1277,6 +1277,7 @@ const db = firebase.firestore();
 
 // ─── App State ───
 let isAdmin = false;
+let isStaff = false;
 let currentMatchVoting = null; // match id being voted on
 let players = []; // cached players
 let unsubscribers = []; // firestore listeners
@@ -1305,12 +1306,24 @@ async function adminLogin() {
     const pw = document.getElementById('adminPassword').value;
     if (!pw) { toast('Digite a senha!', 'error'); return; }
 
+    // Staff login check
+    if (pw === '#Mirb1234') {
+        isAdmin = true;
+        isStaff = true;
+        sessionStorage.setItem('mirb_admin', 'true');
+        sessionStorage.setItem('mirb_staff', 'true');
+        toast('Login de staff realizado!', 'success');
+        renderAdminPanel();
+        return;
+    }
+
     try {
         const doc = await db.collection('config').doc('admin').get();
         if (!doc.exists) {
             // First time: create the config with this password
             await db.collection('config').doc('admin').set({ password: pw });
             isAdmin = true;
+            isStaff = false;
             sessionStorage.setItem('mirb_admin', 'true');
             toast('Senha de admin criada com sucesso! Use essa senha nas próximas vezes.', 'success');
             renderAdminPanel();
@@ -1320,6 +1333,7 @@ async function adminLogin() {
         const stored = doc.data().password;
         if (pw === stored) {
             isAdmin = true;
+            isStaff = false;
             sessionStorage.setItem('mirb_admin', 'true');
             toast('Login de admin realizado!', 'success');
             renderAdminPanel();
@@ -1333,7 +1347,9 @@ async function adminLogin() {
 
 function adminLogout() {
     isAdmin = false;
+    isStaff = false;
     sessionStorage.removeItem('mirb_admin');
+    sessionStorage.removeItem('mirb_staff');
     document.getElementById('adminContent').innerHTML = `
         <div class="admin-lock">
             <div class="lock-icon">🔒</div>
@@ -1354,7 +1370,7 @@ function renderAdminPanel() {
     const container = document.getElementById('adminContent');
     container.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
-            <span style="color:var(--green);font-weight:600;">✅ Logado como Admin</span>
+            <span style="color:var(--green);font-weight:600;">✅ Logado como ${isStaff ? 'Staff' : 'Admin'}</span>
             <button class="btn btn-secondary btn-small" onclick="adminLogout()">Sair</button>
         </div>
 
@@ -1364,6 +1380,7 @@ function renderAdminPanel() {
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabManage')">⚙️ Gerenciar</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLink')">⚡ Vincular GC</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLive')">📡 Live</button>
+            ${isStaff ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabOthers\')">🛠️ Outros</button>' : ''}
         </div>
 
         <!-- TAB: Jogadores -->
@@ -1490,11 +1507,30 @@ function renderAdminPanel() {
                 </div>
             </div>
         </div>
+
+        ${isStaff ? `
+        <!-- TAB: Outros (Staff) -->
+        <div class="admin-tab-content" id="adminTabOthers">
+            <div class="card">
+                <div class="card-title">🛠️ Configurações Staff</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <div>
+                        <div style="font-weight:600;color:var(--text);font-size:14px;">📢 Ouvidoria MiRB</div>
+                        <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Habilitar ou desabilitar a Ouvidoria na página de votação</div>
+                    </div>
+                    <div id="ouvidoriaToggleContainer">
+                        <div class="loading-spinner" style="transform:scale(0.5);"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        ` : ''}
     `;
 
     loadAdminPlayers();
     loadAdminMatches();
     loadAdminLiveStatus();
+    if (isStaff) loadStaffSettings();
 }
 
 function switchAdminTab(btn, tabId) {
@@ -1503,6 +1539,45 @@ function switchAdminTab(btn, tabId) {
     btn.classList.add('active');
     document.getElementById(tabId).classList.add('active');
     if (tabId === 'adminTabLink') loadPendingGCImports();
+    if (tabId === 'adminTabOthers') loadStaffSettings();
+}
+
+// ╔══════════════════════════════════╗
+// ║       STAFF SETTINGS            ║
+// ╚══════════════════════════════════╝
+async function loadStaffSettings() {
+    const container = document.getElementById('ouvidoriaToggleContainer');
+    if (!container) return;
+    try {
+        const doc = await db.collection('config').doc('settings').get();
+        const enabled = doc.exists ? (doc.data().ouvidoriaEnabled !== false) : true;
+        renderOuvidoriaToggle(enabled);
+    } catch (e) {
+        container.innerHTML = '<span style="color:var(--red);font-size:12px;">Erro ao carregar</span>';
+    }
+}
+
+function renderOuvidoriaToggle(enabled) {
+    const container = document.getElementById('ouvidoriaToggleContainer');
+    if (!container) return;
+    container.innerHTML = `
+        <button onclick="toggleOuvidoria()" class="btn btn-small" style="font-size:12px;padding:6px 14px;background:${enabled ? 'rgba(0,200,83,0.15)' : 'rgba(255,61,61,0.15)'};color:${enabled ? 'var(--green)' : 'var(--red)'};border:1px solid ${enabled ? 'rgba(0,200,83,0.3)' : 'rgba(255,61,61,0.3)'};">
+            ${enabled ? '🟢 Ativa' : '🔴 Desativada'}
+        </button>
+    `;
+}
+
+async function toggleOuvidoria() {
+    try {
+        const doc = await db.collection('config').doc('settings').get();
+        const currentEnabled = doc.exists ? (doc.data().ouvidoriaEnabled !== false) : true;
+        const newEnabled = !currentEnabled;
+        await db.collection('config').doc('settings').set({ ouvidoriaEnabled: newEnabled }, { merge: true });
+        renderOuvidoriaToggle(newEnabled);
+        toast(newEnabled ? 'Ouvidoria ativada!' : 'Ouvidoria desativada!', 'success');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
 }
 
 // ╔══════════════════════════════════╗
@@ -2391,7 +2466,14 @@ async function loadVotePage() {
     const el = document.getElementById('voteContent');
     el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
 
-    const muralHtml = `
+    // Check if ouvidoria is enabled
+    let ouvidoriaEnabled = true;
+    try {
+        const settingsDoc = await db.collection('config').doc('settings').get();
+        if (settingsDoc.exists && settingsDoc.data().ouvidoriaEnabled === false) ouvidoriaEnabled = false;
+    } catch (e) {}
+
+    const muralHtml = ouvidoriaEnabled ? `
         <div class="mural-container" style="margin-top:24px;">
             <div style="border-top:1px solid rgba(255,255,255,0.06);margin-bottom:20px;"></div>
             <div class="mural-title">📢 Ouvidoria MiRB</div>
@@ -2410,7 +2492,7 @@ async function loadVotePage() {
             <div id="muralAuthorLine" style="font-size:12px;color:var(--text-dim);margin:-12px 0 16px;"></div>
             <div id="muralPosts"></div>
         </div>
-    `;
+    ` : '';
 
     try {
         const snap = await db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get();
@@ -2423,7 +2505,7 @@ async function loadVotePage() {
                 </div>
                 ${muralHtml}
             `;
-            initMural();
+            if (ouvidoriaEnabled) initMural();
             return;
         }
 
@@ -2491,7 +2573,7 @@ async function loadVotePage() {
         });
 
         el.innerHTML = html + muralHtml;
-        initMural();
+        if (ouvidoriaEnabled) initMural();
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Erro ao carregar: ${e.message}</p>`;
     }
@@ -5641,6 +5723,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Restore admin session
     if (sessionStorage.getItem('mirb_admin') === 'true') {
         isAdmin = true;
+    }
+    if (sessionStorage.getItem('mirb_staff') === 'true') {
+        isStaff = true;
     }
     loadVotePage();
     // Init first GC match slot
