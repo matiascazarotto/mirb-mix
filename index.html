@@ -5728,12 +5728,6 @@ document.addEventListener('DOMContentLoaded', () => {
     addGCMatchSlot();
     // Init live stream listener
     initLiveListener();
-    // Migrate: seed staff password if not set
-    db.collection('config').doc('admin').get().then(doc => {
-        if (doc.exists && !doc.data().staffPassword) {
-            db.collection('config').doc('admin').update({ staffPassword: '#Mirb1234' });
-        }
-    }).catch(() => {});
 });
 
 // Close modal on overlay click
