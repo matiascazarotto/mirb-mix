@@ -4171,17 +4171,25 @@ async function loadDashboard() {
 
         // ── Buscar badges do jornal mais recente ──
         const _badgeMap = {};
+        let _jornalEdition = null;
         try {
-            const jornalSnap = await db.collection('jornal').orderBy('createdAt','desc').limit(1).get();
+            const jornalSnap = await db.collection('jornal').orderBy('weekStart','desc').get();
             if (!jornalSnap.empty) {
-                (jornalSnap.docs[0].data().badges || []).forEach(b => {
+                const latestDoc = jornalSnap.docs[0].data();
+                const totalEditions = jornalSnap.size;
+                (latestDoc.badges || []).forEach(b => {
                     if (!_badgeMap[b.player]) _badgeMap[b.player] = [];
                     _badgeMap[b.player].push({ emoji: b.emoji, label: b.label });
                 });
+                if (latestDoc.weekStart && latestDoc.weekEnd) {
+                    const ws = latestDoc.weekStart.split('-');
+                    const we = latestDoc.weekEnd.split('-');
+                    _jornalEdition = { num: totalEditions, weekLabel: `${ws[2]}/${ws[1]} a ${we[2]}/${we[1]}` };
+                }
             }
         } catch(e) {}
 
-        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet, _badgeMap };
+        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet, _badgeMap, _jornalEdition };
         renderDashModules();
         populateH2HDropdowns();
     } catch (e) {
@@ -4410,7 +4418,20 @@ function renderDashModules() {
                     <td style="padding:10px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
                 </tr>`;
         });
-        html += '</tbody></table></div>';
+        html += '</tbody></table>';
+        // Legenda das badges do jornal
+        const badgeEntries = Object.values(badgeMap);
+        if (badgeEntries.length > 0) {
+            const uniqueBadges = [];
+            const seen = new Set();
+            Object.values(badgeMap).flat().forEach(b => {
+                if (!seen.has(b.emoji)) { seen.add(b.emoji); uniqueBadges.push(b); }
+            });
+            const ed = dashData._jornalEdition;
+            const edLabel = ed ? `Edição Nº ${ed.num} (${ed.weekLabel})` : 'Último Jornal';
+            html += `<div style="font-size:11px;color:var(--text-dim);text-align:center;padding:10px 8px 4px;border-top:1px solid rgba(255,255,255,0.05);">📰 ${edLabel}: ${uniqueBadges.map(b => `${b.emoji} ${b.label}`).join(' · ')}</div>`;
+        }
+        html += '</div>';
     }
 
     // ═══ HIGHLIGHTS ═══ (hidden for single player)
@@ -5311,7 +5332,7 @@ function renderSelectedJornal() {
                     'Morre de lado, morre de frente, morre de tudo.'
                 ];
                 paperHtml += `<div class="jornal-article">`;
-                paperHtml += `<div class="jornal-article-tag">${m.emoji} Obituário</div>`;
+                paperHtml += `<div class="jornal-article-tag">${m.emoji} Saco de Pancada</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} coleciona ${s.deaths || '?'} mortes em ${s.matches || '?'} partidas: m\u00e9dia de ${n(m.value)} por jogo</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
                 if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;">`;
@@ -5340,7 +5361,7 @@ function renderSelectedJornal() {
                     'Delimitar 4 horr\u00edveis por x5? Ele conta por 2.'
                 ];
                 paperHtml += `<div class="jornal-article">`;
-                paperHtml += `<div class="jornal-article-tag">${m.emoji} Coluna do Vexame</div>`;
+                paperHtml += `<div class="jornal-article-tag">${m.emoji} Pateta</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} amarga ${n(m.value)} de ADR e leva o troféu de Pateta</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
                 if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;">`;
@@ -5376,7 +5397,7 @@ function renderSelectedJornal() {
                     'N\u00e3o pede passagem. Toma.',
                     'Possui porte de arma. Se cuide.'
                 ];
-                paperHtml += `<div class="jornal-article-tag">${m.emoji} Primeiro Sangue</div>`;
+                paperHtml += `<div class="jornal-article-tag">${m.emoji} Entry</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} tem m\u00e9dia de ${n(m.value)} entry por partida</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
                 if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:70px;">`;
