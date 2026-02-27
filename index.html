@@ -3211,7 +3211,7 @@ async function loadVotePage() {
                             </div>
                             <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${pCount >= 10 ? 'var(--green)' : 'var(--yellow)'};">${pCount}/10</div>
                         </div>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;">
                             ${avatarsHtml}
                         </div>
                         <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
@@ -5358,6 +5358,46 @@ async function loadJornal() {
     }
 }
 
+let _avatarB64Cache = null;
+async function loadAvatarB64Cache() {
+    if (_avatarB64Cache) return _avatarB64Cache;
+    _avatarB64Cache = {};
+    try {
+        const snap = await db.collection('players').get();
+        snap.docs.forEach(d => {
+            const data = d.data();
+            if (data.avatarB64) _avatarB64Cache[data.name] = data.avatarB64;
+        });
+    } catch {}
+    return _avatarB64Cache;
+}
+
+// One-time migration: convert all existing avatar URLs to base64 in Firestore
+async function syncAvatarCache() {
+    toast('⏳ Convertendo avatares...', 'success');
+    const snap = await db.collection('matches').orderBy('createdAt','desc').get();
+    const avatarUrls = {}; // playerId → { name, url }
+    snap.docs.forEach(d => {
+        (d.data().gcStats || []).forEach(g => {
+            if (g.avatar && g.playerId && !avatarUrls[g.playerId]) {
+                avatarUrls[g.playerId] = { name: g.playerName, url: g.avatar };
+            }
+        });
+    });
+    let ok = 0, fail = 0;
+    for (const [playerId, info] of Object.entries(avatarUrls)) {
+        try {
+            const b64 = await imgToDataURL(info.url);
+            if (b64) {
+                await db.collection('players').doc(playerId).update({ avatarB64: b64 });
+                ok++;
+            } else { fail++; }
+        } catch { fail++; }
+    }
+    _avatarB64Cache = null;
+    toast(`✅ Avatares: ${ok} convertidos, ${fail} falharam`, 'success');
+}
+
 async function imgToDataURL(url) {
     const proxies = [
         url,
@@ -5385,8 +5425,12 @@ async function shareJornal() {
     const imgs = paper.querySelectorAll('img');
     const origSrcs = [];
     try {
+        const b64Cache = await loadAvatarB64Cache();
         await Promise.all([...imgs].map(async (img) => {
             origSrcs.push({ el: img, src: img.src });
+            // Try base64 cache first (by alt text = player name)
+            const playerName = img.alt || '';
+            if (playerName && b64Cache[playerName]) { img.src = b64Cache[playerName]; return; }
             const dataUrl = await imgToDataURL(img.src);
             if (dataUrl) img.src = dataUrl;
         }));
@@ -5469,14 +5513,14 @@ async function fetchLatestBadges() {
     return m;
 }
 
-function buildPlayerCard(player, stats, badgeMap) {
+function buildPlayerCard(player, stats, badgeMap, avatarB64Cache) {
     const s = stats;
     const rating = s?.rating ? s.rating.toFixed(1) : '—';
     const adr = s ? (s.adrSum/s.matches).toFixed(1) : '—';
     const kd = s ? (s.deaths>0?(s.kills/s.deaths).toFixed(2):s.kills) : '—';
     const kast = s ? (s.kastSum/s.matches).toFixed(0) : '—';
     const wr = s ? ((s.wins/s.matches)*100).toFixed(0)+'%' : '—';
-    const avatar = s?.avatar || '';
+    const avatar = (avatarB64Cache && avatarB64Cache[player.name]) || s?.avatar || '';
     const badges = badgeMap[player.name] ? badgeMap[player.name].map(b => `<span style="font-size:14px;" title="${b.label}">${b.emoji}</span>`).join(' ') : '';
     return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.06);">
         ${avatar ? `<img src="${avatar}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-dim);">👤</div>`}
@@ -5494,7 +5538,7 @@ function buildPlayerCard(player, stats, badgeMap) {
     </div>`;
 }
 
-function buildMatchImageHtml(match, allStats, badgeMap) {
+function buildMatchImageHtml(match, allStats, badgeMap, avatarB64Cache) {
     const date = match.createdAt ? match.createdAt.toDate().toLocaleDateString('pt-BR') : '';
     const hasTeams = match.result && match.result.teamA && match.result.teamB;
     const getStats = (p) => allStats[p.id] || Object.values(allStats).find(x => x.name.toLowerCase() === p.name.toLowerCase()) || null;
@@ -5509,11 +5553,11 @@ function buildMatchImageHtml(match, allStats, badgeMap) {
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
                 <div>
                     <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:#4fc3f7;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;">💙 Time A (${match.result.sumA} pts)</div>
-                    ${match.result.teamA.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}
+                    ${match.result.teamA.map(p => buildPlayerCard(p, getStats(p), badgeMap, avatarB64Cache)).join('')}
                 </div>
                 <div>
                     <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:#ffd740;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;">🧡 Time B (${match.result.sumB} pts)</div>
-                    ${match.result.teamB.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}
+                    ${match.result.teamB.map(p => buildPlayerCard(p, getStats(p), badgeMap, avatarB64Cache)).join('')}
                 </div>
             </div>`;
     } else {
@@ -5523,8 +5567,8 @@ function buildMatchImageHtml(match, allStats, badgeMap) {
         playersHtml = `
             <div style="text-align:center;margin-bottom:12px;font-size:14px;color:#8892a4;">👥 ${match.players.length}/10 jogadores confirmados</div>
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
-                <div>${left.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}</div>
-                <div>${right.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}</div>
+                <div>${left.map(p => buildPlayerCard(p, getStats(p), badgeMap, avatarB64Cache)).join('')}</div>
+                <div>${right.map(p => buildPlayerCard(p, getStats(p), badgeMap, avatarB64Cache)).join('')}</div>
             </div>`;
     }
 
@@ -5548,8 +5592,8 @@ async function preGenerateMatchImage(matchId) {
     try {
         const matchDoc = await db.collection('matches').doc(matchId).get();
         const match = matchDoc.data();
-        const [allStats, badgeMap] = await Promise.all([fetchAllTimePlayerStats(), fetchLatestBadges()]);
-        const cardHtml = buildMatchImageHtml(match, allStats, badgeMap);
+        const [allStats, badgeMap, avatarB64Cache] = await Promise.all([fetchAllTimePlayerStats(), fetchLatestBadges(), loadAvatarB64Cache()]);
+        const cardHtml = buildMatchImageHtml(match, allStats, badgeMap, avatarB64Cache);
 
         const container = document.createElement('div');
         container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;';
@@ -6396,6 +6440,24 @@ async function saveGCImport() {
         await batch.commit();
 
         _fightCardCache = null;
+        _avatarB64Cache = null;
+
+        // Convert avatars to base64 and save on player docs (solves CORS in production)
+        (async () => {
+            for (const entry of allUniqueLinked) {
+                const avatarUrl = entry.gc.avatar;
+                if (!avatarUrl) continue;
+                try {
+                    const r = await fetch(avatarUrl, { mode: 'cors' });
+                    if (!r.ok) continue;
+                    const b = await r.blob();
+                    if (b.size < 100) continue;
+                    const b64 = await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
+                    if (b64) await db.collection('players').doc(entry.player.id).update({ avatarB64: b64 });
+                } catch {}
+            }
+        })();
+
         toast(`✅ Stats de ${allParsed.length} partida(s) GC salvas! (${allUniqueLinked.length} jogadores)`, 'success');
         closeEditModal();
         await loadAdminPlayers();
