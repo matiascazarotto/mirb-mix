@@ -5554,7 +5554,17 @@ async function preGenerateMatchImage(matchId) {
         const cardEl = container.querySelector('.fight-card');
 
         const imgs = cardEl.querySelectorAll('img');
-        await Promise.all([...imgs].map(async img => { const d = await imgToDataURL(img.src); if (d) img.src = d; }));
+        await Promise.all([...imgs].map(async img => {
+            const d = await imgToDataURL(img.src);
+            if (d) { img.src = d; }
+            else {
+                // CORS failed — replace with placeholder div
+                const ph = document.createElement('div');
+                ph.style.cssText = img.style.cssText + ';background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;';
+                ph.textContent = '👤';
+                img.replaceWith(ph);
+            }
+        }));
 
         await document.fonts.ready;
         const canvas = await html2canvas(cardEl, { useCORS: true, scale: 2, backgroundColor: '#0a0e17', logging: false });
