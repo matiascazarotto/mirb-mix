@@ -600,6 +600,12 @@
             border: 1px solid rgba(79,195,247,0.3);
         }
 
+        .match-status.open {
+            background: rgba(255,255,255,0.1);
+            color: var(--text);
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
         .team-vote-bar {
             height: 28px;
             background: rgba(255,255,255,0.06);
@@ -2198,11 +2204,11 @@ function updateMatchSelectionCount() {
     const countEl = document.getElementById('adminSelectedCount');
     const btn = document.getElementById('createMatchBtn');
     if (countEl) countEl.textContent = selectedForMatch.length;
-    if (btn) btn.disabled = selectedForMatch.length !== 10;
+    if (btn) btn.disabled = selectedForMatch.length < 1;
 }
 
 async function createMatch() {
-    if (selectedForMatch.length !== 10) return;
+    if (selectedForMatch.length < 1) return;
 
     const matchPlayers = selectedForMatch.map(id => {
         const p = players.find(pl => pl.id === id);
@@ -2215,10 +2221,10 @@ async function createMatch() {
         await db.collection('matches').add({
             name,
             players: matchPlayers,
-            status: 'voting',
+            status: 'open',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
-        toast('Partida criada! Jogadores já podem votar.', 'success');
+        toast('Partida criada! Edite os jogadores ou inicie a votação.', 'success');
         selectedForMatch = [];
         renderPlayerSelectionForMatch();
         document.getElementById('matchName').value = '';
@@ -2258,7 +2264,8 @@ async function loadAdminMatches() {
             const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
             const voteCount = votesSnap.size;
 
-            const statusLabel = m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'team_vote' ? '🔵 Votação de Times' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
+            const statusLabel = m.status === 'open' ? '⚪ Aberta' : m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'team_vote' ? '🔵 Votação de Times' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
+            const isOpen = m.status === 'open';
             const isFinished = m.status === 'finished';
             const isClosed = m.status === 'closed';
             const isTeamVote = m.status === 'team_vote';
@@ -2314,16 +2321,28 @@ async function loadAdminMatches() {
                     </div>
 
                     <!-- Actions -->
-                    ${m.status === 'voting' ? `
+                    ${isOpen ? `
+                    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-primary btn-small" onclick="startVoting('${matchId}')" ${m.players.length !== 10 ? 'disabled title="Precisa de 10 jogadores"' : ''}>🗳️ Iniciar Votação</button>
+                        <button class="btn btn-secondary btn-small" onclick="editMatchPlayers('${matchId}')">✏️ Editar Jogadores</button>
+                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">📋 Escalação</button>
+                    </div>
+                    <div style="margin-top:8px;font-size:12px;color:var(--text-dim);">
+                        👥 <strong>${m.players.length}/10</strong> — ${m.players.map(p => p.name).join(', ')}
+                    </div>
+                    ` : m.status === 'voting' ? `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;">
                         <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
                         <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="editMatchPlayers('${matchId}')">✏️ Jogadores</button>
+                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">📋 Escalação</button>
                     </div>
                     ` : isTeamVote ? `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">⚔️ Fight Card</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-primary btn-small" onclick="forceConfirmTeams('${matchId}')">✅ Confirmar</button>
                         <button class="btn btn-secondary btn-small" onclick="forceResortTeams('${matchId}')">🔄 Re-sort</button>
@@ -2335,6 +2354,7 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">⚔️ Fight Card</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" id="vodBtn-${matchId}" onclick="addVodRow('${matchId}')">📹 VOD</button>
                         <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
@@ -2345,6 +2365,7 @@ async function loadAdminMatches() {
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
+                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">⚔️ Fight Card</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Editar Confronto</button>
                     </div>
@@ -2439,6 +2460,119 @@ async function reopenMatch(matchId) {
     try {
         await db.collection('matches').doc(matchId).update({ status: 'closed' });
         toast('🔓 Partida reaberta para edição.', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+// ── Start Voting (open → voting) ──
+async function startVoting(matchId) {
+    try {
+        const doc = await db.collection('matches').doc(matchId).get();
+        const m = doc.data();
+        if (m.players.length !== 10) {
+            toast('Precisa de exatamente 10 jogadores para iniciar a votação!', 'error');
+            return;
+        }
+        await db.collection('matches').doc(matchId).update({ status: 'voting' });
+        toast('🗳️ Votação iniciada!', 'success');
+        loadAdminMatches();
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+// ── Edit Match Players ──
+async function editMatchPlayers(matchId) {
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+        const currentPlayerIds = match.players.map(p => p.id);
+
+        if (match.status === 'voting') {
+            const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+            if (votesSnap.size > 0 && !confirm(`Existem ${votesSnap.size} votos. Editar jogadores limpará todos os votos. Continuar?`)) return;
+        }
+
+        const overlay = document.getElementById('editModal');
+        editModalOriginalHTML = overlay.querySelector('.modal-box').innerHTML;
+        overlay.querySelector('.modal-box').innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <div class="card-title" style="margin:0;">✏️ Editar Jogadores — ${match.name}</div>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            <div class="selection-counter" style="margin-bottom:12px;"><span class="count" id="editMatchCount">${currentPlayerIds.length}</span> / 10 jogadores</div>
+            <div style="position:relative;margin-bottom:12px;">
+                <input type="text" id="editMatchFilter" placeholder="🔍 Filtrar jogador..." oninput="filterEditMatchPlayers()" style="width:100%;padding:10px 12px;background:var(--dark);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:var(--text);font-size:13px;">
+            </div>
+            <div id="editMatchPlayerGrid" class="player-selection-grid" style="max-height:400px;overflow-y:auto;"></div>
+            <button class="btn btn-primary" id="saveEditMatchBtn" onclick="saveEditMatchPlayers('${matchId}')" style="margin-top:16px;width:100%;" ${currentPlayerIds.length < 1 ? 'disabled' : ''}>💾 Salvar Jogadores</button>
+        `;
+
+        document.getElementById('editMatchPlayerGrid').innerHTML = players.map(p => `
+            <div class="player-selector ${currentPlayerIds.includes(p.id) ? 'selected' : ''}" id="editSel-${p.id}" onclick="toggleEditMatchPlayer('${p.id}')" data-name="${p.name.toLowerCase()}">
+                <input type="checkbox" id="editChk-${p.id}" ${currentPlayerIds.includes(p.id) ? 'checked' : ''}>
+                <div class="player-name">${p.name}</div>
+                <div class="player-meta">
+                    <span class="badge badge-role">${p.role}</span>
+                </div>
+            </div>
+        `).join('');
+
+        window._editMatchSelected = [...currentPlayerIds];
+        window._editMatchStatus = match.status;
+        overlay.classList.add('active');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
+}
+
+function toggleEditMatchPlayer(id) {
+    const sel = window._editMatchSelected;
+    const idx = sel.indexOf(id);
+    if (idx === -1) {
+        if (sel.length >= 10) { toast('Máximo 10 jogadores!', 'error'); return; }
+        sel.push(id);
+    } else {
+        sel.splice(idx, 1);
+    }
+    const el = document.getElementById(`editSel-${id}`);
+    const chk = document.getElementById(`editChk-${id}`);
+    if (el) el.classList.toggle('selected', sel.includes(id));
+    if (chk) chk.checked = sel.includes(id);
+    const countEl = document.getElementById('editMatchCount');
+    if (countEl) countEl.textContent = sel.length;
+    const btn = document.getElementById('saveEditMatchBtn');
+    if (btn) btn.disabled = sel.length < 1;
+}
+
+function filterEditMatchPlayers() {
+    const q = (document.getElementById('editMatchFilter')?.value || '').toLowerCase();
+    document.querySelectorAll('#editMatchPlayerGrid .player-selector').forEach(el => {
+        el.style.display = (el.dataset.name || '').includes(q) ? '' : 'none';
+    });
+}
+
+async function saveEditMatchPlayers(matchId) {
+    const selected = window._editMatchSelected;
+    if (selected.length < 1) return;
+    const matchPlayers = selected.map(id => {
+        const p = players.find(pl => pl.id === id);
+        return { id: p.id, name: p.name, role: p.role, duo: p.duo || '', playstyle: p.playstyle || 'Normal' };
+    });
+    try {
+        if (window._editMatchStatus === 'voting') {
+            const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+            if (!votesSnap.empty) {
+                const batch = db.batch();
+                votesSnap.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
+        }
+        await db.collection('matches').doc(matchId).update({ players: matchPlayers });
+        toast('✅ Jogadores atualizados!', 'success');
+        closeEditModal();
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
@@ -3015,8 +3149,9 @@ async function loadVotePage() {
     ` : '';
 
     try {
-        // Query both voting and team_vote matches + latest jornal for badges
-        const [votingSnap, teamVoteSnap, jornalSnap] = await Promise.all([
+        // Query open, voting and team_vote matches + latest jornal for badges
+        const [openSnap, votingSnap, teamVoteSnap, jornalSnap] = await Promise.all([
+            db.collection('matches').where('status', '==', 'open').orderBy('createdAt', 'desc').get(),
             db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get(),
             db.collection('matches').where('status', '==', 'team_vote').orderBy('createdAt', 'desc').get(),
             db.collection('jornal').orderBy('weekStart', 'desc').limit(1).get()
@@ -3036,15 +3171,71 @@ async function loadVotePage() {
             return badgeMap[name].map(b => `<span title="${b.label}" style="cursor:help;font-size:14px;">${b.emoji}</span>`).join('');
         };
 
+        // ── Build Escalação HTML for open/voting matches ──
+        let escalacaoHtml = '';
+        const escalacaoMatches = [...openSnap.docs, ...votingSnap.docs].filter(d => {
+            const m = d.data();
+            return m.players && m.players.length > 0 && !(m.result && m.result.teamA);
+        });
+        if (escalacaoMatches.length > 0) {
+            // Fetch avatar map from gcStats cache
+            let avatarMap = {};
+            try {
+                const statsSnap = await db.collection('matches').orderBy('createdAt','desc').limit(20).get();
+                statsSnap.docs.forEach(d => {
+                    (d.data().gcStats || []).forEach(g => {
+                        if (g.avatar && g.playerName && !avatarMap[g.playerName]) avatarMap[g.playerName] = g.avatar;
+                    });
+                });
+            } catch(e) {}
+
+            for (const doc of escalacaoMatches) {
+                const m = doc.data();
+                const matchId = doc.id;
+                const pCount = m.players.length;
+                const statusTag = m.status === 'open' ? '⚪ Aberta' : '🟢 Votação';
+
+                const avatarsHtml = m.players.map(p => {
+                    const av = avatarMap[p.name];
+                    return av
+                        ? `<img src="${av}" title="${p.name}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.1);">`
+                        : `<div title="${p.name}" style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:center;font-size:14px;border:2px solid rgba(255,255,255,0.1);">👤</div>`;
+                }).join('');
+
+                escalacaoHtml += `
+                    <div style="background:var(--card);border-radius:12px;padding:16px;border:1px solid rgba(255,255,255,0.06);margin-bottom:12px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                            <div>
+                                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:#e8eaf0;">🎮 ${m.name || 'Mix da Noite'}</span>
+                                <span style="font-size:11px;color:var(--text-dim);margin-left:8px;">${statusTag}</span>
+                            </div>
+                            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${pCount >= 10 ? 'var(--green)' : 'var(--yellow)'};">${pCount}/10</div>
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+                            ${avatarsHtml}
+                        </div>
+                        <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+                            <button class="btn btn-secondary btn-small" onclick="shareMatchImage('${matchId}')" style="font-size:11px;">📸 Compartilhar</button>
+                            <span style="font-size:11px;color:var(--text-dim);">${m.players.map(p => p.name).join(', ')}</span>
+                        </div>
+                    </div>`;
+            }
+        }
+
+        // Pre-generate images in background for instant sharing
+        const _preGenIds = escalacaoMatches.map(d => d.id);
+        const _triggerPreGen = () => _preGenIds.forEach(id => preGenerateMatchImage(id));
+
         if (votingSnap.empty && teamVoteSnap.empty) {
             el.innerHTML = `
-                <div class="empty-state">
+                ${escalacaoHtml || `<div class="empty-state">
                     <div class="icon">🗳️</div>
                     <p>Nenhuma partida aberta para votação.</p>
-                </div>
+                </div>`}
                 ${muralHtml}
             `;
             if (ouvidoriaEnabled) initMural();
+            _triggerPreGen();
             return;
         }
 
@@ -3231,8 +3422,9 @@ async function loadVotePage() {
         });
 
         // Team vote cards first, then level voting, then ouvidoria
-        el.innerHTML = teamVoteHtml + html + muralHtml;
+        el.innerHTML = escalacaoHtml + teamVoteHtml + html + muralHtml;
         if (ouvidoriaEnabled) initMural();
+        _triggerPreGen();
 
         // Start real-time listeners for team vote progress
         destroyTeamVoteListener();
@@ -5230,6 +5422,205 @@ function downloadBlob(blob, filename) {
     toast('Imagem salva!', 'success');
 }
 
+// ╔══════════════════════════════════╗
+// ║    ESCALAÇÃO / FIGHT CARD       ║
+// ╚══════════════════════════════════╝
+let _fightCardCache = null;
+
+async function fetchAllTimePlayerStats() {
+    if (_fightCardCache) return _fightCardCache;
+    const snap = await db.collection('matches').orderBy('createdAt','desc').get();
+    const matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
+    const ps = {};
+    matches.forEach(m => {
+        m.gcStats.forEach(g => {
+            const key = g.playerId || g.gcName || g.playerName;
+            if (!ps[key]) ps[key] = { name: g.playerName, avatar: '', matches: 0, kills: 0, deaths: 0, adrSum: 0, kastSum: 0, fk: 0, wins: 0, losses: 0 };
+            const p = ps[key];
+            p.matches++; p.kills += g.k; p.deaths += g.d; p.adrSum += g.adr; p.kastSum += g.kast; p.fk += g.fk;
+            if (g.win != null ? g.win : (g.rp >= 0)) p.wins++; else p.losses++;
+            if (!p.avatar && g.avatar) p.avatar = g.avatar;
+        });
+    });
+    const entries = Object.values(ps);
+    if (entries.length > 0) {
+        const W = { adr: 0.25, kast: 0.25, kd: 0.20, fk: 0.10, win: 0.05, mp: 0.15 };
+        entries.forEach(p => { p.avgAdr = p.adrSum/p.matches; p.avgKast = p.kastSum/p.matches; p.avgKd = p.deaths > 0 ? p.kills/p.deaths : p.kills; p.avgFk = p.fk/p.matches; p.winPct = p.matches > 0 ? (p.wins/p.matches)*100 : 0; });
+        const mx = { adr: Math.max(...entries.map(p=>p.avgAdr)), kast: Math.max(...entries.map(p=>p.avgKast)), kd: Math.max(...entries.map(p=>p.avgKd)), fk: Math.max(...entries.map(p=>p.avgFk)), win: Math.max(...entries.map(p=>p.winPct)), mp: Math.max(...entries.map(p=>p.matches)) };
+        entries.forEach(p => {
+            p.rawRating = (mx.adr>0?(p.avgAdr/mx.adr)*100:0)*W.adr + (mx.kast>0?(p.avgKast/mx.kast)*100:0)*W.kast + (mx.kd>0?(p.avgKd/mx.kd)*100:0)*W.kd + (mx.fk>0?(p.avgFk/mx.fk)*100:0)*W.fk + (mx.win>0?(p.winPct/mx.win)*100:0)*W.win + (mx.mp>0?Math.max(0.1,p.matches/mx.mp)*100:0)*W.mp;
+        });
+        const avg = entries.reduce((s,p)=>s+p.rawRating,0)/entries.length;
+        const thresh = Math.ceil(mx.mp * 0.7);
+        entries.forEach(p => { const c = Math.min(1, p.matches/thresh); p.rating = c*p.rawRating + (1-c)*avg; });
+    }
+    _fightCardCache = ps;
+    return ps;
+}
+
+async function fetchLatestBadges() {
+    const snap = await db.collection('jornal').orderBy('weekStart','desc').limit(1).get();
+    const m = {};
+    if (!snap.empty) (snap.docs[0].data().badges || []).forEach(b => { if (!m[b.player]) m[b.player] = []; m[b.player].push({ emoji: b.emoji, label: b.label }); });
+    return m;
+}
+
+function buildPlayerCard(player, stats, badgeMap) {
+    const s = stats;
+    const rating = s?.rating ? s.rating.toFixed(1) : '—';
+    const adr = s ? (s.adrSum/s.matches).toFixed(1) : '—';
+    const kd = s ? (s.deaths>0?(s.kills/s.deaths).toFixed(2):s.kills) : '—';
+    const kast = s ? (s.kastSum/s.matches).toFixed(0) : '—';
+    const wr = s ? ((s.wins/s.matches)*100).toFixed(0)+'%' : '—';
+    const avatar = s?.avatar || '';
+    const badges = badgeMap[player.name] ? badgeMap[player.name].map(b => `<span style="font-size:14px;" title="${b.label}">${b.emoji}</span>`).join(' ') : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:rgba(255,255,255,0.04);border-radius:8px;margin-bottom:6px;border:1px solid rgba(255,255,255,0.06);">
+        ${avatar ? `<img src="${avatar}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex-shrink:0;">` : `<div style="width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.1);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-dim);">👤</div>`}
+        <div style="flex:1;min-width:0;">
+            <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:#e8eaf0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${player.name} ${badges}</div>
+            <div style="font-size:11px;color:#8892a4;">${player.role || ''}</div>
+        </div>
+        <div style="display:flex;gap:12px;font-size:12px;text-align:center;flex-shrink:0;">
+            <div><div style="color:#8892a4;font-size:9px;text-transform:uppercase;">Rating</div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#ffd600;font-size:16px;">${rating}</div></div>
+            <div><div style="color:#8892a4;font-size:9px;text-transform:uppercase;">ADR</div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#e8eaf0;">${adr}</div></div>
+            <div><div style="color:#8892a4;font-size:9px;text-transform:uppercase;">K/D</div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#e8eaf0;">${kd}</div></div>
+            <div><div style="color:#8892a4;font-size:9px;text-transform:uppercase;">KAST</div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#e8eaf0;">${kast}%</div></div>
+            <div><div style="color:#8892a4;font-size:9px;text-transform:uppercase;">WIN</div><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:#00c853;">${wr}</div></div>
+        </div>
+    </div>`;
+}
+
+function buildMatchImageHtml(match, allStats, badgeMap) {
+    const date = match.createdAt ? match.createdAt.toDate().toLocaleDateString('pt-BR') : '';
+    const hasTeams = match.result && match.result.teamA && match.result.teamB;
+    const getStats = (p) => allStats[p.id] || Object.values(allStats).find(x => x.name.toLowerCase() === p.name.toLowerCase()) || null;
+
+    let playersHtml, subtitle;
+    if (hasTeams) {
+        subtitle = 'FIGHT CARD';
+        playersHtml = `
+            <div style="display:flex;justify-content:center;margin-bottom:12px;">
+                <span style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:#ffd600;letter-spacing:4px;">⚔️ VS ⚔️</span>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:#4fc3f7;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;">💙 Time A (${match.result.sumA} pts)</div>
+                    ${match.result.teamA.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}
+                </div>
+                <div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:#ffd740;text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:2px;">🧡 Time B (${match.result.sumB} pts)</div>
+                    ${match.result.teamB.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}
+                </div>
+            </div>`;
+    } else {
+        subtitle = 'ESCALAÇÃO DA NOITE';
+        const left = match.players.slice(0, Math.ceil(match.players.length/2));
+        const right = match.players.slice(Math.ceil(match.players.length/2));
+        playersHtml = `
+            <div style="text-align:center;margin-bottom:12px;font-size:14px;color:#8892a4;">👥 ${match.players.length}/10 jogadores confirmados</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+                <div>${left.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}</div>
+                <div>${right.map(p => buildPlayerCard(p, getStats(p), badgeMap)).join('')}</div>
+            </div>`;
+    }
+
+    return `<div class="fight-card" style="width:800px;padding:32px;background:#0a0e17;font-family:'Outfit',sans-serif;color:#e8eaf0;border:2px solid rgba(0,200,83,0.3);border-radius:16px;">
+        <div style="text-align:center;margin-bottom:24px;">
+            <div style="font-family:'Rajdhani',sans-serif;font-size:36px;font-weight:700;letter-spacing:6px;text-transform:uppercase;background:linear-gradient(135deg,#ffd600 0%,#00c853 50%,#2979ff 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">MIRB MIX</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:600;color:#8892a4;letter-spacing:3px;text-transform:uppercase;margin-top:2px;">${subtitle}</div>
+            <div style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:600;color:#e8eaf0;margin-top:8px;">${match.name || 'Partida'}</div>
+            ${date ? `<div style="font-size:13px;color:#8892a4;margin-top:4px;">📅 ${date}</div>` : ''}
+        </div>
+        ${playersHtml}
+        <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:#8892a4;">mirbcs.com · Rating MiRB v1.1</div>
+    </div>`;
+}
+
+// Pre-generated image cache: matchId → { blob, filename, title }
+const _matchImageCache = {};
+
+async function preGenerateMatchImage(matchId) {
+    if (_matchImageCache[matchId]) return;
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.data();
+        const [allStats, badgeMap] = await Promise.all([fetchAllTimePlayerStats(), fetchLatestBadges()]);
+        const cardHtml = buildMatchImageHtml(match, allStats, badgeMap);
+
+        const container = document.createElement('div');
+        container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;';
+        container.innerHTML = cardHtml;
+        document.body.appendChild(container);
+        const cardEl = container.querySelector('.fight-card');
+
+        const imgs = cardEl.querySelectorAll('img');
+        await Promise.all([...imgs].map(async img => { const d = await imgToDataURL(img.src); if (d) img.src = d; }));
+
+        await document.fonts.ready;
+        const canvas = await html2canvas(cardEl, { useCORS: true, scale: 2, backgroundColor: '#0a0e17', logging: false });
+        document.body.removeChild(container);
+
+        const hasTeams = match.result && match.result.teamA;
+        const filename = `mirb-${hasTeams ? 'fightcard' : 'escalacao'}-${(match.name || 'mix').replace(/\s+/g, '-').toLowerCase()}.png`;
+        const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
+        _matchImageCache[matchId] = { blob, filename, title: match.name || 'Mix' };
+    } catch (e) { console.warn('Pre-gen failed:', e); }
+}
+
+async function shareMatchImage(matchId) {
+    // If not cached yet, generate now (shows loading)
+    if (!_matchImageCache[matchId]) {
+        toast('⏳ Gerando imagem...', 'success');
+        await preGenerateMatchImage(matchId);
+    }
+    const cached = _matchImageCache[matchId];
+    if (!cached) { toast('Erro ao gerar imagem', 'error'); return; }
+
+    if (navigator.share) {
+        try {
+            const file = new File([cached.blob], cached.filename, { type: 'image/png' });
+            await navigator.share({ files: [file], title: `MiRB Mix - ${cached.title}` });
+            return;
+        } catch (e) {
+            if (e.name === 'AbortError') return;
+        }
+    }
+    // Fallback: download
+    downloadBlob(cached.blob, cached.filename);
+}
+
+// Keep generateMatchImage for admin buttons (opens overlay for preview)
+async function generateMatchImage(matchId) {
+    toast('⏳ Gerando imagem...', 'success');
+    if (!_matchImageCache[matchId]) await preGenerateMatchImage(matchId);
+    const cached = _matchImageCache[matchId];
+    if (!cached) { toast('Erro ao gerar imagem', 'error'); return; }
+
+    const dataUrl = URL.createObjectURL(cached.blob);
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
+    overlay.innerHTML = `
+        <img src="${dataUrl}" style="max-width:100%;max-height:60vh;border-radius:12px;border:1px solid rgba(255,255,255,0.1);">
+        <div style="display:flex;gap:12px;margin-top:16px;">
+            <button id="_shareBtn" class="btn btn-primary" style="font-size:14px;padding:10px 24px;">📤 Compartilhar</button>
+            <button id="_downloadBtn" class="btn btn-secondary" style="font-size:14px;padding:10px 24px;">💾 Salvar</button>
+        </div>
+        <div style="margin-top:8px;text-align:center;color:var(--text-dim);font-size:11px;opacity:0.6;">ou segure a imagem para compartilhar</div>
+        <button id="_closeBtn" style="position:absolute;top:12px;right:12px;background:rgba(255,255,255,0.1);border:none;color:#fff;font-size:22px;cursor:pointer;padding:8px 12px;border-radius:8px;">✕</button>
+    `;
+    document.body.appendChild(overlay);
+    const closeOverlay = () => { URL.revokeObjectURL(dataUrl); if (overlay.parentNode) document.body.removeChild(overlay); };
+    overlay.querySelector('#_closeBtn').onclick = closeOverlay;
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeOverlay(); });
+    overlay.querySelector('#_shareBtn').onclick = () => {
+        if (navigator.share) {
+            const file = new File([cached.blob], cached.filename, { type: 'image/png' });
+            navigator.share({ files: [file], title: `MiRB Mix - ${cached.title}` }).then(closeOverlay).catch(e => { if (e.name !== 'AbortError') toast('Erro', 'error'); });
+        } else { toast('📲 Segure a imagem para compartilhar', 'error'); }
+    };
+    overlay.querySelector('#_downloadBtn').onclick = () => { downloadBlob(cached.blob, cached.filename); closeOverlay(); };
+}
+
 function renderSelectedJornal() {
     const el = document.getElementById('jornalContent');
     const sel = document.getElementById('jornalFilterEdition');
@@ -5988,6 +6379,7 @@ async function saveGCImport() {
         batch.update(db.collection('matches').doc(gcImportMatchId), updateData);
         await batch.commit();
 
+        _fightCardCache = null;
         toast(`✅ Stats de ${allParsed.length} partida(s) GC salvas! (${allUniqueLinked.length} jogadores)`, 'success');
         closeEditModal();
         await loadAdminPlayers();
