@@ -2325,7 +2325,6 @@ async function loadAdminMatches() {
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-primary btn-small" onclick="startVoting('${matchId}')" ${m.players.length !== 10 ? 'disabled title="Precisa de 10 jogadores"' : ''}>🗳️ Iniciar Votação</button>
                         <button class="btn btn-secondary btn-small" onclick="editMatchPlayers('${matchId}')">✏️ Editar Jogadores</button>
-                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">📋 Escalação</button>
                     </div>
                     <div style="margin-top:8px;font-size:12px;color:var(--text-dim);">
                         👥 <strong>${m.players.length}/10</strong> — ${m.players.map(p => p.name).join(', ')}
@@ -2336,13 +2335,11 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
                         <button class="btn btn-secondary btn-small" onclick="editMatchPlayers('${matchId}')">✏️ Jogadores</button>
-                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">📋 Escalação</button>
                     </div>
                     ` : isTeamVote ? `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
-                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">⚔️ Fight Card</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-primary btn-small" onclick="forceConfirmTeams('${matchId}')">✅ Confirmar</button>
                         <button class="btn btn-secondary btn-small" onclick="forceResortTeams('${matchId}')">🔄 Re-sort</button>
@@ -2354,7 +2351,6 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
-                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">⚔️ Fight Card</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" id="vodBtn-${matchId}" onclick="addVodRow('${matchId}')">📹 VOD</button>
                         <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">🔄 Reabrir Votação</button>
@@ -2365,7 +2361,6 @@ async function loadAdminMatches() {
                     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
                         <button class="btn btn-secondary btn-small" onclick="viewMatchResult('${matchId}')">📋 Equipes</button>
                         ${hasGC ? `<button class="btn btn-secondary btn-small" onclick="viewGCStats('${matchId}')">📊 Resultado</button>` : ''}
-                        <button class="btn btn-secondary btn-small" onclick="generateMatchImage('${matchId}')">⚔️ Fight Card</button>
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Editar Confronto</button>
                     </div>
@@ -5785,7 +5780,7 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Saco de Pancada</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} coleciona ${s.deaths || '?'} mortes em ${s.matches || '?'} partidas: m\u00e9dia de ${n(m.value)} por jogo</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;">`;
+                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     <strong>${m.player}</strong> liderou o ranking de \u00f3bitos da semana
                     com <strong>${n(m.value)} mortes por partida</strong>.
@@ -5814,7 +5809,7 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Pateta</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} amarga ${n(m.value)} de ADR e leva o troféu de Pateta</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;">`;
+                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Com apenas <strong>${n(m.value)} de ADR m\u00e9dio</strong> em ${s.matches || '?'} partidas,
                     <strong>${m.player}</strong> entregou o menor dano por round da semana.
@@ -5850,7 +5845,7 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Entry</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} tem m\u00e9dia de ${n(m.value)} entry por partida</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:70px;">`;
+                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:70px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Em ${s.matches || '?'} partidas, <strong>${m.player}</strong> somou
                     <strong>${totalFk} first kills</strong>,
@@ -5868,7 +5863,7 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Em Alta</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} dispara: sobe ${n(m.value)} pontos no rating</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:55px;">`;
+                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:55px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Rating saltou de <strong>${n(m.prevRating)}</strong> para <strong>${n(s.rating)}</strong>.
                     Registrou <strong>${n(s.adr)} ADR</strong> e <strong>${n(s.winPct)}%</strong> de vit\u00f3rias em ${s.matches || '?'} jogos. A fase \u00e9 boa.
@@ -5880,7 +5875,7 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Em Queda</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} despenca ${n(m.value)} pontos no rating e preocupa</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:55px;">`;
+                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:55px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Caiu de <strong>${n(m.prevRating)}</strong> para <strong>${n(s.rating)}</strong>.
                     <strong>${n(s.adr)} ADR</strong> e K/D de <strong>${n(s.kd)}</strong> em ${s.matches || '?'} partidas. A torcida pede rea\u00e7\u00e3o.
