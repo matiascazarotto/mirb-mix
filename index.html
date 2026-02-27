@@ -2264,7 +2264,7 @@ async function loadAdminMatches() {
             const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
             const voteCount = votesSnap.size;
 
-            const statusLabel = m.status === 'open' ? '⚪ Aberta' : m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'team_vote' ? '🔵 Votação de Times' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
+            const statusLabel = m.status === 'open' ? '⚪ Aguardando Jogadores' : m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'team_vote' ? '🔵 Votação de Times' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
             const isOpen = m.status === 'open';
             const isFinished = m.status === 'finished';
             const isClosed = m.status === 'closed';
@@ -3193,7 +3193,7 @@ async function loadVotePage() {
                 const m = doc.data();
                 const matchId = doc.id;
                 const pCount = m.players.length;
-                const statusTag = m.status === 'open' ? '⚪ Aberta' : '🟢 Votação';
+                const statusTag = m.status === 'open' ? '⚪ Aguardando Jogadores' : '🟢 Votação';
 
                 const avatarsHtml = m.players.map(p => {
                     const av = avatarMap[p.name];
@@ -5563,7 +5563,9 @@ async function preGenerateMatchImage(matchId) {
         const hasTeams = match.result && match.result.teamA;
         const filename = `mirb-${hasTeams ? 'fightcard' : 'escalacao'}-${(match.name || 'mix').replace(/\s+/g, '-').toLowerCase()}.png`;
         const blob = await new Promise(r => canvas.toBlob(r, 'image/png'));
-        _matchImageCache[matchId] = { blob, filename, title: match.name || 'Mix' };
+        const pCount = (match.players || []).length;
+        const shareTitle = pCount >= 10 ? 'MiRB X5 Confirmed' : `MiRB informa: falta ${10 - pCount} noob`;
+        _matchImageCache[matchId] = { blob, filename, title: shareTitle };
     } catch (e) { console.warn('Pre-gen failed:', e); }
 }
 
@@ -5579,7 +5581,7 @@ async function shareMatchImage(matchId) {
     if (navigator.share) {
         try {
             const file = new File([cached.blob], cached.filename, { type: 'image/png' });
-            await navigator.share({ files: [file], title: `MiRB Mix - ${cached.title}` });
+            await navigator.share({ files: [file], title: cached.title });
             return;
         } catch (e) {
             if (e.name === 'AbortError') return;
@@ -5615,7 +5617,7 @@ async function generateMatchImage(matchId) {
     overlay.querySelector('#_shareBtn').onclick = () => {
         if (navigator.share) {
             const file = new File([cached.blob], cached.filename, { type: 'image/png' });
-            navigator.share({ files: [file], title: `MiRB Mix - ${cached.title}` }).then(closeOverlay).catch(e => { if (e.name !== 'AbortError') toast('Erro', 'error'); });
+            navigator.share({ files: [file], title: cached.title }).then(closeOverlay).catch(e => { if (e.name !== 'AbortError') toast('Erro', 'error'); });
         } else { toast('📲 Segure a imagem para compartilhar', 'error'); }
     };
     overlay.querySelector('#_downloadBtn').onclick = () => { downloadBlob(cached.blob, cached.filename); closeOverlay(); };
