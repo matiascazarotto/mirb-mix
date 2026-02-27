@@ -5359,17 +5359,21 @@ async function loadJornal() {
 }
 
 async function imgToDataURL(url) {
-    try {
-        const r = await fetch(url, { mode: 'cors' });
-        const b = await r.blob();
-        return await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
-    } catch {
+    const proxies = [
+        url,
+        'https://wsrv.nl/?url=' + encodeURIComponent(url),
+        'https://corsproxy.io/?' + encodeURIComponent(url)
+    ];
+    for (const fetchUrl of proxies) {
         try {
-            const r = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+            const r = await fetch(fetchUrl, { mode: 'cors' });
+            if (!r.ok) continue;
             const b = await r.blob();
+            if (b.size < 100) continue;
             return await new Promise(res => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.readAsDataURL(b); });
-        } catch { return null; }
+        } catch { continue; }
     }
+    return null;
 }
 async function shareJornal() {
     const paper = document.querySelector('#jornalContent .jornal-paper');
