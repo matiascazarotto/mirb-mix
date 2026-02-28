@@ -3973,29 +3973,29 @@ async function checkTeamVoteThreshold(matchId) {
     const total = keepCount + resortCount;
     if (total === 0) return;
 
+    // Buscar total de votantes elegíveis (quem votou nos níveis)
+    const levelVotesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
+    const eligibleDevices = new Set();
+    levelVotesSnap.docs.forEach(d => {
+        const meta = d.data()._meta;
+        if (meta && meta.deviceId) eligibleDevices.add(meta.deviceId);
+    });
+    const eligible = Math.max(eligibleDevices.size, 1);
+
     const THRESHOLD = 0.6;
 
-    if (keepCount / total >= THRESHOLD) {
-        // Keep wins: confirm teams
+    if (keepCount / eligible >= THRESHOLD) {
+        // 60%+ dos elegíveis votaram manter → confirmar times
         await db.collection('matches').doc(matchId).update({ status: 'closed' });
         toast('✅ Times confirmados pela votação! (60%+ manter)', 'success');
-    } else if (resortCount / total >= THRESHOLD) {
-        // Resort wins: re-sort and open new round
+    } else if (resortCount / eligible >= THRESHOLD) {
+        // 60%+ dos elegíveis votaram re-sort → sortear novamente
         await resortTeams(matchId);
         toast('🔄 Maioria votou re-sort! Novos times sorteados.', 'success');
-    } else {
-        // Check if all eligible voters have voted (tie-breaker)
-        const levelVotesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
-        const eligibleDevices = new Set();
-        levelVotesSnap.docs.forEach(d => {
-            const meta = d.data()._meta;
-            if (meta && meta.deviceId) eligibleDevices.add(meta.deviceId);
-        });
-        if (total >= eligibleDevices.size && keepCount === resortCount) {
-            // All voted, tie → resort
-            await resortTeams(matchId);
-            toast('🔄 Empate com todos os votos! Times re-sorteados.', 'success');
-        }
+    } else if (total >= eligible) {
+        // Todos votaram mas nenhum lado alcançou 60% → empate → re-sort
+        await resortTeams(matchId);
+        toast('🔄 Empate com todos os votos! Times re-sorteados.', 'success');
     }
 }
 
