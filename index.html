@@ -3253,18 +3253,18 @@ async function loadVotePage() {
                 isEligible = !existingLevelVote.empty;
             }
 
-            // Check if already team-voted (localStorage + server)
-            let alreadyVoted = !!localStorage.getItem(`teamVoted_${matchId}`);
+            const round = m.teamVoteRound || 1;
+
+            // Check if already team-voted (localStorage by round + server)
+            let alreadyVoted = localStorage.getItem(`teamVoted_${matchId}`) == round;
             if (!alreadyVoted && isEligible && _voter.deviceId !== 'unknown_') {
                 const existingTeamVote = await db.collection('matches').doc(matchId)
                     .collection('teamVotes').where('_meta.deviceId', '==', _voter.deviceId).limit(1).get();
                 if (!existingTeamVote.empty) {
                     alreadyVoted = true;
-                    localStorage.setItem(`teamVoted_${matchId}`, 'true');
+                    localStorage.setItem(`teamVoted_${matchId}`, String(round));
                 }
             }
-
-            const round = m.teamVoteRound || 1;
             const diff = m.result ? Math.abs(m.result.sumA - m.result.sumB) : 0;
 
             teamVoteHtml += `
@@ -3896,14 +3896,15 @@ async function submitVote(matchId) {
 // ║      TEAM VOTE SUBMISSION       ║
 // ╚══════════════════════════════════╝
 async function submitTeamVote(matchId, vote) {
-    if (localStorage.getItem(`teamVoted_${matchId}`)) {
-        toast('Você já votou nesta confirmação!', 'error');
-        return;
-    }
-
     try {
         const matchDoc = await db.collection('matches').doc(matchId).get();
         const match = matchDoc.data();
+        const round = match.teamVoteRound || 1;
+
+        if (localStorage.getItem(`teamVoted_${matchId}`) == round) {
+            toast('Você já votou nesta confirmação!', 'error');
+            return;
+        }
 
         if (match.status !== 'team_vote') {
             toast('Votação de times já encerrada!', 'error');
@@ -3928,7 +3929,7 @@ async function submitTeamVote(matchId, vote) {
             const existing = await db.collection('matches').doc(matchId)
                 .collection('teamVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
             if (!existing.empty) {
-                localStorage.setItem(`teamVoted_${matchId}`, 'true');
+                localStorage.setItem(`teamVoted_${matchId}`, String(round));
                 toast('Você já votou nesta confirmação!', 'error');
                 loadVotePage();
                 return;
@@ -3947,7 +3948,7 @@ async function submitTeamVote(matchId, vote) {
             }
         });
 
-        localStorage.setItem(`teamVoted_${matchId}`, 'true');
+        localStorage.setItem(`teamVoted_${matchId}`, String(round));
         toast(vote === 'keep' ? '👍 Voto para manter registrado!' : '👎 Voto para re-sort registrado!', 'success');
 
         // Check threshold
