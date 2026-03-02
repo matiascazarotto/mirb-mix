@@ -1707,7 +1707,9 @@ function adminLogout() {
 // ╔══════════════════════════════════╗
 // ║       ADMIN PANEL               ║
 // ╚══════════════════════════════════╝
-function renderAdminPanel() {
+async function renderAdminPanel() {
+    let pollEnabled = true;
+    try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().pollEnabled === false) pollEnabled = false; } catch(e) {}
     const container = document.getElementById('adminContent');
     container.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
@@ -1721,7 +1723,7 @@ function renderAdminPanel() {
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabManage')">⚙️ Gerenciar</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLink')">⚡ Vincular GC</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLive')">📡 Live</button>
-            <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabPoll')">🗳️ Enquete</button>
+            ${pollEnabled ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabPoll\')">🗳️ Enquete</button>' : ''}
             ${isStaff ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabOthers\')">🛠️ Outros</button>' : ''}
         </div>
 
