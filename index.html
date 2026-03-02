@@ -5158,6 +5158,9 @@ async function generateJornal(targetSunday) {
 
     if (weekMatches.length === 0) return null;
 
+    // Load base64 avatar cache for consistent avatars
+    const avatarCache = await loadAvatarB64Cache();
+
     // Aggregate player stats
     const ps = {};
     weekMatches.forEach(m => {
@@ -5187,6 +5190,11 @@ async function generateJornal(targetSunday) {
             if (isWin) p.wins++; else p.losses++;
             if (!p.avatar && g.avatar) p.avatar = g.avatar;
         });
+    });
+
+    // Prefer base64 cached avatars (most up-to-date)
+    Object.values(ps).forEach(p => {
+        if (avatarCache[p.name]) p.avatar = avatarCache[p.name];
     });
 
     // Filter: minimum 30% of week's matches
