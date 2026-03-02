@@ -1449,6 +1449,7 @@
                     </select>
                 </div>
                 <button id="btnShareJornal" class="btn btn-secondary btn-small" onclick="shareJornal()" style="height:38px;">📤 Compartilhar</button>
+                <button id="btnViewArchive" class="btn btn-secondary btn-small" onclick="viewArchivedJornal()" style="height:38px;display:none;">🖼️ Arquivo</button>
             </div>
         </div>
         <div id="jornalContent">
@@ -1991,7 +1992,28 @@ async function adminGenerateJornal() {
         const sat = getWeekSaturday(lastSunday);
         const result = await generateJornal(lastSunday);
         if (result) {
-            toast(`Jornal ${fmtDM(lastSunday)} a ${fmtDM(sat)} gerado! ${result.totalMatches} partidas, ${result.totalPlayers} jogadores.`, 'success');
+            toast(`Jornal gerado! Arquivando imagem...`, 'success');
+
+            // Determinar edNum
+            const allJornals = await db.collection('jornal').orderBy('weekStart', 'asc').get();
+            const edNum = allJornals.docs.findIndex(d => d.id === weekId) + 1;
+
+            // Salvar snapshot de quotes
+            const snapshot = buildJornalSnapshot(result.badges, edNum);
+            await db.collection('jornal').doc(weekId).update({ snapshot });
+
+            // Capturar JPEG e salvar na subcollection
+            try {
+                const imageBase64 = await captureJornalImage({ ...result, snapshot }, edNum);
+                await db.collection('jornal').doc(weekId)
+                    .collection('archive').doc('image')
+                    .set({ imageBase64, capturedAt: firebase.firestore.FieldValue.serverTimestamp() });
+                toast(`Jornal ${fmtDM(lastSunday)} a ${fmtDM(sat)} gerado e arquivado!`, 'success');
+            } catch (imgErr) {
+                console.warn('[Jornal] Image capture failed:', imgErr);
+                toast(`Jornal gerado! (imagem não foi arquivada: ${imgErr.message})`, 'success');
+            }
+
             if (document.getElementById('jornalContent')) loadJornal();
         } else {
             toast(`Sem partidas com GC Stats no período ${fmtDM(lastSunday)} a ${fmtDM(sat)}.`, 'error');
@@ -5229,16 +5251,20 @@ async function generateJornal(targetSunday) {
             ...p, ratingDiff: p.rating - prevRatings[p.name]
         }));
 
+        // Jogadores com badge negativo não podem ser Em Alta, e MVP não pode ser Em Queda
+        const negativeBadgePlayers = new Set(badges.filter(b => b.type === 'pateta' || b.type === 'saco_de_pancada').map(b => b.player));
+        const positiveBadgePlayers = new Set(badges.filter(b => b.type === 'mvp').map(b => b.player));
+
         if (diffs.length > 0) {
-            // Em Alta — biggest positive diff (mínimo 3 pontos para ser relevante)
-            const altaSorted = diffs.filter(d => d.ratingDiff >= 3).sort((a, b) => (b.ratingDiff - a.ratingDiff) || tiebreakerPositive(a, b));
+            // Em Alta — biggest positive diff (mínimo 3 pontos, exclui pateta/saco)
+            const altaSorted = diffs.filter(d => d.ratingDiff >= 3 && !negativeBadgePlayers.has(d.name)).sort((a, b) => (b.ratingDiff - a.ratingDiff) || tiebreakerPositive(a, b));
             if (altaSorted.length > 0) {
                 const alta = altaSorted[0];
                 badges.push({ type: 'em_alta', emoji: '📈', label: 'Em Alta', player: alta.name, value: '+' + alta.ratingDiff.toFixed(1), avatar: alta.avatar, s: pStats(alta), prevRating: prevRatings[alta.name].toFixed(1) });
             }
 
-            // Em Queda — biggest negative diff (mínimo -3 pontos para ser relevante)
-            const quedaSorted = diffs.filter(d => d.ratingDiff <= -3).sort((a, b) => (a.ratingDiff - b.ratingDiff) || tiebreakerNegative(a, b));
+            // Em Queda — biggest negative diff (mínimo -3 pontos, exclui mvp)
+            const quedaSorted = diffs.filter(d => d.ratingDiff <= -3 && !positiveBadgePlayers.has(d.name)).sort((a, b) => (a.ratingDiff - b.ratingDiff) || tiebreakerNegative(a, b));
             if (quedaSorted.length > 0) {
                 const queda = quedaSorted[0];
                 badges.push({ type: 'em_queda', emoji: '📉', label: 'Em Queda', player: queda.name, value: queda.ratingDiff.toFixed(1), avatar: queda.avatar, s: pStats(queda), prevRating: prevRatings[queda.name].toFixed(1) });
@@ -5452,6 +5478,45 @@ async function shareJornal() {
         btn.innerHTML = originalText;
         btn.disabled = false;
     }
+}
+
+async function captureJornalImage(jornalData, edNum) {
+    const html = renderJornalHtml(jornalData, edNum, true);
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;z-index:-1;width:900px;';
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const paper = container.querySelector('.jornal-paper');
+
+    const b64Cache = await loadAvatarB64Cache();
+    const imgs = paper.querySelectorAll('img');
+    await Promise.all([...imgs].map(async (img) => {
+        const playerName = img.alt || '';
+        if (playerName && b64Cache[playerName]) { img.src = b64Cache[playerName]; return; }
+        const dataUrl = await imgToDataURL(img.src);
+        if (dataUrl) img.src = dataUrl;
+    }));
+
+    await document.fonts.ready;
+    const canvas = await html2canvas(paper, { useCORS: true, scale: 2, backgroundColor: '#d5d0c8', logging: false });
+    document.body.removeChild(container);
+    return canvas.toDataURL('image/jpeg', 0.75);
+}
+
+async function viewArchivedJornal() {
+    const sel = document.getElementById('jornalFilterEdition');
+    const idx = parseInt(sel.value);
+    if (isNaN(idx) || !jornalCache[idx]) return;
+    const weekId = jornalCache[idx].id;
+
+    toast('⏳ Carregando arquivo...', 'success');
+    const doc = await db.collection('jornal').doc(weekId).collection('archive').doc('image').get();
+    if (!doc.exists || !doc.data().imageBase64) {
+        toast('Edição sem imagem arquivada', 'error');
+        return;
+    }
+    const win = window.open();
+    win.document.write(`<html><head><title>Jornal MiRB - Arquivo</title></head><body style="margin:0;background:#222;display:flex;justify-content:center;"><img src="${doc.data().imageBase64}" style="max-width:100%;height:auto;"></body></html>`);
 }
 
 function downloadBlob(blob, filename) {
@@ -5676,32 +5741,193 @@ async function generateMatchImage(matchId) {
     overlay.querySelector('#_downloadBtn').onclick = () => { downloadBlob(cached.blob, cached.filename); closeOverlay(); };
 }
 
-function renderSelectedJornal() {
-    const el = document.getElementById('jornalContent');
-    const sel = document.getElementById('jornalFilterEdition');
-    const idx = parseInt(sel.value);
-    if (isNaN(idx) || !jornalCache[idx]) { el.innerHTML = ''; return; }
+const JORNAL_QUOTES = {
+    mvp: [
+        'Contra esse lobby, até meu avô fazia 30 kills.',
+        'Se rating pagasse conta, ele já tinha se aposentado.',
+        'Carregou o time nas costas e ainda pediu mais peso.',
+        'Contra newba é fácil. Mas alguém tinha que fazer.',
+        'Enquanto uns reclamam do time, ele carrega.',
+        'Adversário tão perdido que ele jogou no modo fácil.',
+        'Nível comprado? Esse aí comprou com nota fiscal.',
+        'O adversário jogava melhor de olho fechado.',
+        'Joga joga joga e só melhora. Qual é o segredo?',
+        'Proibido reclamar quando ele tá no time.',
+        'Lobby tão fraco que ele treinou mira no competitivo.',
+        'Fez o adversário repensar as escolhas de vida.',
+        'Com esse adversário, qualquer um brilha. Mas ele brilhou mais.',
+        'Se destacar nesse nível é fácil — difícil é manter toda semana.',
+        'O inimigo jogava como se fosse a primeira vez abrindo o CS.',
+        'Não é que ele jogou bem, é que o oponente jogou pior.',
+        'Rendimento tão alto que parece smurf no próprio lobby.',
+        'Ganhar desse time adversário é obrigação. MVP é bônus.',
+        'O adversário tava tão perdido que pediu GPS no meio do round.',
+        'Não precisa de call: o inimigo já entrega a posição sozinho.',
+        'O inimigo pediu timeout pra chorar.',
+        'Com o nível do adversário, até smoke mata.',
+        'O oponente errava tanto que ele matava de pena.',
+        'Lobby tão fácil que ele jogou com a mão no mouse e a outra no celular.',
+        'O adversário confundiu competitive com casual.'
+    ],
+    saco: [
+        'Especialista em dar de presente a própria vida.',
+        'Morreu mais vezes que personagem de novela.',
+        'Se morrer desse XP, ele já era Global.',
+        'O spawn dele já vem com vela acesa.',
+        'Deveria vender o PC pois não consegue sobreviver um round.',
+        'A cada round, um novo velório.',
+        'Alugou um triplex no chão do bomb.',
+        'A família pede justiça.',
+        'O inimigo agradece a colaboração.',
+        'Morre de lado, morre de frente, morre de tudo.',
+        'O colete dele é só decoração.',
+        'Não sobrevive nem o pistol round.',
+        'Compra colete pra quê, se não dura 5 segundos?',
+        'O kill feed é praticamente um obituário pessoal.',
+        'Se a morte tivesse programa de fidelidade, ele já era VIP.',
+        'O radar do inimigo já marca ele como alvo prioritário.',
+        'Cogitaram dar respawn infinito só pra ele.',
+        'O scoreboard dele parece contagem regressiva — só o D sobe.',
+        'Até bot no Easy morre menos.',
+        'Ele não joga CS, ele pratica speedrun de morte.',
+        'O colete pede demissão antes do round começar.',
+        'As mortes dele merecem um compilado no YouTube.',
+        'Inventaram o trade frag por causa dele.',
+        'O time adversário já sabe: é só esperar ele aparecer.',
+        'Se CS fosse novela, ele seria o personagem que morre no piloto.'
+    ],
+    pateta: [
+        'Fontes dizem que até os bots têm mais impacto.',
+        'ADR tão baixo que parece bug do servidor.',
+        'Até smoke faz mais estrago.',
+        'Joga joga joga e não melhora: qual seria a raiz do problema?',
+        'Nível carregado é pouco. Esse aí foi rebocado.',
+        'Fez menos dano que uma molotov mal jogada.',
+        'A torcida pede contratação urgente de reforço.',
+        'O time adversário já nem comemora os rounds — agradece.',
+        'Delimitar 4 horríveis por x5? Ele conta por 2.',
+        'Se dano fosse opcional, ele já tinha desativado.',
+        'Dano médio menor que o recuo da arma.',
+        'Confundiram ele com decoração do mapa.',
+        'Corre, atira, erra. A rotina não muda.',
+        'Contribuição pro time: zero. Contribuição pro meme: máxima.',
+        'O highlight dele é quando não morre primeiro.',
+        'Ele não erra o spray — ele nunca acerta o spray.',
+        'Se CS medisse esforço em vez de dano, talvez ele se salvasse.',
+        'Até os mates pedem pra ele ficar na base.',
+        'Último vivo do time e o clutch mais improvável da história — dele perdendo.',
+        'Ele não joga mal, ele joga diferente. Muito diferente.',
+        'O dano dele é mais emocional do que físico.',
+        'Rumores dizem que a mira dele é aleatória.',
+        'ADR de jogador que usa trackpad.',
+        'Prometeu melhorar semana que vem. Prometeu semana passada também.'
+    ],
+    entry: [
+        'Entra no bomb como se fosse a casa dele.',
+        'O inimigo nem terminou de posicionar e já está no chão.',
+        'Especialista em abrir caminho — na bala, sem pedir licença.',
+        'Flash, corre, mata. Nessa ordem. Toda vez.',
+        'O primeiro a entrar e o primeiro a matar.',
+        'Abre round como quem abre porta de geladeira — natural.',
+        'O awper inimigo nem tem tempo de mirar.',
+        'First kill é sobrenome dele.',
+        'Não pede passagem. Toma.',
+        'Possui porte de arma. Se cuide.',
+        'Quando ele entra no bomb, alguém já caiu.',
+        'O bomb tá liberado antes de todo mundo sair do spawn.',
+        'Abrir round com ele é abrir com vantagem numérica.',
+        'Entra na fumaça e sai com frag. Instinto puro.',
+        'O entry dele é mais confiável que o despertador.',
+        'Os mates só precisam seguir — o caminho já tá limpo.',
+        'Se entry fosse profissão, ele já tava aposentado pelo INSS.',
+        'A primeira bala dele já tem endereço.',
+        'Ele não confere o ângulo, ele executa o ângulo.',
+        'Rush dele é mais organizado que a economia do time.',
+        'Paga de entry e entrega resultado. Raro.',
+        'O terror de quem segura ângulo.',
+        'Agressividade calculada. Resultado: first kill garantido.',
+        'Nem precisa de util. A presença dele já é vantagem.',
+        'Entra no site como quem entra em casa — com autoridade.'
+    ],
+    emAlta: [
+        'A fase é boa.',
+        'Se mantiver esse ritmo, vira lenda.',
+        'Evolução visível a cada partida.',
+        'O rating agradece o esforço.',
+        'Quem duvidou, tá calado agora.',
+        'Crescimento consistente. A curva só aponta pra cima.',
+        'O hype é real.',
+        'Subiu tanto que precisa de oxigênio.',
+        'De promessa a realidade em uma semana.',
+        'A confiança tá lá em cima — e os números provam.',
+        'Se continuar assim, vai assustar muita gente.',
+        'O grind tá dando resultado.',
+        'Semana passada era dúvida. Essa semana é certeza.',
+        'Rating subindo e moral lá em cima.',
+        'O próximo passo é o topo.',
+        'Treino tá pagando. E com juros.',
+        'Fase boa demais pra ser coincidência.',
+        'Quando acha o ritmo, ninguém segura.',
+        'Os números não mentem: a evolução é real.',
+        'Quem dormiu nele, acordou atrasado.'
+    ],
+    emQueda: [
+        'A torcida pede reação.',
+        'Fase tão ruim que até o bot joga melhor.',
+        'O rating tá pedindo socorro.',
+        'Caiu mais que ação de empresa falida.',
+        'Desceu a ladeira e esqueceu o freio.',
+        'Se continuar assim, vai precisar de resgate.',
+        'O declínio preocupa até quem torce contra.',
+        'Fase tão negativa que virou meme no grupo.',
+        'Urge uma mudança de ares — ou de sens.',
+        'O gráfico de desempenho parece montanha-russa — só que só desce.',
+        'Até o ranking tá com pena.',
+        'Se forma é passageira, essa tá demorando pra ir embora.',
+        'O time já olha pra ele com cara de preocupação.',
+        'Rating em queda livre. Paraquedas não incluído.',
+        'A última vez que subiu foi pra pegar água.',
+        'Já pensou em mudar de role? Ou de jogo?',
+        'Quem viu semana passada não reconhece.',
+        'O declínio é tão consistente que parece proposital.',
+        'Se rating fosse saldo bancário, já estava no cheque especial.',
+        'Nem o coach salva essa fase.'
+    ]
+};
 
-    const j = jornalCache[idx];
-    const totalEditions = jornalCache.length;
-    const edNum = totalEditions - idx;
-    const isLatest = idx === 0;
+function buildJornalSnapshot(badges, edNum) {
+    const bm = {};
+    (badges || []).forEach(b => { bm[b.type] = b; });
+    const snap = { edNum };
+    if (bm.mvp) snap.mvpQuote = JORNAL_QUOTES.mvp[edNum % JORNAL_QUOTES.mvp.length];
+    if (bm.saco_de_pancada) snap.sacoQuote = JORNAL_QUOTES.saco[edNum % JORNAL_QUOTES.saco.length];
+    if (bm.pateta) snap.patetaQuote = JORNAL_QUOTES.pateta[edNum % JORNAL_QUOTES.pateta.length];
+    if (bm.entry) snap.entryQuote = JORNAL_QUOTES.entry[edNum % JORNAL_QUOTES.entry.length];
+    if (bm.em_alta) snap.emAltaQuote = JORNAL_QUOTES.emAlta[edNum % JORNAL_QUOTES.emAlta.length];
+    if (bm.em_queda) snap.emQuedaQuote = JORNAL_QUOTES.emQueda[edNum % JORNAL_QUOTES.emQueda.length];
+    return snap;
+}
+
+function renderJornalHtml(j, edNum, isLatest) {
     const ws = j.weekStart.split('-');
     const we = j.weekEnd.split('-');
     const weekLabel = `${ws[2]}/${ws[1]} a ${we[2]}/${we[1]}`;
 
-    // Map badges by type for easy access
     const bm = {};
     (j.badges || []).forEach(b => { bm[b.type] = b; });
 
-    // Helpers
-    const photo = (b, cls) => b && b.avatar
-        ? `<img src="${b.avatar}" class="jornal-player-photo ${cls || ''}" alt="${b.player}">`
+    const placeholder = (name) => {
+        const initials = (name || '?').split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase();
+        return `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="%23555"/><text x="50" y="55" font-size="36" fill="white" text-anchor="middle" dominant-baseline="middle" font-family="sans-serif">' + initials + '</text></svg>')}`;
+    };
+    const photo = (b, cls) => b
+        ? `<img src="${b.avatar || placeholder(b.player)}" onerror="this.onerror=null;this.src='${placeholder(b.player)}'" class="jornal-player-photo ${cls || ''}" alt="${b.player}">`
         : '';
-    const caption = (b, text) => b && b.avatar
+    const caption = (b, text) => b
         ? `<div class="jornal-photo-caption">${text || b.player}</div>`
         : '';
-    const n = (v) => { const s = String(v); return s.endsWith('.0') ? s.slice(0, -2) : s; };
+    const n = v => { const x = parseFloat(v); return isNaN(x) ? v : (x % 1 === 0 ? x.toString() : x.toFixed(1)); };
+    const snap = j.snapshot || {};
 
     let paperHtml = `<div class="jornal-paper">`;
 
@@ -5731,19 +5957,7 @@ function renderSelectedJornal() {
             paperHtml += `<div class="jornal-article-tag">\uD83C\uDFC6 Capa</div>`;
             if (bm.mvp) {
                 const m = bm.mvp, s = m.s || {};
-                const mvpQuotes = [
-                    'Jogou como se o aluguel dependesse disso.',
-                    'Se rating pagasse conta, ele j\u00e1 tinha se aposentado.',
-                    'Carregou o time nas costas e ainda pediu mais peso.',
-                    'N\u00edvel comprado? Esse a\u00ed comprou com nota fiscal.',
-                    'Enquanto uns reclamam do time, ele carrega.',
-                    'At\u00e9 o demo ficou bonito de assistir.',
-                    'Le\u00e3o de x5 e de lobby. N\u00e3o escolhe palco.',
-                    'O lobby inteiro sabia quem mandava \u2014 menos o advers\u00e1rio.',
-                    'Joga joga joga e s\u00f3 melhora. Qual \u00e9 o segredo?',
-                    'Proibido reclamar quando ele t\u00e1 no time.'
-                ];
-                const mvpQuote = mvpQuotes[edNum % mvpQuotes.length];
+                const mvpQuote = snap.mvpQuote || JORNAL_QUOTES.mvp[edNum % JORNAL_QUOTES.mvp.length];
                 paperHtml += `<div class="jornal-article-headline xlarge">${m.player} fecha a semana com rating ${n(m.value)} e n\u00e3o d\u00e1 chance para ninguém</div>`;
                 paperHtml += photo(m, 'large');
                 paperHtml += caption(m, `${m.player} \u2014 MVP da Edi\u00e7\u00e3o N\u00ba ${edNum}`);
@@ -5765,58 +5979,34 @@ function renderSelectedJornal() {
             paperHtml += `<div>`;
             if (bm.saco_de_pancada) {
                 const m = bm.saco_de_pancada, s = m.s || {};
-                const sacoQuotes = [
-                    'Especialista em dar de presente a pr\u00f3pria vida.',
-                    'Morreu mais vezes que personagem de novela.',
-                    'Se morrer desse XP, ele j\u00e1 era Global.',
-                    'O colete dele \u00e9 s\u00f3 decora\u00e7\u00e3o.',
-                    'Deveria vender o PC pois n\u00e3o consegue sobreviver um round.',
-                    'A cada round, um novo vel\u00f3rio.',
-                    'Alugou um triplex no ch\u00e3o do bomb.',
-                    'A fam\u00edlia pede justi\u00e7a.',
-                    'O inimigo agradece a colabora\u00e7\u00e3o.',
-                    'Morre de lado, morre de frente, morre de tudo.'
-                ];
                 paperHtml += `<div class="jornal-article">`;
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Saco de Pancada</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} coleciona ${s.deaths || '?'} mortes em ${s.matches || '?'} partidas: m\u00e9dia de ${n(m.value)} por jogo</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;" alt="${m.player}">`;
+                paperHtml += `<img src="${m.avatar || placeholder(m.player)}" onerror="this.onerror=null;this.src='${placeholder(m.player)}'" class="jornal-player-photo" style="max-width:90px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
-                    <strong>${m.player}</strong> liderou o ranking de \u00f3bitos da semana
+                    <strong>${m.player}</strong> liderou o ranking de óbitos da semana
                     com <strong>${n(m.value)} mortes por partida</strong>.
                     Somou <strong>${s.kills || '?'} abates</strong> contra <strong>${s.deaths || '?'} mortes</strong>
                     (K/D de <strong>${n(s.kd)}</strong>, saldo de <strong>${s.diff > 0 ? '+' : ''}${s.diff}</strong>).
-                    ${sacoQuotes[edNum % sacoQuotes.length]}
+                    ${snap.sacoQuote || JORNAL_QUOTES.saco[edNum % JORNAL_QUOTES.saco.length]}
                 </div>`;
                 paperHtml += `</div></div>`;
             }
             paperHtml += `<div class="jornal-divider-h"></div>`;
             if (bm.pateta) {
                 const m = bm.pateta, s = m.s || {};
-                const patetaQuotes = [
-                    'Fontes dizem que at\u00e9 os bots t\u00eam mais impacto.',
-                    'ADR t\u00e3o baixo que parece bug do servidor.',
-                    'At\u00e9 smoke faz mais estrago.',
-                    'Neymar do CS: 10 anos atr\u00e1s era craque, hoje \u00e9 pelo nome.',
-                    'Joga joga joga e n\u00e3o melhora: qual seria a raiz do problema?',
-                    'N\u00edvel carregado \u00e9 pouco. Esse a\u00ed foi rebocado.',
-                    'Fez menos dano que uma molotov mal jogada.',
-                    'A torcida pede contrata\u00e7\u00e3o urgente de refor\u00e7o.',
-                    'O time advers\u00e1rio j\u00e1 nem comemora os rounds \u2014 agradece.',
-                    'Delimitar 4 horr\u00edveis por x5? Ele conta por 2.'
-                ];
                 paperHtml += `<div class="jornal-article">`;
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Pateta</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} amarga ${n(m.value)} de ADR e leva o troféu de Pateta</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:90px;" alt="${m.player}">`;
+                paperHtml += `<img src="${m.avatar || placeholder(m.player)}" onerror="this.onerror=null;this.src='${placeholder(m.player)}'" class="jornal-player-photo" style="max-width:90px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
-                    Com apenas <strong>${n(m.value)} de ADR m\u00e9dio</strong> em ${s.matches || '?'} partidas,
+                    Com apenas <strong>${n(m.value)} de ADR médio</strong> em ${s.matches || '?'} partidas,
                     <strong>${m.player}</strong> entregou o menor dano por round da semana.
                     Seus n\u00fameros: <strong>${s.kills || '?'}/${s.deaths || '?'}/${s.assists || '?'}</strong> (K/D/A),
                     K/D de <strong>${n(s.kd)}</strong>.
-                    ${patetaQuotes[edNum % patetaQuotes.length]}
+                    ${snap.patetaQuote || JORNAL_QUOTES.pateta[edNum % JORNAL_QUOTES.pateta.length]}
                 </div>`;
                 paperHtml += `</div></div>`;
             }
@@ -5831,27 +6021,15 @@ function renderSelectedJornal() {
             if (bm.entry) {
                 const m = bm.entry, s = m.s || {};
                 const totalFk = s.fk > 0 ? Math.round(parseFloat(s.fk) * s.matches) : '?';
-                const entryQuotes = [
-                    'Entra no bomb como se fosse a casa dele.',
-                    'O inimigo nem terminou de posicionar e j\u00e1 est\u00e1 no ch\u00e3o.',
-                    'Especialista em abrir caminho \u2014 na bala, sem pedir licen\u00e7a.',
-                    'Quando ele entra no bomb, algu\u00e9m j\u00e1 caiu.',
-                    'O primeiro a entrar e o primeiro a matar.',
-                    'Abre round como quem abre porta de geladeira \u2014 natural.',
-                    'O awper inimigo nem tem tempo de mirar.',
-                    'First kill \u00e9 sobrenome dele.',
-                    'N\u00e3o pede passagem. Toma.',
-                    'Possui porte de arma. Se cuide.'
-                ];
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Entry</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} tem m\u00e9dia de ${n(m.value)} entry por partida</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:70px;" alt="${m.player}">`;
+                paperHtml += `<img src="${m.avatar || placeholder(m.player)}" onerror="this.onerror=null;this.src='${placeholder(m.player)}'" class="jornal-player-photo" style="max-width:70px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Em ${s.matches || '?'} partidas, <strong>${m.player}</strong> somou
                     <strong>${totalFk} first kills</strong>,
                     com <strong>${n(s.adr)} de ADR</strong> e <strong>${n(s.kast)}% de KAST</strong>.
-                    ${entryQuotes[edNum % entryQuotes.length]}
+                    ${snap.entryQuote || JORNAL_QUOTES.entry[edNum % JORNAL_QUOTES.entry.length]}
                 </div></div>`;
             }
             paperHtml += `</div>`;
@@ -5864,10 +6042,11 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Em Alta</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} dispara: sobe ${n(m.value)} pontos no rating</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;margin-bottom:8px;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:55px;" alt="${m.player}">`;
+                paperHtml += `<img src="${m.avatar || placeholder(m.player)}" onerror="this.onerror=null;this.src='${placeholder(m.player)}'" class="jornal-player-photo" style="max-width:55px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Rating saltou de <strong>${n(m.prevRating)}</strong> para <strong>${n(s.rating)}</strong>.
-                    Registrou <strong>${n(s.adr)} ADR</strong> e <strong>${n(s.winPct)}%</strong> de vit\u00f3rias em ${s.matches || '?'} jogos. A fase \u00e9 boa.
+                    Registrou <strong>${n(s.adr)} ADR</strong> e <strong>${n(s.winPct)}%</strong> de vit\u00f3rias em ${s.matches || '?'} jogos.
+                    ${snap.emAltaQuote || JORNAL_QUOTES.emAlta[edNum % JORNAL_QUOTES.emAlta.length]}
                 </div></div>`;
             }
             if (bm.em_queda) {
@@ -5876,10 +6055,11 @@ function renderSelectedJornal() {
                 paperHtml += `<div class="jornal-article-tag">${m.emoji} Em Queda</div>`;
                 paperHtml += `<div class="jornal-article-headline small">${m.player} despenca ${n(m.value)} pontos no rating e preocupa</div>`;
                 paperHtml += `<div style="display:flex;gap:10px;align-items:flex-start;">`;
-                if (m.avatar) paperHtml += `<img src="${m.avatar}" class="jornal-player-photo" style="max-width:55px;" alt="${m.player}">`;
+                paperHtml += `<img src="${m.avatar || placeholder(m.player)}" onerror="this.onerror=null;this.src='${placeholder(m.player)}'" class="jornal-player-photo" style="max-width:55px;" alt="${m.player}">`;
                 paperHtml += `<div class="jornal-article-body">
                     Caiu de <strong>${n(m.prevRating)}</strong> para <strong>${n(s.rating)}</strong>.
-                    <strong>${n(s.adr)} ADR</strong> e K/D de <strong>${n(s.kd)}</strong> em ${s.matches || '?'} partidas. A torcida pede rea\u00e7\u00e3o.
+                    <strong>${n(s.adr)} ADR</strong> e K/D de <strong>${n(s.kd)}</strong> em ${s.matches || '?'} partidas.
+                    ${snap.emQuedaQuote || JORNAL_QUOTES.emQueda[edNum % JORNAL_QUOTES.emQueda.length]}
                 </div></div>`;
             }
             if (!bm.em_alta && !bm.em_queda) {
@@ -5901,7 +6081,25 @@ function renderSelectedJornal() {
 
             paperHtml += `</div>`; // end jornal-paper
 
-    el.innerHTML = paperHtml;
+    return paperHtml;
+}
+
+function renderSelectedJornal() {
+    const el = document.getElementById('jornalContent');
+    const sel = document.getElementById('jornalFilterEdition');
+    const idx = parseInt(sel.value);
+    if (isNaN(idx) || !jornalCache[idx]) { el.innerHTML = ''; return; }
+
+    const j = jornalCache[idx];
+    const totalEditions = jornalCache.length;
+    const edNum = j.snapshot?.edNum || (totalEditions - idx);
+    const isLatest = idx === 0;
+
+    el.innerHTML = renderJornalHtml(j, edNum, isLatest);
+
+    // Mostrar botão Arquivo se edição tem snapshot (foi gerada com auto-captura)
+    const archiveBtn = document.getElementById('btnViewArchive');
+    if (archiveBtn) archiveBtn.style.display = j.snapshot ? '' : 'none';
 }
 
 // ╔══════════════════════════════════╗
