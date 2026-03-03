@@ -1671,12 +1671,14 @@ async function adminLogin() {
             sessionStorage.setItem('mirb_admin', 'true');
             sessionStorage.setItem('mirb_staff', 'true');
             toast('Login de staff realizado!', 'success');
+            logAdminLogin('staff');
             renderAdminPanel();
         } else if (hashedPw === data.password) {
             isAdmin = true;
             isStaff = false;
             sessionStorage.setItem('mirb_admin', 'true');
             toast('Login de admin realizado!', 'success');
+            logAdminLogin('admin');
             renderAdminPanel();
         } else {
             toast('Senha incorreta!', 'error');
@@ -1911,10 +1913,26 @@ async function renderAdminPanel() {
             <div class="card" style="margin-top:16px;">
                 <div class="card-title">🔍 Buscar por IP</div>
                 <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <input type="text" id="staffIpInput" placeholder="Ex: 186.237.21.119" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')staffSearchIP()">
+                    <input type="text" id="staffIpInput" placeholder="Digite o IP" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')staffSearchIP()">
                     <button class="btn btn-primary btn-small" onclick="staffSearchIP()">🔍 Buscar</button>
                 </div>
                 <div id="ipLookupResults"></div>
+            </div>
+            <div class="card" style="margin-top:16px;">
+                <div class="card-title">🚫 Bloquear Dispositivo</div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <input type="text" id="blockIpInput" placeholder="IP" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;box-sizing:border-box;">
+                    <input type="text" id="blockFpInput" placeholder="Fingerprint" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;box-sizing:border-box;">
+                </div>
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Preencha IP, Fingerprint ou ambos.</div>
+                <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:10px;">
+                    <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockMural" checked> Ouvidoria</label>
+                    <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockVote"> Voto Nível</label>
+                    <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockTeamVote"> Voto Time</label>
+                    <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockPoll"> Enquete</label>
+                </div>
+                <button class="btn btn-small" onclick="staffBlockDevice()" style="width:100%;background:rgba(255,61,61,0.15);color:var(--red);border:1px solid rgba(255,61,61,0.3);">🚫 Bloquear</button>
+                <div id="blockedDevicesList" style="margin-top:12px;"></div>
             </div>
         </div>
         ` : ''}
@@ -1937,6 +1955,35 @@ function switchAdminTab(btn, tabId) {
 }
 
 // ╔══════════════════════════════════╗
+// ║       LOGIN LOGS                ║
+// ╚══════════════════════════════════╝
+async function logAdminLogin(type) {
+    try {
+        let ip = 'unknown';
+        try { const r = await fetch('https://api.ipify.org?format=json'); ip = (await r.json()).ip || 'unknown'; } catch(_){}
+        const ua = navigator.userAgent;
+        let browser = 'Desconhecido';
+        if (ua.includes('Edg/')) browser = 'Edge';
+        else if (ua.includes('Chrome/')) browser = 'Chrome';
+        else if (ua.includes('Firefox/')) browser = 'Firefox';
+        else if (ua.includes('Safari/')) browser = 'Safari';
+        await db.collection('loginLogs').add({
+            type,
+            ip,
+            browser,
+            userAgent: ua,
+            platform: navigator.platform || 'unknown',
+            language: navigator.language || 'unknown',
+            screen: screen.width + 'x' + screen.height,
+            cores: navigator.hardwareConcurrency || null,
+            memory: navigator.deviceMemory || null,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch(_){}
+}
+
+// ╔══════════════════════════════════╗
 // ║       STAFF SETTINGS            ║
 // ╚══════════════════════════════════╝
 async function loadStaffSettings() {
@@ -1947,6 +1994,7 @@ async function loadStaffSettings() {
         renderNavToggle('h2hToggleContainer', data.h2hEnabled !== false, 'h2hEnabled');
         renderNavToggle('jornalToggleContainer', data.jornalEnabled !== false, 'jornalEnabled');
         renderNavToggle('pollToggleContainer', data.pollEnabled !== false, 'pollEnabled');
+        loadBlockedDevices();
     } catch (e) {
         ['ouvidoriaToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer'].forEach(id => {
             const c = document.getElementById(id);
@@ -2010,6 +2058,106 @@ async function toggleNavFeature(featureKey) {
     }
 }
 
+// ── IP Blocking ──
+let _blockedCache = null;
+let _blockedCacheTime = 0;
+
+async function _loadBlockedCache() {
+    const now = Date.now();
+    if (_blockedCache && now - _blockedCacheTime < 30000) return _blockedCache;
+    try {
+        const [ipDoc, fpDoc] = await Promise.all([
+            db.collection('config').doc('blockedIPs').get(),
+            db.collection('config').doc('blockedFingerprints').get()
+        ]);
+        _blockedCache = {
+            ips: ipDoc.exists ? ipDoc.data() : {},
+            fps: fpDoc.exists ? fpDoc.data() : {}
+        };
+    } catch (e) { _blockedCache = { ips: {}, fps: {} }; }
+    _blockedCacheTime = now;
+    return _blockedCache;
+}
+
+async function isIPBlocked(ip, feature, fingerprint) {
+    const cache = await _loadBlockedCache();
+    const byIp = cache.ips[ip];
+    if (byIp && Array.isArray(byIp) && byIp.includes(feature)) return true;
+    if (fingerprint) {
+        const byFp = cache.fps[fingerprint];
+        if (byFp && Array.isArray(byFp) && byFp.includes(feature)) return true;
+    }
+    return false;
+}
+
+async function staffBlockDevice() {
+    const ip = document.getElementById('blockIpInput').value.trim();
+    const fp = document.getElementById('blockFpInput').value.trim();
+    if (!ip && !fp) { toast('Informe o IP ou Fingerprint!', 'error'); return; }
+    const features = [];
+    if (document.getElementById('blockMural').checked) features.push('mural');
+    if (document.getElementById('blockVote').checked) features.push('vote');
+    if (document.getElementById('blockTeamVote').checked) features.push('teamVote');
+    if (document.getElementById('blockPoll').checked) features.push('poll');
+    if (!features.length) { toast('Selecione ao menos uma funcionalidade!', 'error'); return; }
+    try {
+        if (ip) await db.collection('config').doc('blockedIPs').set({ [ip]: features }, { merge: true });
+        if (fp) await db.collection('config').doc('blockedFingerprints').set({ [fp]: features }, { merge: true });
+        _blockedCache = null;
+        toast(`${ip ? 'IP ' + ip : ''}${ip && fp ? ' + ' : ''}${fp ? 'FP ' + fp : ''} bloqueado!`, 'success');
+        document.getElementById('blockIpInput').value = '';
+        document.getElementById('blockFpInput').value = '';
+        loadBlockedDevices();
+    } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function staffUnblockDevice(key, type) {
+    try {
+        const docName = type === 'ip' ? 'blockedIPs' : 'blockedFingerprints';
+        await db.collection('config').doc(docName).update(new firebase.firestore.FieldPath(key), firebase.firestore.FieldValue.delete());
+        _blockedCache = null;
+        toast(`${type === 'ip' ? 'IP' : 'FP'} ${key} desbloqueado!`, 'success');
+        loadBlockedDevices();
+    } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function loadBlockedDevices() {
+    const el = document.getElementById('blockedDevicesList');
+    if (!el) return;
+    try {
+        const [ipDoc, fpDoc] = await Promise.all([
+            db.collection('config').doc('blockedIPs').get(),
+            db.collection('config').doc('blockedFingerprints').get()
+        ]);
+        const ipData = ipDoc.exists ? ipDoc.data() : {};
+        const fpData = fpDoc.exists ? fpDoc.data() : {};
+        const labels = { mural: 'Ouvidoria', vote: 'Voto Nível', teamVote: 'Voto Time', poll: 'Enquete' };
+        let html = '';
+        Object.entries(ipData).forEach(([ip, feats]) => {
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                <div>
+                    <span style="font-size:11px;background:rgba(255,255,255,0.08);padding:1px 6px;border-radius:3px;color:var(--text-dim);margin-right:4px;">IP</span>
+                    <span style="font-size:13px;color:var(--text);font-weight:600;">${ip}</span>
+                    <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${(feats || []).map(f => labels[f] || f).join(', ')}</span>
+                </div>
+                <button class="btn btn-small" onclick="staffUnblockDevice('${ip}','ip')" style="font-size:10px;padding:3px 8px;background:rgba(0,200,83,0.1);color:var(--green);border:1px solid rgba(0,200,83,0.2);">✅</button>
+            </div>`;
+        });
+        Object.entries(fpData).forEach(([fp, feats]) => {
+            html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                <div>
+                    <span style="font-size:11px;background:rgba(138,43,226,0.15);padding:1px 6px;border-radius:3px;color:#b388ff;margin-right:4px;">FP</span>
+                    <span style="font-size:13px;color:var(--text);font-weight:600;font-family:monospace;">${fp}</span>
+                    <span style="font-size:11px;color:var(--text-dim);margin-left:6px;">${(feats || []).map(f => labels[f] || f).join(', ')}</span>
+                </div>
+                <button class="btn btn-small" onclick="staffUnblockDevice('${fp}','fp')" style="font-size:10px;padding:3px 8px;background:rgba(0,200,83,0.1);color:var(--green);border:1px solid rgba(0,200,83,0.2);">✅</button>
+            </div>`;
+        });
+        if (!html) html = '<div style="font-size:12px;color:var(--text-dim);">Nenhum dispositivo bloqueado.</div>';
+        el.innerHTML = html;
+    } catch (e) { el.innerHTML = ''; }
+}
+
 async function staffSearchIP() {
     const ip = document.getElementById('staffIpInput').value.trim();
     const el = document.getElementById('ipLookupResults');
@@ -2017,6 +2165,7 @@ async function staffSearchIP() {
     el.innerHTML = '<div class="loading-spinner" style="transform:scale(0.7);margin:12px 0;">Buscando...</div>';
     try {
         const results = [];
+        const fingerprints = new Set();
 
         // 1. Votos de nível e time — buscar últimas 30 partidas
         const matchSnap = await db.collection('matches').orderBy('createdAt', 'desc').limit(30).get();
@@ -2029,6 +2178,7 @@ async function staffSearchIP() {
             votesSnap.docs.forEach(v => {
                 const d = v.data();
                 if (d._meta && d._meta.ip === ip) {
+                    if (d._meta.fingerprint) fingerprints.add(d._meta.fingerprint);
                     results.push({ type: '🗳️ Voto Nível', detail: `${mName} (${mDate})`, sub: `Votou em ${d._meta.votedOn || '?'} jogadores — ${d._meta.timestamp || ''}` });
                 }
             });
@@ -2037,6 +2187,7 @@ async function staffSearchIP() {
             tvSnap.docs.forEach(v => {
                 const d = v.data();
                 if (d._meta && d._meta.ip === ip) {
+                    if (d._meta.fingerprint) fingerprints.add(d._meta.fingerprint);
                     results.push({ type: '⚔️ Voto Time', detail: `${mName} (${mDate})`, sub: `Votou: Time ${d.vote || '?'} — ${d._meta.timestamp || ''}` });
                 }
             });
@@ -2050,6 +2201,8 @@ async function staffSearchIP() {
             respSnap.docs.forEach(r => {
                 const d = r.data();
                 if (d.deviceId && d.deviceId.startsWith(ip + '_')) {
+                    const fp = d.deviceId.split('_')[1];
+                    if (fp) fingerprints.add(fp);
                     results.push({ type: '📊 Enquete', detail: `"${pData.question}"`, sub: `Voto: ${d.vote === 'sim' ? '✅ Sim' : '❌ Não'}${d.playerName ? ' (' + d.playerName + ')' : ''}` });
                 }
             });
@@ -2059,6 +2212,7 @@ async function staffSearchIP() {
         const muralSnap = await db.collection('mural').where('_ip', '==', ip).get();
         muralSnap.docs.forEach(m => {
             const d = m.data();
+            if (d._fingerprint) fingerprints.add(d._fingerprint);
             const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString('pt-BR') + ' ' + d.createdAt.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '?';
             results.push({ type: '📢 Mural', detail: `"${d.text}"`, sub: `Sobre: ${d.targetPlayer} — por ${d.authorName} — ${date}` });
         });
@@ -2067,7 +2221,17 @@ async function staffSearchIP() {
             el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">Nenhum registro encontrado para este IP.</div>';
             return;
         }
-        el.innerHTML = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${results.length} registro(s) encontrado(s)</div>` +
+        let fpHtml = '';
+        if (fingerprints.size > 0) {
+            fpHtml = `<div style="background:rgba(138,43,226,0.08);border:1px solid rgba(138,43,226,0.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
+                <div style="font-size:11px;color:#b388ff;font-weight:600;margin-bottom:4px;">🔑 Fingerprints associados:</div>
+                ${[...fingerprints].map(fp => `<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+                    <code style="font-size:12px;color:var(--text);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px;">${fp}</code>
+                    <button class="btn btn-small" onclick="navigator.clipboard.writeText('${fp}');toast('Copiado!','success');" style="font-size:9px;padding:2px 6px;background:rgba(255,255,255,0.06);color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);">📋</button>
+                </div>`).join('')}
+            </div>`;
+        }
+        el.innerHTML = fpHtml + `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${results.length} registro(s) encontrado(s)</div>` +
             results.map(r => `
                 <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
                     <div style="font-size:12px;"><span style="color:var(--accent);font-weight:600;">${r.type}</span> <span style="color:var(--text);">${r.detail}</span></div>
@@ -4035,7 +4199,10 @@ async function postMural() {
 
     const author = localStorage.getItem('muralAuthor') || 'Anônimo';
     let _ip = 'unknown';
+    let _fp = 'unknown';
     try { const r = await fetch('https://api.ipify.org?format=json'); _ip = (await r.json()).ip || 'unknown'; } catch(_){}
+    try { _fp = await getDeviceFingerprint(); } catch(_){}
+    if (await isIPBlocked(_ip, 'mural', _fp)) { toast('Não foi possível postar. Tente novamente mais tarde.', 'error'); return; }
 
     try {
         await db.collection('mural').add({
@@ -4044,6 +4211,7 @@ async function postMural() {
             authorName: author,
             laughs: 0,
             _ip,
+            _fingerprint: _fp,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         textInput.value = '';
@@ -4170,6 +4338,7 @@ async function submitVote(matchId) {
 
         // Get voter device ID (IP + fingerprint)
         const voter = await getVoterDeviceId();
+        if (await isIPBlocked(voter.ip, 'vote', voter.fingerprint)) { toast('Não foi possível votar. Tente novamente mais tarde.', 'error'); return; }
 
         // Check if this device already voted (server-side dedup by deviceId)
         if (voter.deviceId !== 'unknown_') {
@@ -4306,6 +4475,7 @@ async function submitPollVote(pollId, vote) {
     }
     try {
         const voter = await getVoterDeviceId();
+        if (await isIPBlocked(voter.ip, 'poll', voter.fingerprint)) { toast('Não foi possível votar. Tente novamente mais tarde.', 'error'); return; }
         // Server-side dedup
         if (voter.deviceId !== 'unknown_') {
             const existing = await db.collection('polls').doc(pollId)
@@ -4408,6 +4578,7 @@ async function submitTeamVote(matchId, vote) {
         }
 
         const voter = await getVoterDeviceId();
+        if (await isIPBlocked(voter.ip, 'teamVote', voter.fingerprint)) { toast('Não foi possível votar. Tente novamente mais tarde.', 'error'); return; }
 
         // Check eligibility: must have voted in level votes
         if (voter.deviceId !== 'unknown_') {
