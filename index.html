@@ -3958,6 +3958,8 @@ async function postMural() {
     if (containsBlockedWord(text)) { toast('Reclamação sobre jogabilidade, não pessoal! Reformule sua mensagem.', 'error'); return; }
 
     const author = localStorage.getItem('muralAuthor') || 'Anônimo';
+    let _ip = 'unknown';
+    try { const r = await fetch('https://api.ipify.org?format=json'); _ip = (await r.json()).ip || 'unknown'; } catch(_){}
 
     try {
         await db.collection('mural').add({
@@ -3965,6 +3967,7 @@ async function postMural() {
             targetPlayer: target,
             authorName: author,
             laughs: 0,
+            _ip,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         textInput.value = '';
