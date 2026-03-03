@@ -1908,6 +1908,14 @@ async function renderAdminPanel() {
                     </div>
                 </div>
             </div>
+            <div class="card" style="margin-top:16px;">
+                <div class="card-title">🔍 Buscar por IP</div>
+                <div style="display:flex;gap:8px;margin-bottom:12px;">
+                    <input type="text" id="staffIpInput" placeholder="Ex: 186.237.21.119" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')staffSearchIP()">
+                    <button class="btn btn-primary btn-small" onclick="staffSearchIP()">🔍 Buscar</button>
+                </div>
+                <div id="ipLookupResults"></div>
+            </div>
         </div>
         ` : ''}
     `;
@@ -1999,6 +2007,74 @@ async function toggleNavFeature(featureKey) {
         toast(`${cfg.label} ${newVal ? 'ativada' : 'desativada'}!`, 'success');
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
+    }
+}
+
+async function staffSearchIP() {
+    const ip = document.getElementById('staffIpInput').value.trim();
+    const el = document.getElementById('ipLookupResults');
+    if (!ip) { toast('Informe um IP!', 'error'); return; }
+    el.innerHTML = '<div class="loading-spinner" style="transform:scale(0.7);margin:12px 0;">Buscando...</div>';
+    try {
+        const results = [];
+
+        // 1. Votos de nível e time — buscar últimas 30 partidas
+        const matchSnap = await db.collection('matches').orderBy('createdAt', 'desc').limit(30).get();
+        for (const mDoc of matchSnap.docs) {
+            const mData = mDoc.data();
+            const mName = mData.name || mDoc.id;
+            const mDate = mData.createdAt ? mData.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
+            // Votos de nível
+            const votesSnap = await mDoc.ref.collection('votes').get();
+            votesSnap.docs.forEach(v => {
+                const d = v.data();
+                if (d._meta && d._meta.ip === ip) {
+                    results.push({ type: '🗳️ Voto Nível', detail: `${mName} (${mDate})`, sub: `Votou em ${d._meta.votedOn || '?'} jogadores — ${d._meta.timestamp || ''}` });
+                }
+            });
+            // Votos de time
+            const tvSnap = await mDoc.ref.collection('teamVotes').get();
+            tvSnap.docs.forEach(v => {
+                const d = v.data();
+                if (d._meta && d._meta.ip === ip) {
+                    results.push({ type: '⚔️ Voto Time', detail: `${mName} (${mDate})`, sub: `Votou: Time ${d.vote || '?'} — ${d._meta.timestamp || ''}` });
+                }
+            });
+        }
+
+        // 2. Enquetes
+        const pollSnap = await db.collection('polls').get();
+        for (const pDoc of pollSnap.docs) {
+            const pData = pDoc.data();
+            const respSnap = await pDoc.ref.collection('responses').get();
+            respSnap.docs.forEach(r => {
+                const d = r.data();
+                if (d.deviceId && d.deviceId.startsWith(ip + '_')) {
+                    results.push({ type: '📊 Enquete', detail: `"${pData.question}"`, sub: `Voto: ${d.vote === 'sim' ? '✅ Sim' : '❌ Não'}${d.playerName ? ' (' + d.playerName + ')' : ''}` });
+                }
+            });
+        }
+
+        // 3. Mural
+        const muralSnap = await db.collection('mural').where('_ip', '==', ip).get();
+        muralSnap.docs.forEach(m => {
+            const d = m.data();
+            const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString('pt-BR') + ' ' + d.createdAt.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '?';
+            results.push({ type: '📢 Mural', detail: `"${d.text}"`, sub: `Sobre: ${d.targetPlayer} — por ${d.authorName} — ${date}` });
+        });
+
+        if (results.length === 0) {
+            el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">Nenhum registro encontrado para este IP.</div>';
+            return;
+        }
+        el.innerHTML = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${results.length} registro(s) encontrado(s)</div>` +
+            results.map(r => `
+                <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
+                    <div style="font-size:12px;"><span style="color:var(--accent);font-weight:600;">${r.type}</span> <span style="color:var(--text);">${r.detail}</span></div>
+                    <div style="font-size:11px;color:var(--text-dim);margin-top:2px;">${r.sub}</div>
+                </div>`).join('');
+    } catch (e) {
+        el.innerHTML = `<span style="color:var(--red);font-size:12px;">Erro: ${e.message}</span>`;
     }
 }
 
