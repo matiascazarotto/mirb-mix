@@ -1580,6 +1580,7 @@ Rating = Confiança × RawRating + (1 - Confiança) × MédiaGeral</code>
 <!-- ════════════ FIREBASE SDK ════════════ -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <script>
@@ -1600,6 +1601,9 @@ const firebaseConfig = {
 // ─── Init Firebase ───
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+const ADMIN_EMAIL = 'admin@mirb-mix.firebaseapp.com';
+const STAFF_EMAIL = 'staff@mirb-mix.firebaseapp.com';
 
 // ─── App State ───
 let isAdmin = false;
@@ -1651,38 +1655,56 @@ async function adminLogin() {
     if (!pw) { toast('Digite a senha!', 'error'); return; }
 
     try {
-        const hashedPw = await hashPassword(pw);
-        const doc = await db.collection('config').doc('admin').get();
-        if (!doc.exists) {
-            // First time: create the config with hashed password
-            await db.collection('config').doc('admin').set({ password: hashedPw });
-            isAdmin = true;
-            isStaff = false;
-            sessionStorage.setItem('mirb_admin', 'true');
-            toast('Senha de admin criada com sucesso! Use essa senha nas próximas vezes.', 'success');
-            renderAdminPanel();
-            return;
+        let loginType = null;
+
+        // 1. Tentar Firebase Auth (fluxo pós-migração)
+        try {
+            await auth.signInWithEmailAndPassword(STAFF_EMAIL, pw);
+            loginType = 'staff';
+        } catch (e1) {
+            try {
+                await auth.signInWithEmailAndPassword(ADMIN_EMAIL, pw);
+                loginType = 'admin';
+            } catch (e2) {}
         }
 
-        const data = doc.data();
-        if (data.staffPassword && hashedPw === data.staffPassword) {
-            isAdmin = true;
-            isStaff = true;
-            sessionStorage.setItem('mirb_admin', 'true');
-            sessionStorage.setItem('mirb_staff', 'true');
-            toast('Login de staff realizado!', 'success');
-            logAdminLogin('staff');
-            renderAdminPanel();
-        } else if (hashedPw === data.password) {
-            isAdmin = true;
-            isStaff = false;
-            sessionStorage.setItem('mirb_admin', 'true');
-            toast('Login de admin realizado!', 'success');
-            logAdminLogin('admin');
-            renderAdminPanel();
-        } else {
-            toast('Senha incorreta!', 'error');
+        // 2. Fallback: verificação por hash (migração automática)
+        if (!loginType) {
+            const hashedPw = await hashPassword(pw);
+            const doc = await db.collection('config').doc('admin').get();
+            if (!doc.exists) { toast('Senha incorreta!', 'error'); return; }
+
+            const data = doc.data();
+            if (data.staffPassword && hashedPw === data.staffPassword) {
+                loginType = 'staff';
+            } else if (hashedPw === data.password) {
+                loginType = 'admin';
+            } else {
+                toast('Senha incorreta!', 'error');
+                return;
+            }
+
+            // Criar usuário Firebase Auth automaticamente
+            const email = loginType === 'staff' ? STAFF_EMAIL : ADMIN_EMAIL;
+            try {
+                await auth.createUserWithEmailAndPassword(email, pw);
+            } catch (createErr) {
+                if (createErr.code !== 'auth/email-already-in-use') {
+                    console.warn('Erro ao criar user Firebase Auth:', createErr.message);
+                }
+                // Tentar login mesmo assim
+                try { await auth.signInWithEmailAndPassword(email, pw); } catch(_){}
+            }
         }
+
+        // 3. Sucesso
+        isAdmin = true;
+        isStaff = (loginType === 'staff');
+        sessionStorage.setItem('mirb_admin', 'true');
+        if (isStaff) sessionStorage.setItem('mirb_staff', 'true');
+        toast(`Login de ${loginType} realizado!`, 'success');
+        logAdminLogin(loginType);
+        renderAdminPanel();
     } catch (e) {
         toast('Erro ao verificar senha: ' + e.message, 'error');
     }
@@ -1693,6 +1715,7 @@ function adminLogout() {
     isStaff = false;
     sessionStorage.removeItem('mirb_admin');
     sessionStorage.removeItem('mirb_staff');
+    auth.signOut().catch(() => {});
     document.getElementById('adminContent').innerHTML = `
         <div class="admin-lock">
             <div class="lock-icon">🔒</div>
@@ -8556,13 +8579,27 @@ function toast(msg, type = 'success') {
 document.addEventListener('DOMContentLoaded', () => {
     // Save original edit modal content
     editModalOriginalHTML = document.getElementById('editModal').querySelector('.modal-box').innerHTML;
-    // Restore admin session
+    // Restore admin session (sync, para render imediato)
     if (sessionStorage.getItem('mirb_admin') === 'true') {
         isAdmin = true;
     }
     if (sessionStorage.getItem('mirb_staff') === 'true') {
         isStaff = true;
     }
+    // Firebase Auth state listener (async, persistência entre abas)
+    auth.onAuthStateChanged(user => {
+        if (user) {
+            isAdmin = true;
+            sessionStorage.setItem('mirb_admin', 'true');
+            if (user.email === STAFF_EMAIL) {
+                isStaff = true;
+                sessionStorage.setItem('mirb_staff', 'true');
+            } else {
+                isStaff = false;
+                sessionStorage.removeItem('mirb_staff');
+            }
+        }
+    });
     loadVotePage();
     // Apply nav visibility from settings
     db.collection('config').doc('settings').get().then(doc => {
