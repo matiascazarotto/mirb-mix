@@ -203,11 +203,13 @@ async function renderAdminPanel() {
                 </div>
             </div>
             <div class="card" style="margin-top:16px;">
-                <div class="card-title">🔍 Buscar por IP</div>
-                <div style="display:flex;gap:8px;margin-bottom:12px;">
-                    <input type="text" id="staffIpInput" placeholder="Digite o IP" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')staffSearchIP()">
+                <div class="card-title">🔍 Buscar por IP ou Fingerprint</div>
+                <div style="display:flex;gap:8px;margin-bottom:8px;">
+                    <input type="text" id="staffIpInput" placeholder="IP" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')staffSearchIP()">
+                    <input type="text" id="staffFpInput" placeholder="Fingerprint" style="flex:1;padding:10px 12px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;font-family:inherit;" onkeydown="if(event.key==='Enter')staffSearchIP()">
                     <button class="btn btn-primary btn-small" onclick="staffSearchIP()">🔍 Buscar</button>
                 </div>
+                <div style="font-size:11px;color:var(--text-dim);margin-bottom:8px;">Preencha IP, Fingerprint ou ambos.</div>
                 <div id="ipLookupResults"></div>
             </div>
             <div class="card" style="margin-top:16px;">
@@ -422,35 +424,43 @@ async function loadBlockedDevices() {
 }
 
 async function staffSearchIP() {
-    const ip = document.getElementById('staffIpInput').value.trim();
+    const ip = (document.getElementById('staffIpInput').value || '').trim();
+    const fp = (document.getElementById('staffFpInput') ? document.getElementById('staffFpInput').value : '').trim();
     const el = document.getElementById('ipLookupResults');
-    if (!ip) { toast('Informe um IP!', 'error'); return; }
+    if (!ip && !fp) { toast('Informe um IP ou Fingerprint!', 'error'); return; }
     el.innerHTML = '<div class="loading-spinner" style="transform:scale(0.7);margin:12px 0;">Buscando...</div>';
     try {
         const results = [];
-        const fingerprints = new Set();
+        const foundIPs = new Set();
+        const foundFPs = new Set();
 
-        // 1. Votos de nível e time — buscar últimas 30 partidas
+        function matchesSearch(docIp, docFp) {
+            if (ip && fp) return docIp === ip || docFp === fp;
+            if (ip) return docIp === ip;
+            return docFp === fp;
+        }
+
+        // 1. Votos de nível e time — últimas 30 partidas
         const matchSnap = await db.collection('matches').orderBy('createdAt', 'desc').limit(30).get();
         for (const mDoc of matchSnap.docs) {
             const mData = mDoc.data();
             const mName = mData.name || mDoc.id;
             const mDate = mData.createdAt ? mData.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
-            // Votos de nível
             const votesSnap = await mDoc.ref.collection('votes').get();
             votesSnap.docs.forEach(v => {
                 const d = v.data();
-                if (d._meta && d._meta.ip === ip) {
-                    if (d._meta.fingerprint) fingerprints.add(d._meta.fingerprint);
+                if (d._meta && matchesSearch(d._meta.ip, d._meta.fingerprint)) {
+                    if (d._meta.ip) foundIPs.add(d._meta.ip);
+                    if (d._meta.fingerprint) foundFPs.add(d._meta.fingerprint);
                     results.push({ type: '🗳️ Voto Nível', detail: `${mName} (${mDate})`, sub: `Votou em ${d._meta.votedOn || '?'} jogadores — ${d._meta.timestamp || ''}` });
                 }
             });
-            // Votos de time
             const tvSnap = await mDoc.ref.collection('teamVotes').get();
             tvSnap.docs.forEach(v => {
                 const d = v.data();
-                if (d._meta && d._meta.ip === ip) {
-                    if (d._meta.fingerprint) fingerprints.add(d._meta.fingerprint);
+                if (d._meta && matchesSearch(d._meta.ip, d._meta.fingerprint)) {
+                    if (d._meta.ip) foundIPs.add(d._meta.ip);
+                    if (d._meta.fingerprint) foundFPs.add(d._meta.fingerprint);
                     results.push({ type: '⚔️ Voto Time', detail: `${mName} (${mDate})`, sub: `Votou: Time ${d.vote || '?'} — ${d._meta.timestamp || ''}` });
                 }
             });
@@ -463,38 +473,59 @@ async function staffSearchIP() {
             const respSnap = await pDoc.ref.collection('responses').get();
             respSnap.docs.forEach(r => {
                 const d = r.data();
-                if (d.deviceId && d.deviceId.startsWith(ip + '_')) {
-                    const fp = d.deviceId.split('_')[1];
-                    if (fp) fingerprints.add(fp);
-                    results.push({ type: '📊 Enquete', detail: `"${pData.question}"`, sub: `Voto: ${d.vote === 'sim' ? '✅ Sim' : '❌ Não'}${d.playerName ? ' (' + d.playerName + ')' : ''}` });
+                if (d.deviceId) {
+                    const parts = d.deviceId.split('_');
+                    const dIp = parts[0] || '';
+                    const dFp = parts[1] || '';
+                    if (matchesSearch(dIp, dFp)) {
+                        if (dIp) foundIPs.add(dIp);
+                        if (dFp) foundFPs.add(dFp);
+                        results.push({ type: '📊 Enquete', detail: `"${pData.question}"`, sub: `Voto: ${d.vote === 'sim' ? '✅ Sim' : '❌ Não'}${d.playerName ? ' (' + d.playerName + ')' : ''}` });
+                    }
                 }
             });
         }
 
         // 3. Mural
-        const muralSnap = await db.collection('mural').where('_ip', '==', ip).get();
+        const muralSnap = await db.collection('mural').get();
         muralSnap.docs.forEach(m => {
             const d = m.data();
-            if (d._fingerprint) fingerprints.add(d._fingerprint);
-            const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString('pt-BR') + ' ' + d.createdAt.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '?';
-            results.push({ type: '📢 Mural', detail: `"${d.text}"`, sub: `Sobre: ${d.targetPlayer} — por ${d.authorName} — ${date}` });
+            if (matchesSearch(d._ip, d._fingerprint)) {
+                if (d._ip) foundIPs.add(d._ip);
+                if (d._fingerprint) foundFPs.add(d._fingerprint);
+                const date = d.createdAt ? d.createdAt.toDate().toLocaleDateString('pt-BR') + ' ' + d.createdAt.toDate().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '?';
+                results.push({ type: '📢 Mural', detail: `"${d.text}"`, sub: `Sobre: ${d.targetPlayer} — por ${d.authorName} — ${date}` });
+            }
         });
 
         if (results.length === 0) {
-            el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">Nenhum registro encontrado para este IP.</div>';
+            el.innerHTML = '<div style="color:var(--text-dim);font-size:13px;padding:8px 0;">Nenhum registro encontrado.</div>';
             return;
         }
-        let fpHtml = '';
-        if (fingerprints.size > 0) {
-            fpHtml = `<div style="background:rgba(138,43,226,0.08);border:1px solid rgba(138,43,226,0.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;">
-                <div style="font-size:11px;color:#b388ff;font-weight:600;margin-bottom:4px;">🔑 Fingerprints associados:</div>
-                ${[...fingerprints].map(fp => `<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
-                    <code style="font-size:12px;color:var(--text);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px;">${fp}</code>
-                    <button class="btn btn-small" onclick="navigator.clipboard.writeText('${fp}');toast('Copiado!','success');" style="font-size:9px;padding:2px 6px;background:rgba(255,255,255,0.06);color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);">📋</button>
-                </div>`).join('')}
-            </div>`;
+
+        let assocHtml = '';
+        const showIPs = ip ? [] : [...foundIPs];
+        const showFPs = fp ? [] : [...foundFPs];
+        if (showIPs.length > 0 || showFPs.length > 0) {
+            assocHtml = `<div style="background:rgba(138,43,226,0.08);border:1px solid rgba(138,43,226,0.2);border-radius:8px;padding:8px 10px;margin-bottom:10px;">`;
+            if (showIPs.length > 0) {
+                assocHtml += `<div style="font-size:11px;color:#b388ff;font-weight:600;margin-bottom:4px;">🌐 IPs associados:</div>`;
+                assocHtml += showIPs.map(v => `<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+                    <code style="font-size:12px;color:var(--text);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px;">${v}</code>
+                    <button class="btn btn-small" onclick="navigator.clipboard.writeText('${v}');toast('Copiado!','success');" style="font-size:9px;padding:2px 6px;background:rgba(255,255,255,0.06);color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);">📋</button>
+                </div>`).join('');
+            }
+            if (showFPs.length > 0) {
+                assocHtml += `<div style="font-size:11px;color:#b388ff;font-weight:600;margin-bottom:4px;${showIPs.length > 0 ? 'margin-top:8px;' : ''}">🔑 Fingerprints associados:</div>`;
+                assocHtml += showFPs.map(v => `<div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+                    <code style="font-size:12px;color:var(--text);background:rgba(255,255,255,0.06);padding:2px 6px;border-radius:3px;">${v}</code>
+                    <button class="btn btn-small" onclick="navigator.clipboard.writeText('${v}');toast('Copiado!','success');" style="font-size:9px;padding:2px 6px;background:rgba(255,255,255,0.06);color:var(--text-dim);border:1px solid rgba(255,255,255,0.1);">📋</button>
+                </div>`).join('');
+            }
+            assocHtml += `</div>`;
         }
-        el.innerHTML = fpHtml + `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${results.length} registro(s) encontrado(s)</div>` +
+
+        el.innerHTML = assocHtml + `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px;">${results.length} registro(s) encontrado(s)</div>` +
             results.map(r => `
                 <div style="padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
                     <div style="font-size:12px;"><span style="color:var(--accent);font-weight:600;">${r.type}</span> <span style="color:var(--text);">${r.detail}</span></div>

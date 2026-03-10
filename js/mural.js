@@ -201,7 +201,18 @@ const MURAL_BLOCKED_WORDS = [
     // Outros pessoais
     'retardado', 'retardada', 'mongol', 'mongoloide', 'autista',
     'deficiente', 'aleijado', 'aleijada', 'doente mental',
-    'cancer', 'morre', 'morrer', 'se mata', 'suicida'
+    'cancer', 'morre', 'morrer', 'se mata', 'suicida',
+    // Ofensas de caráter/personalidade
+    'falso', 'falsa', 'duas caras', 'pelas costas', 'fofoqueiro', 'fofoqueira',
+    'cobra', 'traidor', 'traidora', 'mentiroso', 'mentirosa', 'covarde',
+    'parasita', 'inutil', 'incompetente', 'lixo', 'lixo humano',
+    'nojo', 'nojento', 'nojenta', 'ridiculo', 'ridicula', 'patetico', 'patetica',
+    'otario', 'otaria', 'trouxa', 'babaca', 'idiota', 'imbecil', 'burro', 'burra',
+    'toxico', 'toxica', 'chato', 'chata', 'mala', 'sem nocao',
+    'folgado', 'folgada', 'aproveitador', 'aproveitadora', 'interesseiro', 'interesseira',
+    'arrogante', 'metido', 'metida', 'convencido', 'convencida',
+    'chorao', 'mimado', 'mimada', 'fresco', 'fresca',
+    'piranha', 'galinha', 'corno', 'chifrudo'
 ];
 
 function normalizeForFilter(text) {

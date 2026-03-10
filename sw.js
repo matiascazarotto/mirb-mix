@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mirb-v1';
+const CACHE_NAME = 'mirb-v2';
 const ASSETS = [
   '/',
   '/index.html',
