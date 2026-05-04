@@ -354,6 +354,13 @@ async function toggleNavFeature(featureKey) {
         renderNavToggle(cfg.container, newVal, featureKey);
         const navBtn = document.getElementById(cfg.nav);
         if (navBtn) navBtn.style.display = newVal ? '' : 'none';
+        if (featureKey === 'h2hEnabled' || featureKey === 'jornalEnabled') {
+            try {
+                const cache = JSON.parse(localStorage.getItem('mirb_navCache') || '{}');
+                cache[featureKey] = newVal;
+                localStorage.setItem('mirb_navCache', JSON.stringify(cache));
+            } catch (e) {}
+        }
         toast(`${cfg.label} ${newVal ? 'ativada' : 'desativada'}!`, 'success');
     } catch (e) {
         toast('Erro: ' + e.message, 'error');

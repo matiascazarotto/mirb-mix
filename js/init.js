@@ -26,14 +26,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     loadVotePage();
-    // Apply nav visibility from settings
+    // Apply nav visibility from settings (cache for next reload to avoid flicker)
     db.collection('config').doc('settings').get().then(doc => {
-        if (doc.exists) {
-            const data = doc.data();
-            if (data.h2hEnabled === false) { const b = document.getElementById('navH2h'); if (b) b.style.display = 'none'; }
-            if (data.jornalEnabled === false) { const b = document.getElementById('navJornal'); if (b) b.style.display = 'none'; }
-        }
-    }).catch(() => {});
+        const data = doc.exists ? doc.data() : {};
+        const h2h = data.h2hEnabled !== false;
+        const jornal = data.jornalEnabled !== false;
+        const bH = document.getElementById('navH2h');
+        if (bH) bH.style.display = h2h ? '' : 'none';
+        const bJ = document.getElementById('navJornal');
+        if (bJ) bJ.style.display = jornal ? '' : 'none';
+        // Drop the pre-paint cache <style> so inline display rules take effect
+        const cacheStyle = document.getElementById('navCacheStyle');
+        if (cacheStyle) cacheStyle.remove();
+        try { localStorage.setItem('mirb_navCache', JSON.stringify({ h2hEnabled: h2h, jornalEnabled: jornal })); } catch (e) {}
+    }).catch(() => {
+        const cacheStyle = document.getElementById('navCacheStyle');
+        if (cacheStyle) cacheStyle.remove();
+    });
     // Init first GC match slot
     addGCMatchSlot();
     // Init live stream listener

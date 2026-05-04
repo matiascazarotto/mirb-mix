@@ -16,6 +16,25 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
+    <script>
+        // Apply cached nav visibility before paint to avoid flicker.
+        // The injected <style> is removed by init.js once Firestore settings load,
+        // so a feature that was re-enabled remotely will reappear after one fetch.
+        (function () {
+            try {
+                var c = JSON.parse(localStorage.getItem('mirb_navCache') || '{}');
+                var hide = [];
+                if (c.h2hEnabled === false) hide.push('#navH2h');
+                if (c.jornalEnabled === false) hide.push('#navJornal');
+                if (hide.length) {
+                    var s = document.createElement('style');
+                    s.id = 'navCacheStyle';
+                    s.textContent = hide.join(',') + '{display:none!important;}';
+                    document.head.appendChild(s);
+                }
+            } catch (e) {}
+        })();
+    </script>
 </head>
 <body>
 
