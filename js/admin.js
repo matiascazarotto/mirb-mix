@@ -146,9 +146,9 @@ async function renderAdminPanel() {
                             <label>Badge</label>
                             <select id="badgeTypeSelect" required>
                                 <option value="">Selecionar...</option>
-                                <option value="campeao">🏆 Campeão da LAN</option>
-                                <option value="mvp">⭐ MVP da LAN</option>
-                                <option value="pior-jogador">💩 Pior da LAN</option>
+                                <option value="campeao">🏆 Campeão de LAN</option>
+                                <option value="mvp">⭐ MVP de LAN</option>
+                                <option value="pior-jogador">🥚 Chocou em LAN</option>
                             </select>
                         </div>
                     </div>

@@ -8,7 +8,7 @@
 const BADGE_TYPES = {
     'campeao':       { label: 'Campeão de LAN',   img: 'assets/badges/campeao.png',       emoji: '🏆' },
     'mvp':           { label: 'MVP de LAN',       img: 'assets/badges/mvp.png',           emoji: '⭐' },
-    'pior-jogador':  { label: 'Pior da LAN',       img: 'assets/badges/pior-jogador.png', emoji: '💩' }
+    'pior-jogador':  { label: 'Chocou em LAN',     img: null,                              emoji: '🥚' }
 };
 const BADGE_DISPLAY_ORDER = ['campeao', 'mvp', 'pior-jogador'];
 
@@ -65,8 +65,11 @@ function renderBadgesInline(badges, opts = {}) {
         if (!n) return;
         const meta = BADGE_TYPES[type];
         const title = n > 1 ? `${meta.label} (${n}x)` : meta.label;
+        const visual = meta.img
+            ? `<img src="${meta.img}" alt="${meta.label}" style="width:${size}px;height:${size}px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));">`
+            : `<span aria-label="${meta.label}" style="font-size:${size}px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));">${meta.emoji}</span>`;
         parts.push(`<span class="player-badge-inline" title="${title}" style="display:inline-flex;align-items:center;gap:1px;vertical-align:middle;">
-            <img src="${meta.img}" alt="${meta.label}" style="width:${size}px;height:${size}px;object-fit:contain;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));">
+            ${visual}
             ${n > 1 ? `<span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:${Math.max(10, Math.round(size * 0.65))}px;color:var(--yellow);line-height:1;">×${n}</span>` : ''}
         </span>`);
     });
@@ -84,9 +87,12 @@ function renderBadgesShowcase(badges) {
         if (!n) return;
         const meta = BADGE_TYPES[type];
         const title = n > 1 ? `${meta.label} — ${n} vezes` : meta.label;
+        const visual = meta.img
+            ? `<img src="${meta.img}" alt="${meta.label}" style="width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.5));">`
+            : `<span aria-label="${meta.label}" style="font-size:64px;line-height:72px;display:inline-block;width:72px;height:72px;text-align:center;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.5));">${meta.emoji}</span>`;
         items.push(`<div title="${title}" style="position:relative;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:80px;">
             <div style="position:relative;">
-                <img src="${meta.img}" alt="${meta.label}" style="width:72px;height:72px;object-fit:contain;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.5));">
+                ${visual}
                 ${n > 1 ? `<div style="position:absolute;top:-4px;right:-4px;background:var(--yellow);color:#000;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:12px;border-radius:12px;padding:2px 8px;line-height:1.3;box-shadow:0 2px 6px rgba(0,0,0,0.4);">×${n}</div>` : ''}
             </div>
             <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.5px;text-align:center;line-height:1.2;">${meta.label}</div>
