@@ -16,6 +16,7 @@ async function renderAdminPanel() {
             <button class="admin-sub-tab active" onclick="switchAdminTab(this, 'adminTabMatch')">🎮 Partidas</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabManage')">⚙️ Gerenciar</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLink')">⚡ Vincular GC</button>
+            <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabBadges')">🏆 Badges</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLive')">📡 Live</button>
             ${pollEnabled ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabPoll\')">🗳️ Enquete</button>' : ''}
             ${isStaff ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabOthers\')">🛠️ Outros</button>' : ''}
@@ -123,6 +124,41 @@ async function renderAdminPanel() {
                     <span style="color:var(--text-dim);font-size:11px;margin-left:4px;">— Descompacte → Chrome → <code>chrome://extensions</code> → Modo desenvolvedor → Carregar sem compactação</span>
                 </p>
                 <div id="gcPendingImports"><div class="loading-spinner">Carregando</div></div>
+            </div>
+        </div>
+
+        <!-- TAB: Badges -->
+        <div class="admin-tab-content" id="adminTabBadges">
+            <div class="card">
+                <div class="card-title">🏆 Atribuir Badge</div>
+                <p style="color:var(--text-dim);font-size:12px;margin-bottom:14px;">
+                    Adicione conquistas aos jogadores (Campeão, MVP, Pior Jogador). Cada badge é cumulativa: atribua de novo para incrementar o contador.
+                </p>
+                <form onsubmit="addPlayerBadge(event)">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Jogador</label>
+                            <select id="badgePlayerSelect" required>
+                                <option value="">Carregando...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Badge</label>
+                            <select id="badgeTypeSelect" required>
+                                <option value="">Selecionar...</option>
+                                <option value="campeao">🏆 Campeão da LAN</option>
+                                <option value="mvp">⭐ MVP da LAN</option>
+                                <option value="pior-jogador">💩 Pior da LAN</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Adicionar Badge</button>
+                </form>
+            </div>
+
+            <div class="card">
+                <div class="card-title">Badges Atribuídas</div>
+                <div id="adminBadgesList"><div class="loading-spinner">Carregando</div></div>
             </div>
         </div>
 
@@ -246,6 +282,7 @@ function switchAdminTab(btn, tabId) {
     if (tabId === 'adminTabLink') loadPendingGCImports();
     if (tabId === 'adminTabPoll') loadAdminPollTab();
     if (tabId === 'adminTabOthers') loadStaffSettings();
+    if (tabId === 'adminTabBadges') loadAdminBadgesTab();
 }
 
 // ╔══════════════════════════════════╗

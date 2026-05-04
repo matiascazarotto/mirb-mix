@@ -355,6 +355,9 @@ async function loadDashboard() {
         const currentVal = sel.value;
         sel.innerHTML = '<option value="">Todos</option>' + Object.values(ps).sort((a,b) => a.name.localeCompare(b.name)).map(p => `<option value="${p.name}" ${p.name === currentVal ? 'selected' : ''}>${p.name}</option>`).join('');
 
+        // ── Carregar trofeus persistentes (LAN/MVP/Pior) ──
+        try { await loadAllBadges(); } catch(_) {}
+
         // ── Buscar badges do jornal mais recente ──
         const _badgeMap = {};
         let _jornalEdition = null;
@@ -414,12 +417,14 @@ function renderDashModules() {
         const avgFk = (p.fk / p.matches).toFixed(1);
         const diffPerMatch = (p.diff / p.matches).toFixed(1);
 
+        const _profileBadges = (typeof getBadgesByPlayerName === 'function') ? getBadgesByPlayerName(p.name) : [];
+        const _profileBadgesInline = _profileBadges.length ? renderBadgesInline(_profileBadges, { size: 22 }) : '';
         html += `
         <div class="card" style="border:1px solid rgba(255,193,7,0.15);background:linear-gradient(135deg,rgba(255,193,7,0.04),transparent);">
             <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
                 ${p.avatar ? `<img src="${p.avatar}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:3px solid var(--yellow);box-shadow:0 0 20px rgba(255,193,7,0.2);">` : ''}
                 <div>
-                    <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--yellow);line-height:1;">${p.name}</div>
+                    <div style="font-family:'Rajdhani',sans-serif;font-size:28px;font-weight:700;color:var(--yellow);line-height:1;display:flex;align-items:center;flex-wrap:wrap;">${p.name}${_profileBadgesInline}</div>
                     <div style="color:var(--text-dim);font-size:13px;margin-top:4px;">Perfil individual • ${p.matches} partida(s) GC</div>
                 </div>
             </div>
@@ -437,7 +442,8 @@ function renderDashModules() {
                 ${dashStatBox('➕', 'Diff Total', (p.diff > 0 ? '+' : '') + p.diff, p.diff >= 0 ? 'var(--green)' : 'var(--red)')}
                 ${dashStatBox('📈', 'RP Total', (p.rpTotal > 0 ? '+' : '') + p.rpTotal, rpColor)}
             </div>
-        </div>`;
+        </div>
+        ${(typeof renderBadgesShowcase === 'function') ? renderBadgesShowcase(_profileBadges) : ''}`;
       } else {
         // ── Global overview (multiple players) ──
         const totalKills = entries.reduce((s, p) => s + p.kills, 0);
@@ -587,7 +593,7 @@ function renderDashModules() {
                     <td style="padding:10px 6px;">
                         <div style="display:flex;align-items:center;gap:6px;">
                             ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
-                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>${getDashBadgeHtml(p.name)}
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>${getDashBadgeHtml(p.name)}${(typeof renderBadgesInline === 'function') ? renderBadgesInline(getBadgesByPlayerName(p.name), { size: 16 }) : ''}
                         </div>
                     </td>
                     <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>

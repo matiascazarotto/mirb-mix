@@ -2,6 +2,8 @@
 // ║   OUVIDORIA MIRB                ║
 // ╚══════════════════════════════════╝
 async function initMural() {
+    // Pre-carregar badges para exibir junto aos posts
+    try { await loadAllBadges(); } catch (_) {}
     // Populate player dropdown
     const dropdown = document.getElementById('muralDropdown');
     if (dropdown) {
@@ -53,9 +55,10 @@ async function initMural() {
                 const id = doc.id;
                 const hasLaughed = localStorage.getItem(`laughed_${id}`);
                 const timeAgo = d.createdAt ? getTimeAgo(d.createdAt.toDate()) : '';
+                const targetBadges = (typeof getBadgesByPlayerName === 'function') ? renderBadgesInline(getBadgesByPlayerName(d.targetPlayer), { size: 14 }) : '';
                 return `
                     <div class="mural-post">
-                        <div class="mural-post-text">"${escapeHtml(d.text)}" — sobre <span class="mural-target">${escapeHtml(d.targetPlayer)}</span></div>
+                        <div class="mural-post-text">"${escapeHtml(d.text)}" — sobre <span class="mural-target">${escapeHtml(d.targetPlayer)}</span>${targetBadges}</div>
                         <div class="mural-post-meta">
                             <span>por ${escapeHtml(d.authorName || 'Anônimo')} ${timeAgo ? '· ' + timeAgo : ''}</span>
                             <button class="mural-laugh-btn ${hasLaughed ? 'voted' : ''}" onclick="laughMural('${id}')">
