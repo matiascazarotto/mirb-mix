@@ -398,6 +398,45 @@ async function generateJornal(targetSunday) {
     return jornalData;
 }
 
+// Self-healing: generate a jornal (with quotes) for every completed week that has
+// GC-stats matches but no jornal yet. Runs on each Jornal load, so any missed week
+// gets backfilled on the next visit. Image archiving stays a manual admin action.
+async function generateMissingJornais() {
+    const now = new Date();
+
+    // 1. Which completed weeks (Sun–Sat already ended) have ≥1 GC-stats match?
+    const allMatches = await db.collection('matches').orderBy('createdAt', 'desc').get();
+    const weeksWithMatches = new Set();
+    allMatches.docs.forEach(d => {
+        const m = d.data();
+        if (!m.createdAt || !m.gcStats || m.gcStats.length === 0) return;
+        const sunday = getWeekSunday(m.createdAt.toDate());
+        if (getWeekSaturday(sunday) >= now) return; // semana ainda não terminou
+        weeksWithMatches.add(sunday.toISOString().slice(0, 10));
+    });
+    if (weeksWithMatches.size === 0) return;
+
+    // 2. Quais dessas semanas ainda não têm jornal
+    const existing = await db.collection('jornal').get();
+    const existingIds = new Set(existing.docs.map(d => d.id));
+    const missing = [...weeksWithMatches].filter(id => !existingIds.has(id)).sort();
+    if (missing.length === 0) return;
+
+    // 3. Numeração de edição estável (posição cronológica no conjunto completo)
+    const allIds = [...new Set([...existingIds, ...weeksWithMatches])].sort();
+
+    // 4. Gerar cada semana faltante (em ordem cronológica) já com os quotes
+    for (const weekId of missing) {
+        const sunday = getWeekSunday(new Date(weekId + 'T12:00:00'));
+        const result = await generateJornal(sunday);
+        if (!result) continue;
+        const edNum = allIds.indexOf(weekId) + 1;
+        const snapshot = buildJornalSnapshot(result.badges, edNum);
+        await db.collection('jornal').doc(weekId).update({ snapshot });
+        console.log(`[Jornal] Auto-gerado: semana ${weekId} (Edição Nº ${edNum})`);
+    }
+}
+
 let jornalCache = [];
 
 async function loadJornal() {
@@ -405,10 +444,8 @@ async function loadJornal() {
     el.innerHTML = '<div class="loading-spinner">Carregando Jornal MiRB</div>';
 
     try {
-        // Auto-generate last week's jornal if missing
-        const lastSunday = getWeekSunday(new Date());
-        lastSunday.setDate(lastSunday.getDate() - 7);
-        await generateJornal(lastSunday);
+        // Auto-generate any completed week that has matches but no jornal yet (self-healing)
+        await generateMissingJornais();
 
         // Fetch all jornais
         const snap = await db.collection('jornal').orderBy('weekStart', 'desc').get();
