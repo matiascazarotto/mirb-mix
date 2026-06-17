@@ -299,12 +299,16 @@ async function generateJornal(targetSunday) {
     badges.push({ type: 'pateta', emoji: '🤡', label: 'Pateta', player: pateta.name, value: pateta.avgAdr.toFixed(1), avatar: pateta.avatar, s: pStats(pateta) });
 
     // 📈 Em Alta / 📉 Em Queda — need previous week's jornal
-    const prevSunday = new Date(weekStart);
-    prevSunday.setDate(prevSunday.getDate() - 7);
-    const prevWeekId = prevSunday.toISOString().slice(0, 10);
-    const prevDoc = await db.collection('jornal').doc(prevWeekId).get();
+    // Usa a edição anterior mais recente (não estritamente weekStart-7), pra que
+    // semanas sem mix / gaps não quebrem a comparação de rating.
+    const prevSnap = await db.collection('jornal')
+        .where('weekStart', '<', weekId)
+        .orderBy('weekStart', 'desc')
+        .limit(1)
+        .get();
+    const prevDoc = prevSnap.docs[0];
 
-    if (prevDoc.exists && prevDoc.data().playerRatings) {
+    if (prevDoc && prevDoc.data().playerRatings) {
         const prevRatings = prevDoc.data().playerRatings;
 
         const diffs = entries.filter(p => prevRatings[p.name] != null).map(p => ({
@@ -1161,7 +1165,10 @@ function renderJornalHtml(j, edNum, isLatest) {
             }
             if (!bm.em_alta && !bm.em_queda) {
                 paperHtml += `<div class="jornal-article-tag">\uD83D\uDCCA Mercado de Transfers</div>`;
-                paperHtml += `<div class="jornal-article-body" style="font-style:italic;">Primeira edi\u00e7\u00e3o do Jornal MiRB \u2014 compara\u00e7\u00f5es de rating estar\u00e3o dispon\u00edveis a partir da pr\u00f3xima semana.</div>`;
+                const transferMsg = edNum <= 1
+                    ? `Primeira edi\u00e7\u00e3o do Jornal MiRB \u2014 compara\u00e7\u00f5es de rating estar\u00e3o dispon\u00edveis a partir da pr\u00f3xima semana.`
+                    : `Sem movimenta\u00e7\u00f5es relevantes no rating esta semana.`;
+                paperHtml += `<div class="jornal-article-body" style="font-style:italic;">${transferMsg}</div>`;
             }
             paperHtml += `</div>`;
 
