@@ -144,6 +144,21 @@ function fmtDM(date) {
     return String(date.getDate()).padStart(2, '0') + '/' + String(date.getMonth() + 1).padStart(2, '0');
 }
 
+// Format date as local "yyyy-mm-dd" (sem o shift de UTC do toISOString)
+function fmtYMD(date) {
+    return date.getFullYear() + '-' +
+        String(date.getMonth() + 1).padStart(2, '0') + '-' +
+        String(date.getDate()).padStart(2, '0');
+}
+
+// Rótulo "dd/mm a dd/mm" de uma edição. Deriva o sábado (fim) a partir do
+// weekStart (domingo, confiável) somando 6 dias — assim corrige até as edições
+// já salvas com weekEnd errado, sem precisar regravar nada no Firestore.
+function jornalWeekRange(weekStartStr) {
+    const [y, mo, d] = weekStartStr.split('-').map(Number);
+    return `${fmtDM(new Date(y, mo - 1, d))} a ${fmtDM(new Date(y, mo - 1, d + 6))}`;
+}
+
 // Calculate weekly rating using MiRB v1.1 formula
 function calcWeeklyRatings(entries) {
     if (!entries.length) return;
@@ -381,7 +396,7 @@ async function generateJornal(targetSunday) {
 
     const jornalData = {
         weekStart: weekId,
-        weekEnd: weekEnd.toISOString().slice(0, 10),
+        weekEnd: fmtYMD(weekEnd), // sábado local (toISOString empurrava p/ o domingo seguinte)
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         totalMatches: weekMatches.length,
         matchesInPeriod: allInPeriod.length,
@@ -465,10 +480,8 @@ async function loadJornal() {
         const sel = document.getElementById('jornalFilterEdition');
         const currentVal = sel.value;
         sel.innerHTML = jornalCache.map((j, idx) => {
-            const ws = j.weekStart.split('-');
-            const we = j.weekEnd.split('-');
             const edNum = jornalCache.length - idx;
-            const label = `Edição Nº ${edNum} — ${ws[2]}/${ws[1]} a ${we[2]}/${we[1]}`;
+            const label = `Edição Nº ${edNum} — ${jornalWeekRange(j.weekStart)}`;
             return `<option value="${idx}" ${String(idx) === currentVal ? 'selected' : ''}>${label}</option>`;
         }).join('');
 
@@ -1010,9 +1023,7 @@ function buildJornalSnapshot(badges, edNum) {
 }
 
 function renderJornalHtml(j, edNum, isLatest) {
-    const ws = j.weekStart.split('-');
-    const we = j.weekEnd.split('-');
-    const weekLabel = `${ws[2]}/${ws[1]} a ${we[2]}/${we[1]}`;
+    const weekLabel = jornalWeekRange(j.weekStart);
 
     const bm = {};
     (j.badges || []).forEach(b => { bm[b.type] = b; });
