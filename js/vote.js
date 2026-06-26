@@ -7,11 +7,15 @@ async function loadVotePage() {
     const el = document.getElementById('voteContent');
     el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
 
-    // Check if ouvidoria is enabled
+    // Check if ouvidoria / re-sort are enabled
     let ouvidoriaEnabled = true;
+    let resortEnabled = true;
     try {
         const settingsDoc = await db.collection('config').doc('settings').get();
-        if (settingsDoc.exists && settingsDoc.data().ouvidoriaEnabled === false) ouvidoriaEnabled = false;
+        if (settingsDoc.exists) {
+            if (settingsDoc.data().ouvidoriaEnabled === false) ouvidoriaEnabled = false;
+            if (settingsDoc.data().resortEnabled === false) resortEnabled = false;
+        }
     } catch (e) {}
 
     const muralHtml = ouvidoriaEnabled ? `
@@ -238,9 +242,11 @@ async function loadVotePage() {
                             <button class="team-vote-btn keep" onclick="submitTeamVote('${matchId}', 'keep')">
                                 👍 Manter Times
                             </button>
+                            ${resortEnabled ? `
                             <button class="team-vote-btn resort" onclick="submitTeamVote('${matchId}', 'resort')">
                                 👎 Sortear Novamente
                             </button>
+                            ` : ''}
                         </div>
                     `}
                 </div>
@@ -470,10 +476,17 @@ async function checkTeamVoteThreshold(matchId) {
 
     const THRESHOLD = 0.6;
 
+    // Refazer times pode estar desligado pela staff — nesse caso só o "manter" fecha a partida
+    let resortEnabled = true;
+    try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().resortEnabled === false) resortEnabled = false; } catch (e) {}
+
     if (keepCount / eligible >= THRESHOLD) {
         // 60%+ dos elegíveis votaram manter → confirmar times
         await db.collection('matches').doc(matchId).update({ status: 'closed' });
         toast('✅ Times confirmados pela votação! (60%+ manter)', 'success');
+    } else if (!resortEnabled) {
+        // Refazer times desligado → nunca re-sorteia; aguarda mais votos de "manter"
+        return;
     } else if (resortCount / eligible >= THRESHOLD) {
         // 60%+ dos elegíveis votaram re-sort → sortear novamente
         await resortTeams(matchId);

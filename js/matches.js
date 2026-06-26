@@ -98,6 +98,10 @@ async function loadAdminMatches() {
             return;
         }
 
+        // Re-sort (refazer times) toggle — staff can disable it globally
+        let resortEnabled = true;
+        try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().resortEnabled === false) resortEnabled = false; } catch (e) {}
+
         // Assign display names for duplicate match names
         const allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         assignDisplayNames(allMatches);
@@ -192,7 +196,7 @@ async function loadAdminMatches() {
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
                         <span style="width:1px;height:20px;background:rgba(255,255,255,0.1);margin:0 2px;"></span>
                         <button class="btn btn-primary btn-small" onclick="forceConfirmTeams('${matchId}')">✅ Confirmar</button>
-                        <button class="btn btn-secondary btn-small" onclick="forceResortTeams('${matchId}')">🔄 Re-sort</button>
+                        ${resortEnabled ? `<button class="btn btn-secondary btn-small" onclick="forceResortTeams('${matchId}')">🔄 Re-sort</button>` : ''}
                         <button class="btn btn-secondary btn-small" onclick="reopenVoting('${matchId}')">↩️ Reabrir</button>
                     </div>
                     <div id="teamVoteProgress-${matchId}" style="margin-top:8px;font-size:12px;color:var(--text-dim);"></div>
@@ -740,6 +744,13 @@ async function forceConfirmTeams(matchId) {
 }
 
 async function forceResortTeams(matchId) {
+    try {
+        const s = await db.collection('config').doc('settings').get();
+        if (s.exists && s.data().resortEnabled === false) {
+            toast('Refazer times está desligado pela staff!', 'error');
+            return;
+        }
+    } catch (e) {}
     if (!confirm('Forçar novo sorteio de times?')) return;
     try {
         await resortTeams(matchId);
@@ -771,6 +782,22 @@ async function closeVotingAndBalance(matchId) {
 
         // Balance teams
         const teams = balanceTeams(playersWithLevels);
+
+        // Check if re-sort (confirmação) is enabled — staff can disable it globally
+        let resortEnabled = true;
+        try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().resortEnabled === false) resortEnabled = false; } catch (e) {}
+
+        if (!resortEnabled) {
+            // Re-sort desligado → fixa os times direto, pula a votação de confirmação
+            await db.collection('matches').doc(matchId).update({
+                status: 'closed',
+                result: teams,
+                playersWithLevels: playersWithLevels
+            });
+            toast('Times sorteados e confirmados! (refazer times está desligado)', 'success');
+            loadAdminMatches();
+            return;
+        }
 
         // Save result and open team confirmation vote
         await db.collection('matches').doc(matchId).update({

@@ -205,6 +205,15 @@ async function renderAdminPanel() {
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div>
+                        <div style="font-weight:600;color:var(--text);font-size:14px;">🔄 Refazer Times</div>
+                        <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Permite re-sortear os times na confirmação (jogadores e admin). Desligado: ao balancear, os times já ficam confirmados.</div>
+                    </div>
+                    <div id="resortToggleContainer">
+                        <div class="loading-spinner" style="transform:scale(0.5);"></div>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
+                    <div>
                         <div style="font-weight:600;color:var(--text);font-size:14px;">⚔️ Tela 1 vs 1</div>
                         <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Habilitar ou desabilitar a tela 1 vs 1 no menu</div>
                     </div>
@@ -293,12 +302,13 @@ async function loadStaffSettings() {
         const doc = await db.collection('config').doc('settings').get();
         const data = doc.exists ? doc.data() : {};
         renderOuvidoriaToggle(data.ouvidoriaEnabled !== false);
+        renderNavToggle('resortToggleContainer', data.resortEnabled !== false, 'resortEnabled');
         renderNavToggle('h2hToggleContainer', data.h2hEnabled !== false, 'h2hEnabled');
         renderNavToggle('jornalToggleContainer', data.jornalEnabled !== false, 'jornalEnabled');
         renderNavToggle('pollToggleContainer', data.pollEnabled !== false, 'pollEnabled');
         loadBlockedDevices();
     } catch (e) {
-        ['ouvidoriaToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer'].forEach(id => {
+        ['ouvidoriaToggleContainer', 'resortToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer'].forEach(id => {
             const c = document.getElementById(id);
             if (c) c.innerHTML = '<span style="color:var(--red);font-size:12px;">Erro ao carregar</span>';
         });
@@ -340,6 +350,7 @@ function renderNavToggle(containerId, enabled, featureKey) {
 
 async function toggleNavFeature(featureKey) {
     const map = {
+        resortEnabled: { nav: null, container: 'resortToggleContainer', label: 'Refazer Times' },
         h2hEnabled: { nav: 'navH2h', container: 'h2hToggleContainer', label: '1 vs 1' },
         jornalEnabled: { nav: 'navJornal', container: 'jornalToggleContainer', label: 'Jornal' },
         pollEnabled: { nav: null, container: 'pollToggleContainer', label: 'Enquetes' }
