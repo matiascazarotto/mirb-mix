@@ -517,12 +517,51 @@ function renderDashModules() {
             p._ratingMiRB = confidence * p._rawRating + (1 - confidence) * _avgRating;
         });
 
+        // ── Afunda / Carrega: desempenho PURO (sem WIN% e sem volume) ──
+        // Pesos MiRB renormalizados só com as métricas de skill: ADR/KAST/K-D/FK.
+        const SW_ADR = 0.3125, SW_KAST = 0.3125, SW_KD = 0.25, SW_FK = 0.125;
+        entries.forEach(p => {
+            const nAdr  = _maxAdr  > 0 ? (p._avgAdr  / _maxAdr)  * 100 : 0;
+            const nKast = _maxKast > 0 ? (p._avgKast / _maxKast) * 100 : 0;
+            const nKd   = _maxKd   > 0 ? (p._avgKdr  / _maxKd)   * 100 : 0;
+            const nFk   = _maxFk   > 0 ? (p._avgFk   / _maxFk)   * 100 : 0;
+            p._skillRaw = nAdr * SW_ADR + nKast * SW_KAST + nKd * SW_KD + nFk * SW_FK;
+        });
+        const _avgSkillRaw = entries.reduce((s, p) => s + p._skillRaw, 0) / entries.length;
+        entries.forEach(p => {
+            const confidence = Math.min(1, p.matches / _regThreshold);
+            p._skill = confidence * p._skillRaw + (1 - confidence) * _avgSkillRaw;
+        });
+
+        // Régua (média/desvio) calculada só sobre os REGULARES (≥ trava de jogos)
+        const AFUNDA_MIN_GAMES = 10;
+        const _reg = entries.filter(p => p.matches >= AFUNDA_MIN_GAMES);
+        const _showImpacto = _reg.length >= 2; // coluna só aparece com ≥2 regulares (precisa de régua pra comparar)
+        let _afAvg = 0, _afStd = 1, _wrAvg = 0.5;
+        if (_reg.length >= 2) {
+            _afAvg = _reg.reduce((s, p) => s + p._skill, 0) / _reg.length;
+            _afStd = Math.sqrt(_reg.reduce((s, p) => s + (p._skill - _afAvg) ** 2, 0) / _reg.length) || 1;
+            _wrAvg = _reg.reduce((s, p) => s + (p.wins / p.matches), 0) / _reg.length;
+        }
+        const _afSpread = 2 * _afStd; // ~2 desvios abaixo da média = 100% Afunda
+        entries.forEach(p => {
+            if (p.matches < AFUNDA_MIN_GAMES || _reg.length < 2) { p._afunda = null; p._carrega = null; p._drag = null; return; }
+            p._afunda  = Math.max(0, Math.min(100, (_afAvg - p._skill) / _afSpread * 100));
+            p._carrega = Math.max(0, Math.min(100, (p._skill - _afAvg) / _afSpread * 100));
+            p._drag = p._afunda - p._carrega; // >0 afunda · <0 carrega
+        });
+
         const col = dashSortCol || 'rating';
         const dir = dashSortDir || 'desc';
         const sorted = [...entries].sort((a, b) => {
             let va, vb;
             switch(col) {
                 case 'rating': va = a._ratingMiRB; vb = b._ratingMiRB; break;
+                case 'afunda':
+                    if (a._drag == null && b._drag == null) return 0;
+                    if (a._drag == null) return 1;   // sem rótulo vai pro fim
+                    if (b._drag == null) return -1;
+                    va = a._drag; vb = b._drag; break;
                 case 'p': va = a.matches; vb = b.matches; break;
                 case 'v': va = a.wins; vb = b.wins; break;
                 case 'd': va = a.losses; vb = b.losses; break;
@@ -550,6 +589,18 @@ function renderDashModules() {
         const thStyle = 'padding:10px 6px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;';
         const activeStyle = (c) => col === c ? 'color:var(--yellow);' : '';
 
+        // Célula Afunda/Carrega (▼ vermelho = afunda · ▲ verde = carrega · ~ neutro · — sem dados)
+        const afundaCellHtml = (p) => {
+            if (p._afunda == null) return '<span style="color:var(--text-dim);" title="Menos de ' + AFUNDA_MIN_GAMES + ' jogos">—</span>';
+            if (p._afunda >= p._carrega) {
+                if (p._afunda < 8) return '<span style="color:var(--text-dim);" title="Neutro — na média">~</span>';
+                const c = p._afunda >= 55 ? 'var(--red)' : 'var(--yellow)';
+                return `<span style="color:${c};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;" title="Afunda o time — desempenho abaixo da média (${Math.round(p._afunda)})">▼ ${Math.round(p._afunda)}</span>`;
+            }
+            if (p._carrega < 8) return '<span style="color:var(--text-dim);" title="Neutro — na média">~</span>';
+            return `<span style="color:var(--green);font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;" title="Carrega o time — desempenho acima da média (${Math.round(p._carrega)})">▲ ${Math.round(p._carrega)}</span>`;
+        };
+
         html += `
         <div class="card" style="overflow-x:auto;">
             <div class="card-title" style="display:flex;align-items:center;gap:10px;">🏆 Ranking Geral
@@ -561,6 +612,7 @@ function renderDashModules() {
                         <th style="padding:10px 6px;text-align:left;">#</th>
                         <th style="padding:10px 6px;text-align:left;">Jogador</th>
                         <th style="${thStyle}${activeStyle('rating')}" onclick="dashSort('rating')">Rating${arrow('rating')}</th>
+                        ${_showImpacto ? `<th style="${thStyle}${activeStyle('afunda')}" onclick="dashSort('afunda')" title="▲ verde Carrega · ▼ vermelho Afunda — desempenho puro vs. a média (${AFUNDA_MIN_GAMES}+ jogos)">Carrega/Afunda${arrow('afunda')}</th>` : ''}
                         <th style="${thStyle}${activeStyle('p')}" onclick="dashSort('p')">P${arrow('p')}</th>
                         <th style="${thStyle}${activeStyle('v')}" onclick="dashSort('v')">V${arrow('v')}</th>
                         <th style="${thStyle}${activeStyle('d')}" onclick="dashSort('d')">D${arrow('d')}</th>
@@ -597,6 +649,7 @@ function renderDashModules() {
                         </div>
                     </td>
                     <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>
+                    ${_showImpacto ? `<td style="padding:10px 6px;text-align:center;">${afundaCellHtml(p)}</td>` : ''}
                     <td style="padding:10px 6px;text-align:center;color:var(--text-dim);">${p.matches}</td>
                     <td style="padding:10px 6px;text-align:center;color:var(--green);">${p.wins}</td>
                     <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.losses}</td>
@@ -624,6 +677,61 @@ function renderDashModules() {
             html += `<div style="font-size:11px;color:var(--text-dim);text-align:center;padding:10px 8px 4px;border-top:1px solid rgba(255,255,255,0.05);">📰 ${edLabel}: ${uniqueBadges.map(b => `${b.emoji} ${b.label}`).join(' · ')}</div>`;
         }
         html += '</div>';
+
+        // ── Carregômetro: desempenho puro × vitórias (só regulares) ──
+        if (_reg.length >= 4) {
+            const _minSk = Math.min(..._reg.map(p => p._skill));
+            const _maxSk = Math.max(..._reg.map(p => p._skill));
+            const _minWr = Math.min(..._reg.map(p => p.wins / p.matches));
+            const _maxWr = Math.max(..._reg.map(p => p.wins / p.matches));
+            const _skR = (_maxSk - _minSk) || 1, _wrR = (_maxWr - _minWr) || 1;
+            const _carregados = _reg
+                .filter(p => p._skill < _afAvg && (p.wins / p.matches) > _wrAvg)
+                .map(p => ({ p, score: ((p.wins / p.matches - _minWr) / _wrR) - ((p._skill - _minSk) / _skR), wr: Math.round(p.wins / p.matches * 100) }))
+                .sort((a, b) => b.score - a.score).slice(0, 3);
+            const _azarados = _reg
+                .filter(p => p._skill > _afAvg && (p.wins / p.matches) < _wrAvg)
+                .map(p => ({ p, score: ((p._skill - _minSk) / _skR) - ((p.wins / p.matches - _minWr) / _wrR), wr: Math.round(p.wins / p.matches * 100) }))
+                .sort((a, b) => b.score - a.score).slice(0, 3);
+
+            const _carrRow = (x) => `
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(255,61,61,0.06);border:1px solid rgba(255,61,61,0.12);border-radius:8px;">
+                    ${x.p.avatar ? `<img src="${x.p.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : '<span style="font-size:18px;">🛟</span>'}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text);font-size:14px;">${x.p.name}</div>
+                        <div style="color:var(--text-dim);font-size:11px;">ganha ${x.wr}% jogando abaixo da média</div>
+                    </div>
+                    <div style="text-align:right;"><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--red);font-size:18px;line-height:1;">${Math.round(x.p._afunda)}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;">afunda</div></div>
+                </div>`;
+            const _azarRow = (x) => `
+                <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.12);border-radius:8px;">
+                    ${x.p.avatar ? `<img src="${x.p.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : '<span style="font-size:18px;">🎯</span>'}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text);font-size:14px;">${x.p.name}</div>
+                        <div style="color:var(--text-dim);font-size:11px;">joga acima da média, vence só ${x.wr}%</div>
+                    </div>
+                    <div style="text-align:right;"><div style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:18px;line-height:1;">${Math.round(x.p._carrega)}</div><div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;">carrega</div></div>
+                </div>`;
+
+            if (_carregados.length || _azarados.length) {
+                html += `
+                <div class="card">
+                    <div class="card-title" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">🛟 Carregômetro
+                        <span style="font-size:11px;color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0;">desempenho puro × vitórias · ${AFUNDA_MIN_GAMES}+ jogos</span>
+                    </div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;">
+                        <div>
+                            <div style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🛟 Carregados <span style="color:var(--text-dim);font-weight:400;text-transform:none;">· ganham apesar de ir mal</span></div>
+                            <div style="display:flex;flex-direction:column;gap:8px;">${_carregados.length ? _carregados.map(_carrRow).join('') : '<div style="color:var(--text-dim);font-size:12px;padding:8px;">Ninguém — todo mundo ganha merecendo. 👏</div>'}</div>
+                        </div>
+                        <div>
+                            <div style="font-family:'Rajdhani',sans-serif;font-size:12px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">🎯 Azarados <span style="color:var(--text-dim);font-weight:400;text-transform:none;">· vão bem mas perdem</span></div>
+                            <div style="display:flex;flex-direction:column;gap:8px;">${_azarados.length ? _azarados.map(_azarRow).join('') : '<div style="color:var(--text-dim);font-size:12px;padding:8px;">Ninguém — quem joga bem está vencendo.</div>'}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }
+        }
     }
 
     // ═══ HIGHLIGHTS ═══ (hidden for single player)
