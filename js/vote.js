@@ -275,6 +275,9 @@ async function loadVotePage() {
             }));
         }
 
+        // Níveis lembrados do último voto deste dispositivo (por jogador)
+        const lastVotes = getLastVotes();
+
         let html = '';
         votingSnap.docs.forEach(doc => {
             const m = doc.data();
@@ -305,24 +308,29 @@ async function loadVotePage() {
                             Dê uma nota de 1 a 20 para cada jogador. Desmarque "Não sei" para votar. Você só pode votar 1 vez.
                         </p>
                         <div class="vote-grid" id="voteGrid-${matchId}">
-                            ${m.players.map(p => `
-                                <div class="vote-row skipped" id="voteRow-${matchId}-${p.id}">
-                                    <span class="player-label">${p.name} ${getBadgeHtml(p.name)}</span>
+                            ${m.players.map(p => {
+                                const last = lastVotes[p.id];
+                                const hasLast = last != null && last >= 1 && last <= 20;
+                                const val = hasLast ? last : 10;
+                                return `
+                                <div class="vote-row ${hasLast ? '' : 'skipped'}" id="voteRow-${matchId}-${p.id}">
+                                    <span class="player-label">${p.name} ${getBadgeHtml(p.name)}${hasLast ? `<span style="color:var(--text-dim);font-size:11px;margin-left:6px;opacity:0.7;">último: ${last}</span>` : ''}</span>
                                     <span class="role-label">${p.role}</span>
-                                    <label class="vote-skip-toggle active">
-                                        <input type="checkbox" checked
+                                    <label class="vote-skip-toggle ${hasLast ? '' : 'active'}">
+                                        <input type="checkbox" ${hasLast ? '' : 'checked'}
                                             id="skip-${matchId}-${p.id}"
                                             onchange="toggleVoteSkip('${matchId}','${p.id}')">
                                         Não sei
                                     </label>
                                     <div class="vote-slider-area" style="display:flex;align-items:center;gap:8px;flex:1;">
-                                        <input type="range" min="1" max="20" value="10"
+                                        <input type="range" min="1" max="20" value="${val}"
                                             id="vote-${matchId}-${p.id}"
                                             oninput="document.getElementById('disp-${matchId}-${p.id}').textContent=this.value">
-                                        <span class="level-display" id="disp-${matchId}-${p.id}">—</span>
+                                        <span class="level-display" id="disp-${matchId}-${p.id}">${hasLast ? val : '—'}</span>
                                     </div>
                                 </div>
-                            `).join('')}
+                                `;
+                            }).join('')}
                         </div>
                         <button class="btn btn-primary" style="margin-top:16px;width:100%;" onclick="submitVote('${matchId}')">
                             ✅ Confirmar Voto

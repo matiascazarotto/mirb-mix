@@ -371,6 +371,20 @@ async function getVoterDeviceId() {
     return { ip, fingerprint: fp, deviceId: ip + '_' + fp };
 }
 
+// ── Lembra o último nível votado de cada jogador (por dispositivo, localStorage) ──
+function getLastVotes() {
+    try { return JSON.parse(localStorage.getItem('mirbLastVotes')) || {}; }
+    catch (_) { return {}; }
+}
+function saveLastVotes(voteData) {
+    const store = getLastVotes();
+    Object.keys(voteData).forEach(pid => {
+        const v = parseInt(voteData[pid]);
+        if (v >= 1 && v <= 20) store[pid] = v;
+    });
+    try { localStorage.setItem('mirbLastVotes', JSON.stringify(store)); } catch (_) {}
+}
+
 async function submitVote(matchId) {
     // Check if already voted (localStorage — fast client-side check)
     if (localStorage.getItem(`voted_${matchId}`)) {
@@ -438,6 +452,8 @@ async function submitVote(matchId) {
 
         // Mark as voted in localStorage
         localStorage.setItem(`voted_${matchId}`, 'true');
+        // Lembra o nível dado a cada jogador para pré-preencher a próxima votação
+        saveLastVotes(voteData);
 
         toast('Voto registrado com sucesso!', 'success');
         loadVotePage();
