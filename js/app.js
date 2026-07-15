@@ -27,6 +27,7 @@ let players = []; // cached players
 let unsubscribers = []; // firestore listeners
 let muralUnsubscribe = null; // mural listener
 let teamVoteUnsubscribe = null; // team vote listener
+let mapVoteUnsubscribe = null; // map vote listener
 
 // ╔══════════════════════════════════╗
 // ║         NAVIGATION              ║
@@ -37,7 +38,7 @@ function showPage(name) {
     document.getElementById(`page-${name}`).classList.add('active');
     document.querySelector(`.nav-btn[onclick*="${name}"]`).classList.add('active');
 
-    if (name !== 'vote') destroyTeamVoteListener();
+    if (name !== 'vote') { destroyTeamVoteListener(); destroyMapVoteListener(); }
 
     if (name === 'vote') loadVotePage();
     if (name === 'matches') loadMatchesPage();
@@ -51,6 +52,13 @@ function destroyTeamVoteListener() {
     if (teamVoteUnsubscribe) {
         teamVoteUnsubscribe();
         teamVoteUnsubscribe = null;
+    }
+}
+
+function destroyMapVoteListener() {
+    if (mapVoteUnsubscribe) {
+        mapVoteUnsubscribe();
+        mapVoteUnsubscribe = null;
     }
 }
 // ╔══════════════════════════════════╗

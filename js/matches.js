@@ -98,9 +98,10 @@ async function loadAdminMatches() {
             return;
         }
 
-        // Re-sort (refazer times) toggle — staff can disable it globally
+        // Re-sort (refazer times) e escolha de mapa — staff pode desligar globalmente
         let resortEnabled = true;
-        try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().resortEnabled === false) resortEnabled = false; } catch (e) {}
+        let mapSelectEnabled = true;
+        try { const s = await db.collection('config').doc('settings').get(); if (s.exists) { if (s.data().resortEnabled === false) resortEnabled = false; if (s.data().mapSelectEnabled === false) mapSelectEnabled = false; } } catch (e) {}
 
         // Assign display names for duplicate match names
         const allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -219,6 +220,7 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Editar Confronto</button>
                     </div>
                     `}
+                    ${(!isOpen && !isFinished && mapSelectEnabled) ? mapControlsHtml(m, matchId) : ''}
                 </div>
             `;
         }
@@ -254,12 +256,14 @@ async function deleteMatch(matchId) {
     }
     if (!confirm('Excluir esta partida e todos os votos?')) return;
     try {
-        // Delete votes and teamVotes subcollections
+        // Delete votes, teamVotes and mapVotes subcollections
         const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
         const teamVotesSnap = await db.collection('matches').doc(matchId).collection('teamVotes').get();
+        const mapVotesSnap = await db.collection('matches').doc(matchId).collection('mapVotes').get();
         const batch = db.batch();
         votesSnap.docs.forEach(d => batch.delete(d.ref));
         teamVotesSnap.docs.forEach(d => batch.delete(d.ref));
+        mapVotesSnap.docs.forEach(d => batch.delete(d.ref));
         batch.delete(db.collection('matches').doc(matchId));
         await batch.commit();
         toast('Partida excluída!', 'success');
@@ -297,6 +301,7 @@ async function finishMatch(matchId) {
     if (!confirm('Finalizar esta partida? Ela ficará travada (pode reabrir depois se precisar).')) return;
     try {
         await db.collection('matches').doc(matchId).update({ status: 'finished', wasFinished: true });
+        await markMapPlayed(matchId);
         toast('✅ Partida finalizada!', 'success');
         loadAdminMatches();
     } catch (e) {
@@ -918,13 +923,13 @@ async function viewMatchResult(matchId) {
             toast('Resultado não disponível.', 'error');
             return;
         }
-        showResultModal(match.name, match.result);
+        showResultModal(match.name, match.result, match.chosenMap);
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
     }
 }
 
-function showResultModal(title, teams) {
+function showResultModal(title, teams, chosenMap) {
     const diff = Math.abs(teams.sumA - teams.sumB);
     const overlay = document.getElementById('editModal');
     overlay.querySelector('.modal-box').innerHTML = `
@@ -932,6 +937,7 @@ function showResultModal(title, teams) {
             <span>🏆 ${title}</span>
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
         </div>
+        ${chosenMap ? `<div style="text-align:center;margin-bottom:10px;font-size:14px;color:var(--text);">🗺️ Mapa: <strong style="color:var(--yellow);">${chosenMap.emoji || ''} ${chosenMap.name}</strong></div>` : ''}
         <div class="diff-display ${diff <= 2 ? 'balanced' : 'unbalanced'}">
             Diferença: <span class="diff-value">${diff}</span> ponto(s)
             ${diff <= 2 ? '<br><span style="color:var(--green);font-size:14px;">✅ Times Balanceados!</span>' : ''}
@@ -965,15 +971,16 @@ function showResultModal(title, teams) {
             </div>
         </div>
         <div style="text-align:center;margin-top:16px;">
-            <button class="btn btn-primary btn-small" onclick="copyResultWhatsApp('${encodeURIComponent(JSON.stringify({name:title,teams}))}')">📱 Copiar p/ WhatsApp</button>
+            <button class="btn btn-primary btn-small" onclick="copyResultWhatsApp('${encodeURIComponent(JSON.stringify({name:title,teams,chosenMap:chosenMap||null}))}')">📱 Copiar p/ WhatsApp</button>
         </div>
     `;
     overlay.classList.add('active');
 }
 
 function copyResultWhatsApp(encoded) {
-    const { name, teams } = JSON.parse(decodeURIComponent(encoded));
+    const { name, teams, chosenMap } = JSON.parse(decodeURIComponent(encoded));
     let text = `🎮 *${name}* 🎮\n\n`;
+    if (chosenMap) text += `🗺️ *Mapa:* ${chosenMap.emoji || ''} ${chosenMap.name}\n\n`;
     text += `💙 *TIME A* (${teams.sumA} pts)\n`;
     teams.teamA.forEach(p => text += `• ${p.name} (${p.role} - Nv.${p.currentLevel})\n`);
     text += `\n🧡 *TIME B* (${teams.sumB} pts)\n`;

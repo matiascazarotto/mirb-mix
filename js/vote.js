@@ -7,14 +7,16 @@ async function loadVotePage() {
     const el = document.getElementById('voteContent');
     el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
 
-    // Check if ouvidoria / re-sort are enabled
+    // Check if ouvidoria / re-sort / escolha de mapa are enabled
     let ouvidoriaEnabled = true;
     let resortEnabled = true;
+    let mapSelectEnabled = true;
     try {
         const settingsDoc = await db.collection('config').doc('settings').get();
         if (settingsDoc.exists) {
             if (settingsDoc.data().ouvidoriaEnabled === false) ouvidoriaEnabled = false;
             if (settingsDoc.data().resortEnabled === false) resortEnabled = false;
+            if (settingsDoc.data().mapSelectEnabled === false) mapSelectEnabled = false;
         }
     } catch (e) {}
 
@@ -41,11 +43,12 @@ async function loadVotePage() {
 
     try {
         // Query open, voting and team_vote matches + latest jornal for badges
-        const [openSnap, votingSnap, teamVoteSnap, jornalSnap] = await Promise.all([
+        const [openSnap, votingSnap, teamVoteSnap, jornalSnap, mapVoteSnap] = await Promise.all([
             db.collection('matches').where('status', '==', 'open').orderBy('createdAt', 'desc').get(),
             db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get(),
             db.collection('matches').where('status', '==', 'team_vote').orderBy('createdAt', 'desc').get(),
-            db.collection('jornal').orderBy('weekStart', 'desc').limit(1).get()
+            db.collection('jornal').orderBy('weekStart', 'desc').limit(1).get(),
+            mapSelectEnabled ? db.collection('matches').where('mapVote', '==', 'open').get() : Promise.resolve({ docs: [], empty: true })
         ]);
 
         // Build badge map: playerName → array of emoji strings
@@ -117,7 +120,7 @@ async function loadVotePage() {
         const _preGenIds = escalacaoMatches.map(d => d.id);
         const _triggerPreGen = () => _preGenIds.forEach(id => preGenerateMatchImage(id));
 
-        if (votingSnap.empty && teamVoteSnap.empty) {
+        if (votingSnap.empty && teamVoteSnap.empty && mapVoteSnap.empty) {
             // Check for active poll
             let pollHtml = '';
             try {
@@ -187,6 +190,7 @@ async function loadVotePage() {
                         <div class="match-title">${m.name}</div>
                         <span class="match-status team_vote">🔵 Confirmação${round > 1 ? ' #' + round : ''}</span>
                     </div>
+                    ${m.chosenMap ? `<div style="text-align:center;margin:8px 0 -4px;font-size:13px;color:var(--text);">🗺️ Mapa: <strong style="color:var(--yellow);">${m.chosenMap.emoji || ''} ${m.chosenMap.name}</strong></div>` : ''}
 
                     <div style="text-align:center;margin:12px 0;padding:10px;border-radius:8px;background:rgba(0,0,0,0.3);">
                         <span style="color:var(--text-dim);font-size:13px;">Diferença: </span>
@@ -340,8 +344,19 @@ async function loadVotePage() {
             }
         });
 
-        // Team vote cards first, then level voting, then ouvidoria
-        el.innerHTML = escalacaoHtml + teamVoteHtml + html + muralHtml;
+        // ── Map Vote Cards (votação de mapa — Top 3) ──
+        let mapVoteHtml = '';
+        let mapVoteIds = [];
+        let mapPool = null;
+        if (mapSelectEnabled && !mapVoteSnap.empty) {
+            mapPool = await loadMapPool();
+            const built = await buildMapVoteHtml(mapVoteSnap.docs, _voter, mapPool);
+            mapVoteHtml = built.html;
+            mapVoteIds = built.ids;
+        }
+
+        // Map vote + team vote cards first, then level voting, then ouvidoria
+        el.innerHTML = escalacaoHtml + mapVoteHtml + teamVoteHtml + html + muralHtml;
         if (ouvidoriaEnabled) initMural();
         _triggerPreGen();
 
@@ -384,6 +399,18 @@ async function loadVotePage() {
                 unsubscribers.push(unsub);
             });
             teamVoteUnsubscribe = () => unsubscribers.forEach(u => u());
+        }
+
+        // Start real-time listeners for map vote progress
+        destroyMapVoteListener();
+        if (mapVoteIds.length > 0 && mapPool) {
+            const mapUnsubs = [];
+            mapVoteIds.forEach(matchId => {
+                const unsub = db.collection('matches').doc(matchId).collection('mapVotes')
+                    .onSnapshot(mvSnap => renderMapVoteProgress(matchId, mvSnap.docs, mapPool));
+                mapUnsubs.push(unsub);
+            });
+            mapVoteUnsubscribe = () => mapUnsubs.forEach(u => u());
         }
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;padding:30px;">Erro ao carregar: ${e.message}</p>`;

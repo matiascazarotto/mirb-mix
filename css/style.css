@@ -1240,3 +1240,84 @@
             .jornal-headline-bar { font-size: 10px; }
             .jornal-footer-stats { flex-wrap: wrap; gap: 8px; }
         }
+
+        /* ── Mapas (votação Top 3 + rotação) ── */
+        .match-card.map_vote::before {
+            background: linear-gradient(90deg, var(--yellow), var(--ct-blue));
+        }
+        .match-status.map_vote {
+            background: rgba(255,214,0,0.15);
+            color: var(--yellow);
+            border: 1px solid rgba(255,214,0,0.3);
+        }
+        .map-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+        .map-tile {
+            position: relative;
+            flex: 1 1 90px;
+            max-width: 130px;
+            min-width: 84px;
+            padding: 14px 8px 10px;
+            background: rgba(255,255,255,0.04);
+            border: 2px solid var(--card-border);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s, transform 0.1s;
+            user-select: none;
+        }
+        .map-tile:hover { border-color: rgba(255,255,255,0.2); background: rgba(255,255,255,0.07); }
+        .map-tile:active { transform: scale(0.97); }
+        .map-tile .map-emoji { font-size: 26px; line-height: 1; }
+        .map-tile .map-name {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            font-size: 13px;
+            color: var(--text);
+            text-align: center;
+        }
+        .map-tile.selected {
+            border-color: var(--green);
+            background: rgba(0,200,83,0.10);
+        }
+        .map-tile .map-rank {
+            position: absolute;
+            top: -8px;
+            right: -8px;
+            min-width: 22px;
+            height: 22px;
+            padding: 0 5px;
+            border-radius: 11px;
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            font-size: 12px;
+            color: #06210f;
+            background: var(--green);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        }
+        .map-tile:not(.selected) .map-rank { display: none; }
+        .map-tile.rank-1 { border-color: var(--yellow); background: rgba(255,214,0,0.10); }
+        .map-tile.rank-1 .map-rank { background: var(--yellow); color: #2a2400; }
+        .map-tile.rank-2 { border-color: var(--ct-blue); background: rgba(79,195,247,0.10); }
+        .map-tile.rank-2 .map-rank { background: var(--ct-blue); color: #04212e; }
+        .map-tile.rank-3 { border-color: #ff9800; background: rgba(255,152,0,0.10); }
+        .map-tile.rank-3 .map-rank { background: #ff9800; color: #2a1a00; }
+        .map-admin-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            align-items: center;
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid rgba(255,255,255,0.05);
+        }

@@ -237,7 +237,7 @@ async function renderAdminPanel() {
                     </div>
                     <button class="btn btn-primary btn-small" onclick="adminGenerateJornal()">📰 Gerar Jornal</button>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div>
                         <div style="font-weight:600;color:var(--text);font-size:14px;">🗳️ Enquetes</div>
                         <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Habilitar ou desabilitar enquetes rápidas para Admins</div>
@@ -245,6 +245,28 @@ async function renderAdminPanel() {
                     <div id="pollToggleContainer">
                         <div class="loading-spinner" style="transform:scale(0.5);"></div>
                     </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;">
+                    <div>
+                        <div style="font-weight:600;color:var(--text);font-size:14px;">🗺️ Escolha de Mapa</div>
+                        <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Habilitar votação de mapa (Top 3) e sorteio por rotação na página de votação</div>
+                    </div>
+                    <div id="mapSelectToggleContainer">
+                        <div class="loading-spinner" style="transform:scale(0.5);"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="card" style="margin-top:16px;">
+                <div class="card-title">🗺️ Lista de Mapas</div>
+                <p style="color:var(--text-dim);font-size:12px;margin-bottom:12px;">Mapas ativos entram na votação (Top 3) e no sorteio. Desative um mapa para tirá-lo da rotação sem apagar.</p>
+                <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;">
+                    <input type="text" id="newMapEmoji" placeholder="🗺️" maxlength="4" style="width:56px;padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;text-align:center;box-sizing:border-box;">
+                    <input type="text" id="newMapName" placeholder="Nome do mapa" maxlength="24" style="flex:1;min-width:120px;padding:8px 10px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:var(--text);font-size:14px;box-sizing:border-box;" onkeydown="if(event.key==='Enter')addMapToPool()">
+                    <button class="btn btn-primary btn-small" onclick="addMapToPool()">➕ Add</button>
+                </div>
+                <div id="mapPoolEditorList"><div class="loading-spinner" style="transform:scale(0.7);">Carregando</div></div>
+                <div style="margin-top:12px;text-align:right;">
+                    <button class="btn btn-secondary btn-small" onclick="resetMapRotation()" style="font-size:11px;">🔄 Resetar rotação</button>
                 </div>
             </div>
             <div class="card" style="margin-top:16px;">
@@ -269,6 +291,7 @@ async function renderAdminPanel() {
                     <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockVote"> Voto Nível</label>
                     <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockTeamVote"> Voto Time</label>
                     <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockPoll"> Enquete</label>
+                    <label style="font-size:13px;color:var(--text);cursor:pointer;display:flex;align-items:center;gap:4px;"><input type="checkbox" id="blockMapVote"> Voto Mapa</label>
                 </div>
                 <button class="btn btn-small" onclick="staffBlockDevice()" style="width:100%;background:rgba(255,61,61,0.15);color:var(--red);border:1px solid rgba(255,61,61,0.3);">🚫 Bloquear</button>
                 <div id="blockedDevicesList" style="margin-top:12px;"></div>
@@ -306,9 +329,11 @@ async function loadStaffSettings() {
         renderNavToggle('h2hToggleContainer', data.h2hEnabled !== false, 'h2hEnabled');
         renderNavToggle('jornalToggleContainer', data.jornalEnabled !== false, 'jornalEnabled');
         renderNavToggle('pollToggleContainer', data.pollEnabled !== false, 'pollEnabled');
+        renderNavToggle('mapSelectToggleContainer', data.mapSelectEnabled !== false, 'mapSelectEnabled');
+        loadMapPoolEditor();
         loadBlockedDevices();
     } catch (e) {
-        ['ouvidoriaToggleContainer', 'resortToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer'].forEach(id => {
+        ['ouvidoriaToggleContainer', 'resortToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer', 'mapSelectToggleContainer'].forEach(id => {
             const c = document.getElementById(id);
             if (c) c.innerHTML = '<span style="color:var(--red);font-size:12px;">Erro ao carregar</span>';
         });
@@ -353,7 +378,8 @@ async function toggleNavFeature(featureKey) {
         resortEnabled: { nav: null, container: 'resortToggleContainer', label: 'Refazer Times' },
         h2hEnabled: { nav: 'navH2h', container: 'h2hToggleContainer', label: '1 vs 1' },
         jornalEnabled: { nav: 'navJornal', container: 'jornalToggleContainer', label: 'Jornal' },
-        pollEnabled: { nav: null, container: 'pollToggleContainer', label: 'Enquetes' }
+        pollEnabled: { nav: null, container: 'pollToggleContainer', label: 'Enquetes' },
+        mapSelectEnabled: { nav: null, container: 'mapSelectToggleContainer', label: 'Escolha de Mapa' }
     };
     const cfg = map[featureKey];
     if (!cfg) return;
@@ -419,6 +445,8 @@ async function staffBlockDevice() {
     if (document.getElementById('blockVote').checked) features.push('vote');
     if (document.getElementById('blockTeamVote').checked) features.push('teamVote');
     if (document.getElementById('blockPoll').checked) features.push('poll');
+    const blockMapVoteEl = document.getElementById('blockMapVote');
+    if (blockMapVoteEl && blockMapVoteEl.checked) features.push('mapVote');
     if (!features.length) { toast('Selecione ao menos uma funcionalidade!', 'error'); return; }
     try {
         if (ip) await db.collection('config').doc('blockedIPs').set({ [ip]: features }, { merge: true });
@@ -451,7 +479,7 @@ async function loadBlockedDevices() {
         ]);
         const ipData = ipDoc.exists ? ipDoc.data() : {};
         const fpData = fpDoc.exists ? fpDoc.data() : {};
-        const labels = { mural: 'Ouvidoria', vote: 'Voto Nível', teamVote: 'Voto Time', poll: 'Enquete' };
+        const labels = { mural: 'Ouvidoria', vote: 'Voto Nível', teamVote: 'Voto Time', poll: 'Enquete', mapVote: 'Voto Mapa' };
         let html = '';
         Object.entries(ipData).forEach(([ip, feats]) => {
             html += `<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04);">
