@@ -15,6 +15,9 @@ const firebaseConfig = {
 // ─── Init Firebase ───
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+// Cache offline (IndexedDB): reloads e novas visitas renderizam do cache local
+// na hora; onSnapshot busca só os deltas do servidor por cima.
+try { db.enablePersistence({ synchronizeTabs: true }).catch(() => {}); } catch (e) {}
 const auth = firebase.auth();
 const ADMIN_EMAIL = 'admin@mirb-mix.firebaseapp.com';
 const STAFF_EMAIL = 'staff@mirb-mix.firebaseapp.com';

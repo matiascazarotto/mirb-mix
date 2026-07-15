@@ -3,7 +3,7 @@
 // ╚══════════════════════════════════╝
 async function renderAdminPanel() {
     let pollEnabled = true;
-    try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().pollEnabled === false) pollEnabled = false; } catch(e) {}
+    try { const s = await Store.getSettings(); if (s.pollEnabled === false) pollEnabled = false; } catch(e) {}
     const container = document.getElementById('adminContent');
     container.innerHTML = `
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
@@ -322,8 +322,7 @@ function switchAdminTab(btn, tabId) {
 // ╚══════════════════════════════════╝
 async function loadStaffSettings() {
     try {
-        const doc = await db.collection('config').doc('settings').get();
-        const data = doc.exists ? doc.data() : {};
+        const data = await Store.getSettings();
         renderOuvidoriaToggle(data.ouvidoriaEnabled !== false);
         renderNavToggle('resortToggleContainer', data.resortEnabled !== false, 'resortEnabled');
         renderNavToggle('h2hToggleContainer', data.h2hEnabled !== false, 'h2hEnabled');
@@ -352,8 +351,8 @@ function renderOuvidoriaToggle(enabled) {
 
 async function toggleOuvidoria() {
     try {
-        const doc = await db.collection('config').doc('settings').get();
-        const currentEnabled = doc.exists ? (doc.data().ouvidoriaEnabled !== false) : true;
+        const data = await Store.getSettings();
+        const currentEnabled = data.ouvidoriaEnabled !== false;
         const newEnabled = !currentEnabled;
         await db.collection('config').doc('settings').set({ ouvidoriaEnabled: newEnabled }, { merge: true });
         renderOuvidoriaToggle(newEnabled);
@@ -384,8 +383,8 @@ async function toggleNavFeature(featureKey) {
     const cfg = map[featureKey];
     if (!cfg) return;
     try {
-        const doc = await db.collection('config').doc('settings').get();
-        const current = doc.exists ? (doc.data()[featureKey] !== false) : true;
+        const data = await Store.getSettings();
+        const current = data[featureKey] !== false;
         const newVal = !current;
         await db.collection('config').doc('settings').set({ [featureKey]: newVal }, { merge: true });
         renderNavToggle(cfg.container, newVal, featureKey);
@@ -523,13 +522,16 @@ async function staffSearchIP() {
             return docFp === fp;
         }
 
-        // 1. Votos de nível e time — últimas 30 partidas
-        const matchSnap = await db.collection('matches').orderBy('createdAt', 'desc').limit(30).get();
-        for (const mDoc of matchSnap.docs) {
-            const mData = mDoc.data();
-            const mName = mData.name || mDoc.id;
-            const mDate = mData.createdAt ? mData.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
-            const votesSnap = await mDoc.ref.collection('votes').get();
+        // 1. Votos de nível e time — últimas 30 partidas (subcoleções em paralelo)
+        const recentMatches = (await Store.getMatches()).slice(0, 30);
+        await Promise.all(recentMatches.map(async m => {
+            const mName = m.name || m.id;
+            const mDate = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
+            const ref = db.collection('matches').doc(m.id);
+            const [votesSnap, tvSnap] = await Promise.all([
+                ref.collection('votes').get(),
+                ref.collection('teamVotes').get()
+            ]);
             votesSnap.docs.forEach(v => {
                 const d = v.data();
                 if (d._meta && matchesSearch(d._meta.ip, d._meta.fingerprint)) {
@@ -538,7 +540,6 @@ async function staffSearchIP() {
                     results.push({ type: '🗳️ Voto Nível', detail: `${mName} (${mDate})`, sub: `Votou em ${d._meta.votedOn || '?'} jogadores — ${d._meta.timestamp || ''}` });
                 }
             });
-            const tvSnap = await mDoc.ref.collection('teamVotes').get();
             tvSnap.docs.forEach(v => {
                 const d = v.data();
                 if (d._meta && matchesSearch(d._meta.ip, d._meta.fingerprint)) {
@@ -547,7 +548,7 @@ async function staffSearchIP() {
                     results.push({ type: '⚔️ Voto Time', detail: `${mName} (${mDate})`, sub: `Votou: Time ${d.vote || '?'} — ${d._meta.timestamp || ''}` });
                 }
             });
-        }
+        }));
 
         // 2. Enquetes
         const pollSnap = await db.collection('polls').get();

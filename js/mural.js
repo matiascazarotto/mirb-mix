@@ -251,8 +251,7 @@ async function postMural() {
     const author = localStorage.getItem('muralAuthor') || 'Anônimo';
     let _ip = 'unknown';
     let _fp = 'unknown';
-    try { const r = await fetch('https://api.ipify.org?format=json'); _ip = (await r.json()).ip || 'unknown'; } catch(_){}
-    try { _fp = await getDeviceFingerprint(); } catch(_){}
+    try { const v = await getVoterDeviceId(); _ip = v.ip; _fp = v.fingerprint; } catch(_){}
     if (await isIPBlocked(_ip, 'mural', _fp)) { toast('Não foi possível postar. Tente novamente mais tarde.', 'error'); return; }
 
     try {
@@ -361,14 +360,36 @@ async function getDeviceFingerprint() {
 }
 
 // Get voter unique ID: IP + device fingerprint
-async function getVoterDeviceId() {
+// IP cacheado em sessionStorage (TTL 6h) + timeout de 2,5s: o ipify (serviço
+// externo, 0,5-3s) rodava em TODA carga da página e era um dos maiores gargalos.
+const _IP_CACHE_KEY = 'mirb_ipCache';
+const _IP_CACHE_TTL = 6 * 60 * 60 * 1000;
+let _voterIdCache = null;
+
+async function _fetchPublicIP() {
+    try {
+        const cached = JSON.parse(sessionStorage.getItem(_IP_CACHE_KEY));
+        if (cached && cached.ip && Date.now() - cached.t < _IP_CACHE_TTL) return cached.ip;
+    } catch (_) {}
     let ip = 'unknown';
     try {
-        const res = await fetch('https://api.ipify.org?format=json');
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 2500);
+        const res = await fetch('https://api.ipify.org?format=json', { signal: ctrl.signal });
+        clearTimeout(timer);
         ip = (await res.json()).ip || 'unknown';
     } catch (_) {}
-    const fp = await getDeviceFingerprint();
-    return { ip, fingerprint: fp, deviceId: ip + '_' + fp };
+    if (ip !== 'unknown') {
+        try { sessionStorage.setItem(_IP_CACHE_KEY, JSON.stringify({ ip, t: Date.now() })); } catch (_) {}
+    }
+    return ip;
+}
+
+async function getVoterDeviceId() {
+    if (_voterIdCache && _voterIdCache.ip !== 'unknown') return _voterIdCache;
+    const [ip, fp] = await Promise.all([_fetchPublicIP(), getDeviceFingerprint()]);
+    _voterIdCache = { ip, fingerprint: fp, deviceId: ip + '_' + fp };
+    return _voterIdCache;
 }
 
 // ── Lembra o último nível votado de cada jogador (por dispositivo, localStorage) ──
@@ -449,6 +470,13 @@ async function submitVote(matchId) {
         };
 
         await db.collection('matches').doc(matchId).collection('votes').doc(voterId).set(voteRecord);
+        // Contador desnormalizado: a lista do admin lê voteCount direto do doc
+        // (sem varrer a subcoleção) e vê votos chegando ao vivo via onSnapshot.
+        // Só incrementa se o campo já existe — partida antiga sem voteCount tem
+        // votos não contados no campo; o admin usa o fallback count() pra ela.
+        if (typeof match.voteCount === 'number') {
+            try { await db.collection('matches').doc(matchId).update({ voteCount: firebase.firestore.FieldValue.increment(1) }); } catch (_) {}
+        }
 
         // Mark as voted in localStorage
         localStorage.setItem(`voted_${matchId}`, 'true');

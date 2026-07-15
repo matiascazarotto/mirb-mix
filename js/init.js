@@ -25,10 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+    Store.start();
     loadVotePage();
     // Apply nav visibility from settings (cache for next reload to avoid flicker)
-    db.collection('config').doc('settings').get().then(doc => {
-        const data = doc.exists ? doc.data() : {};
+    Store.getSettings().then(data => {
         const h2h = data.h2hEnabled !== false;
         const jornal = data.jornalEnabled !== false;
         const bH = document.getElementById('navH2h');
@@ -48,10 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Init live stream listener
     initLiveListener();
     // Migrate: mark existing finished matches with wasFinished flag
-    db.collection('matches').where('status', '==', 'finished').get().then(snap => {
-        snap.docs.forEach(d => {
-            if (!d.data().wasFinished) d.ref.update({ wasFinished: true });
-        });
+    Store.getMatches().then(all => {
+        all.filter(m => m.status === 'finished' && !m.wasFinished)
+            .forEach(m => db.collection('matches').doc(m.id).update({ wasFinished: true }).catch(() => {}));
     }).catch(() => {});
 });
 

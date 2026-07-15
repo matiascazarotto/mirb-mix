@@ -25,9 +25,8 @@ const DEFAULT_MAP_POOL = [
 // reaproveitar as permissões existentes — evita depender de regras para docs novos.
 async function loadMapPool() {
     try {
-        const doc = await db.collection('config').doc('settings').get();
-        const mp = doc.exists ? doc.data().mapPool : null;
-        if (Array.isArray(mp) && mp.length) return mp;
+        const s = await Store.getSettings();
+        if (Array.isArray(s.mapPool) && s.mapPool.length) return s.mapPool;
     } catch (e) {}
     return DEFAULT_MAP_POOL.map(m => ({ ...m }));
 }
@@ -38,17 +37,16 @@ function getActiveMaps(maps) {
 
 async function isMapSelectEnabled() {
     try {
-        const s = await db.collection('config').doc('settings').get();
-        if (s.exists && s.data().mapSelectEnabled === false) return false;
+        const s = await Store.getSettings();
+        if (s.mapSelectEnabled === false) return false;
     } catch (e) {}
     return true;
 }
 
 async function loadMapRotation() {
     try {
-        const doc = await db.collection('config').doc('settings').get();
-        const pl = doc.exists ? doc.data().mapPlayed : null;
-        if (Array.isArray(pl)) return pl;
+        const s = await Store.getSettings();
+        if (Array.isArray(s.mapPlayed)) return s.mapPlayed;
     } catch (e) {}
     return [];
 }

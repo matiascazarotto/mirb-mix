@@ -8,17 +8,10 @@ async function loadVotePage() {
     el.innerHTML = '<div class="loading-spinner">Carregando partidas</div>';
 
     // Check if ouvidoria / re-sort / escolha de mapa are enabled
-    let ouvidoriaEnabled = true;
-    let resortEnabled = true;
-    let mapSelectEnabled = true;
-    try {
-        const settingsDoc = await db.collection('config').doc('settings').get();
-        if (settingsDoc.exists) {
-            if (settingsDoc.data().ouvidoriaEnabled === false) ouvidoriaEnabled = false;
-            if (settingsDoc.data().resortEnabled === false) resortEnabled = false;
-            if (settingsDoc.data().mapSelectEnabled === false) mapSelectEnabled = false;
-        }
-    } catch (e) {}
+    const _settings = await Store.getSettings();
+    const ouvidoriaEnabled = _settings.ouvidoriaEnabled !== false;
+    const resortEnabled = _settings.resortEnabled !== false;
+    const mapSelectEnabled = _settings.mapSelectEnabled !== false;
 
     const muralHtml = ouvidoriaEnabled ? `
         <div class="mural-container" style="margin-top:24px;">
@@ -42,14 +35,17 @@ async function loadVotePage() {
     ` : '';
 
     try {
-        // Query open, voting and team_vote matches + latest jornal for badges
-        const [openSnap, votingSnap, teamVoteSnap, jornalSnap, mapVoteSnap] = await Promise.all([
-            db.collection('matches').where('status', '==', 'open').orderBy('createdAt', 'desc').get(),
-            db.collection('matches').where('status', '==', 'voting').orderBy('createdAt', 'desc').get(),
-            db.collection('matches').where('status', '==', 'team_vote').orderBy('createdAt', 'desc').get(),
-            db.collection('jornal').orderBy('weekStart', 'desc').limit(1).get(),
-            mapSelectEnabled ? db.collection('matches').where('mapVote', '==', 'open').get() : Promise.resolve({ docs: [], empty: true })
+        // Partidas vêm do Store (cache em memória + tempo real) — zero queries aqui.
+        // _snap adapta os objetos ao formato de QuerySnapshot pro código abaixo não mudar.
+        const [allMatches, jornalSnap] = await Promise.all([
+            Store.getMatches(),
+            db.collection('jornal').orderBy('weekStart', 'desc').limit(1).get()
         ]);
+        const _snap = arr => ({ docs: arr.map(m => ({ id: m.id, data: () => m })), empty: arr.length === 0 });
+        const openSnap = _snap(allMatches.filter(m => m.status === 'open'));
+        const votingSnap = _snap(allMatches.filter(m => m.status === 'voting'));
+        const teamVoteSnap = _snap(allMatches.filter(m => m.status === 'team_vote'));
+        const mapVoteSnap = _snap(mapSelectEnabled ? allMatches.filter(m => m.mapVote === 'open') : []);
 
         // Build badge map: playerName → array of emoji strings
         const badgeMap = {};
@@ -72,16 +68,13 @@ async function loadVotePage() {
             return m.players && m.players.length > 0 && !(m.result && m.result.teamA);
         });
         if (escalacaoMatches.length > 0) {
-            // Fetch avatar map from gcStats cache
+            // Avatar map from gcStats — direto do cache do Store, sem query
             let avatarMap = {};
-            try {
-                const statsSnap = await db.collection('matches').orderBy('createdAt','desc').limit(20).get();
-                statsSnap.docs.forEach(d => {
-                    (d.data().gcStats || []).forEach(g => {
-                        if (g.avatar && g.playerName && !avatarMap[g.playerName]) avatarMap[g.playerName] = g.avatar;
-                    });
+            allMatches.slice(0, 20).forEach(m => {
+                (m.gcStats || []).forEach(g => {
+                    if (g.avatar && g.playerName && !avatarMap[g.playerName]) avatarMap[g.playerName] = g.avatar;
                 });
-            } catch(e) {}
+            });
 
             for (const doc of escalacaoMatches) {
                 const m = doc.data();
@@ -158,7 +151,8 @@ async function loadVotePage() {
         let teamVoteHtml = '';
         const teamVoteMatchIds = [];
 
-        for (const doc of teamVoteSnap.docs) {
+        // Elegibilidade/já-votou de todos os cards em paralelo (era sequencial)
+        const _tvChecks = await Promise.all(teamVoteSnap.docs.map(async doc => {
             const m = doc.data();
             const matchId = doc.id;
 
@@ -182,6 +176,13 @@ async function loadVotePage() {
                     localStorage.setItem(`teamVoted_${matchId}`, String(round));
                 }
             }
+            return { isEligible, alreadyVoted, round };
+        }));
+
+        teamVoteSnap.docs.forEach((doc, _ti) => {
+            const m = doc.data();
+            const matchId = doc.id;
+            const { isEligible, alreadyVoted, round } = _tvChecks[_ti];
             const diff = m.result ? Math.abs(m.result.sumA - m.result.sumB) : 0;
 
             teamVoteHtml += `
@@ -256,7 +257,7 @@ async function loadVotePage() {
                 </div>
             `;
             teamVoteMatchIds.push(matchId);
-        }
+        });
 
         // ── Level Voting Cards ──
         // Assign display names for duplicate match names
@@ -513,7 +514,7 @@ async function checkTeamVoteThreshold(matchId) {
 
     // Refazer times pode estar desligado pela staff — nesse caso só o "manter" fecha a partida
     let resortEnabled = true;
-    try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().resortEnabled === false) resortEnabled = false; } catch (e) {}
+    try { const s = await Store.getSettings(); if (s.resortEnabled === false) resortEnabled = false; } catch (e) {}
 
     if (keepCount / eligible >= THRESHOLD) {
         // 60%+ dos elegíveis votaram manter → confirmar times
@@ -533,3 +534,32 @@ async function checkTeamVoteThreshold(matchId) {
     }
 }
 
+
+// ╔══════════════════════════════════╗
+// ║  TEMPO REAL — página Votar       ║
+// ╚══════════════════════════════════╝
+// Re-renderiza a página quando o ESTADO das partidas muda (abriu/encerrou votação,
+// re-sort, mapa escolhido, escalação editada). A assinatura ignora de propósito
+// campos como voteCount: votos de outras pessoas não podem re-renderizar a página
+// no meio do preenchimento dos sliders.
+let _votePageSig = null;
+let _votePageRefreshTimer = null;
+Store.subscribe('matches', async () => {
+    const all = await Store.getMatches();
+    const sig = all
+        .filter(m => ['open', 'voting', 'team_vote'].includes(m.status) || m.mapVote === 'open')
+        .map(m => [
+            m.id, m.status, m.teamVoteRound || 0, m.mapVote || '',
+            (m.chosenMap && m.chosenMap.id) || '',
+            (m.players || []).map(p => p.id).join(','),
+            m.result ? m.result.sumA + '-' + m.result.sumB : ''
+        ].join('|'))
+        .join(';');
+    const isFirst = _votePageSig === null;
+    if (_votePageSig === sig) return;
+    _votePageSig = sig;
+    if (isFirst) return; // 1º snapshot: a carga inicial da página já usa esses dados
+    if (!document.getElementById('page-vote')?.classList.contains('active')) return;
+    clearTimeout(_votePageRefreshTimer);
+    _votePageRefreshTimer = setTimeout(() => loadVotePage(), 400);
+});

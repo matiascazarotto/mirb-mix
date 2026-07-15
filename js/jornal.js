@@ -207,12 +207,11 @@ async function generateJornal(targetSunday) {
     const existingDoc = await db.collection('jornal').doc(weekId).get();
     if (existingDoc.exists) return existingDoc.data();
 
-    // Fetch all matches in the date range
-    const allMatches = await db.collection('matches').orderBy('createdAt', 'desc').get();
+    // Fetch all matches in the date range (cache do Store)
+    const allMatches = await Store.getMatches();
     const allInPeriod = [];
     const weekMatches = [];
-    allMatches.docs.forEach(d => {
-        const m = { id: d.id, ...d.data() };
+    allMatches.forEach(m => {
         if (!m.createdAt) return;
         const dt = m.createdAt.toDate();
         if (dt < weekStart || dt > weekEnd) return;
@@ -424,10 +423,9 @@ async function generateMissingJornais() {
     const now = new Date();
 
     // 1. Which completed weeks (Sun–Sat already ended) have ≥1 GC-stats match?
-    const allMatches = await db.collection('matches').orderBy('createdAt', 'desc').get();
+    const allMatches = await Store.getMatches();
     const weeksWithMatches = new Set();
-    allMatches.docs.forEach(d => {
-        const m = d.data();
+    allMatches.forEach(m => {
         if (!m.createdAt || !m.gcStats || m.gcStats.length === 0) return;
         const sunday = getWeekSunday(m.createdAt.toDate());
         if (getWeekSaturday(sunday) >= now) return; // semana ainda não terminou
@@ -511,10 +509,10 @@ async function loadAvatarB64Cache() {
 // One-time migration: convert all existing avatar URLs to base64 in Firestore
 async function syncAvatarCache() {
     toast('⏳ Convertendo avatares...', 'success');
-    const snap = await db.collection('matches').orderBy('createdAt','desc').get();
+    const allM = await Store.getMatches();
     const avatarUrls = {}; // playerId → { name, url }
-    snap.docs.forEach(d => {
-        (d.data().gcStats || []).forEach(g => {
+    allM.forEach(m => {
+        (m.gcStats || []).forEach(g => {
             if (g.avatar && g.playerId && !avatarUrls[g.playerId]) {
                 avatarUrls[g.playerId] = { name: g.playerName, url: g.avatar };
             }
@@ -652,8 +650,8 @@ let _fightCardCache = null;
 
 async function fetchAllTimePlayerStats() {
     if (_fightCardCache) return _fightCardCache;
-    const snap = await db.collection('matches').orderBy('createdAt','desc').get();
-    const matches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
+    const all = await Store.getMatches();
+    const matches = all.filter(m => m.gcStats && m.gcStats.length > 0);
     const ps = {};
     matches.forEach(m => {
         m.gcStats.forEach(g => {

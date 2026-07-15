@@ -7,8 +7,8 @@ async function loadAdminPollTab() {
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
     try {
         // Check if polls are enabled by staff
-        const settingsDoc = await db.collection('config').doc('settings').get();
-        const pollEnabled = settingsDoc.exists ? (settingsDoc.data().pollEnabled !== false) : true;
+        const _s = await Store.getSettings();
+        const pollEnabled = _s.pollEnabled !== false;
         if (!pollEnabled) {
             el.innerHTML = `<div class="card"><div class="empty-state"><div class="icon">🗳️</div><p>Enquetes desabilitadas pelo Staff.</p></div></div>`;
             return;

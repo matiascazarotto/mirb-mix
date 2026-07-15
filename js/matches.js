@@ -72,6 +72,7 @@ async function createMatch() {
             name,
             players: matchPlayers,
             status: 'open',
+            voteCount: 0,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         toast('Partida criada! Edite os jogadores ou inicie a votação.', 'success');
@@ -87,13 +88,16 @@ async function createMatch() {
 // ╔══════════════════════════════════╗
 // ║   ADMIN MATCHES MANAGEMENT      ║
 // ╚══════════════════════════════════╝
+let _adminMatchLimit = 15;       // paginação: quantas partidas renderizar
+const _legacyVoteCounts = {};    // cache de contagem p/ partidas antigas sem voteCount
+
 async function loadAdminMatches() {
     const el = document.getElementById('adminMatchesList');
     if (!el) return;
 
     try {
-        const snap = await db.collection('matches').orderBy('createdAt', 'desc').get();
-        if (snap.empty) {
+        const cached = await Store.getMatches();
+        if (cached.length === 0) {
             el.innerHTML = '<div class="empty-state"><p>Nenhuma partida criada.</p></div>';
             return;
         }
@@ -101,23 +105,35 @@ async function loadAdminMatches() {
         // Re-sort (refazer times) e escolha de mapa — staff pode desligar globalmente
         let resortEnabled = true;
         let mapSelectEnabled = true;
-        try { const s = await db.collection('config').doc('settings').get(); if (s.exists) { if (s.data().resortEnabled === false) resortEnabled = false; if (s.data().mapSelectEnabled === false) mapSelectEnabled = false; } } catch (e) {}
+        try { const s = await Store.getSettings(); if (s.resortEnabled === false) resortEnabled = false; if (s.mapSelectEnabled === false) mapSelectEnabled = false; } catch (e) {}
 
         // Assign display names for duplicate match names
-        const allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const allMatches = cached.map(m => ({ ...m }));
         assignDisplayNames(allMatches);
-        const displayNameMap = {};
-        allMatches.forEach(m => { displayNameMap[m.id] = m.displayName; });
+
+        const visible = allMatches.slice(0, _adminMatchLimit);
+
+        // Contagem de votos: campo desnormalizado voteCount (novo); pra partidas
+        // antigas sem o campo, aggregate count() (não baixa docs) em PARALELO —
+        // era 1 query sequencial por partida (N+1), o gargalo desta tela.
+        const voteCounts = await Promise.all(visible.map(async m => {
+            if (typeof m.voteCount === 'number') return m.voteCount;
+            if (m.status !== 'voting' && _legacyVoteCounts[m.id] != null) return _legacyVoteCounts[m.id];
+            let n = 0;
+            try {
+                const agg = await db.collection('matches').doc(m.id).collection('votes').count().get();
+                n = agg.data().count;
+            } catch (e) {
+                try { n = (await db.collection('matches').doc(m.id).collection('votes').get()).size; } catch (e2) {}
+            }
+            _legacyVoteCounts[m.id] = n;
+            return n;
+        }));
 
         let html = '';
-        for (const doc of snap.docs) {
-            const m = doc.data();
-            m.displayName = displayNameMap[doc.id];
-            const matchId = doc.id;
-
-            // Count votes
-            const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
-            const voteCount = votesSnap.size;
+        visible.forEach((m, _vi) => {
+            const matchId = m.id;
+            const voteCount = voteCounts[_vi];
 
             const statusLabel = m.status === 'open' ? '⚪ Aguardando Jogadores' : m.status === 'voting' ? '🟢 Votação Aberta' : m.status === 'team_vote' ? '🔵 Votação de Times' : m.status === 'finished' ? '✅ Finalizada' : '🟡 Em Andamento';
             const isOpen = m.status === 'open';
@@ -186,7 +202,7 @@ async function loadAdminMatches() {
                     </div>
                     ` : m.status === 'voting' ? `
                     <div style="display:flex;gap:6px;flex-wrap:wrap;">
-                        <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}')">🏆 Encerrar & Balancear</button>
+                        <button class="btn btn-primary btn-small" onclick="closeVotingAndBalance('${matchId}', this)">🏆 Encerrar & Balancear</button>
                         <button class="btn btn-secondary btn-small" onclick="viewVoteDetails('${matchId}')">👁️ Ver Votos</button>
                         ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewVoteLog('${matchId}')">📜 Log</button>` : ''}
                         <button class="btn btn-secondary btn-small" onclick="editMatchPlayers('${matchId}')">✏️ Jogadores</button>
@@ -223,14 +239,19 @@ async function loadAdminMatches() {
                     ${(!isOpen && !isFinished && mapSelectEnabled) ? mapControlsHtml(m, matchId) : ''}
                 </div>
             `;
+        });
+
+        if (allMatches.length > visible.length) {
+            html += `<div style="text-align:center;margin-top:10px;">
+                <button class="btn btn-secondary btn-small" onclick="_adminMatchLimit += 15; loadAdminMatches();">⬇️ Carregar mais (${allMatches.length - visible.length} restantes)</button>
+            </div>`;
         }
         el.innerHTML = html;
 
         // Load team vote progress for team_vote matches
-        snap.docs.forEach(doc => {
-            const m = doc.data();
+        visible.forEach(m => {
             if (m.status === 'team_vote') {
-                const mid = doc.id;
+                const mid = m.id;
                 db.collection('matches').doc(mid).collection('teamVotes').get().then(tvSnap => {
                     const progressEl = document.getElementById(`teamVoteProgress-${mid}`);
                     if (!progressEl) return;
@@ -244,6 +265,20 @@ async function loadAdminMatches() {
         el.innerHTML = `<p style="color:var(--red)">Erro: ${e.message}</p>`;
     }
 }
+
+// ── Tempo real: re-renderiza a lista do admin quando as partidas mudam ──
+// (inclui voteCount → admin vê os votos chegando ao vivo). Não re-renderiza com
+// modal aberto ou input de VOD em edição pra não engolir o que o admin digita.
+let _adminRefreshTimer = null;
+Store.subscribe('matches', () => {
+    const listEl = document.getElementById('adminMatchesList');
+    if (!listEl || !listEl.innerHTML) return;
+    if (!document.getElementById('page-admin')?.classList.contains('active')) return;
+    if (document.getElementById('editModal')?.classList.contains('active')) return;
+    if (document.querySelector('.vod-new-input')) return;
+    clearTimeout(_adminRefreshTimer);
+    _adminRefreshTimer = setTimeout(() => loadAdminMatches(), 400);
+});
 
 async function deleteMatch(matchId) {
     // Block non-staff from deleting matches that were finished
@@ -423,8 +458,10 @@ async function saveEditMatchPlayers(matchId) {
                 votesSnap.docs.forEach(d => batch.delete(d.ref));
                 await batch.commit();
             }
+            await db.collection('matches').doc(matchId).update({ players: matchPlayers, voteCount: 0 });
+        } else {
+            await db.collection('matches').doc(matchId).update({ players: matchPlayers });
         }
-        await db.collection('matches').doc(matchId).update({ players: matchPlayers });
         toast('✅ Jogadores atualizados!', 'success');
         closeEditModal();
         loadAdminMatches();
@@ -509,12 +546,11 @@ async function removeVod(matchId, vodIndex) {
 
 async function showOutdatedMatches() {
     try {
-        const snap = await db.collection('matches').orderBy('createdAt', 'desc').get();
+        const all = await Store.getMatches();
         const outdated = [];
-        snap.docs.forEach(doc => {
-            const m = doc.data();
+        all.forEach(m => {
             if (m.gcStats && m.gcStats.length > 0 && m.gcStats[0].teamScore == null) {
-                outdated.push({ id: doc.id, name: m.name, playerCount: m.gcStats.length, matchCount: m.gcMatchCount || 1 });
+                outdated.push({ id: m.id, name: m.name, playerCount: m.gcStats.length, matchCount: m.gcMatchCount || 1 });
             }
         });
 
@@ -750,8 +786,8 @@ async function forceConfirmTeams(matchId) {
 
 async function forceResortTeams(matchId) {
     try {
-        const s = await db.collection('config').doc('settings').get();
-        if (s.exists && s.data().resortEnabled === false) {
+        const s = await Store.getSettings();
+        if (s.resortEnabled === false) {
             toast('Refazer times está desligado pela staff!', 'error');
             return;
         }
@@ -766,14 +802,19 @@ async function forceResortTeams(matchId) {
     }
 }
 
-async function closeVotingAndBalance(matchId) {
+async function closeVotingAndBalance(matchId, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Balanceando...'; }
+    const _restoreBtn = () => { if (btn) { btn.disabled = false; btn.textContent = '🏆 Encerrar & Balancear'; } };
     try {
-        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const [matchDoc, votesSnap] = await Promise.all([
+            db.collection('matches').doc(matchId).get(),
+            db.collection('matches').doc(matchId).collection('votes').get()
+        ]);
         const match = matchDoc.data();
-        const votesSnap = await db.collection('matches').doc(matchId).collection('votes').get();
 
         if (votesSnap.empty) {
             toast('Nenhum voto recebido ainda!', 'error');
+            _restoreBtn();
             return;
         }
 
@@ -790,7 +831,7 @@ async function closeVotingAndBalance(matchId) {
 
         // Check if re-sort (confirmação) is enabled — staff can disable it globally
         let resortEnabled = true;
-        try { const s = await db.collection('config').doc('settings').get(); if (s.exists && s.data().resortEnabled === false) resortEnabled = false; } catch (e) {}
+        try { const s = await Store.getSettings(); if (s.resortEnabled === false) resortEnabled = false; } catch (e) {}
 
         if (!resortEnabled) {
             // Re-sort desligado → fixa os times direto, pula a votação de confirmação
@@ -816,6 +857,7 @@ async function closeVotingAndBalance(matchId) {
         loadAdminMatches();
     } catch (e) {
         toast('Erro: ' + e.message, 'error');
+        _restoreBtn();
     }
 }
 

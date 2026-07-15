@@ -6,7 +6,8 @@ async function loadMatchesPage() {
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
 
     try {
-        const snap = await db.collection('matches').orderBy('createdAt', 'desc').get();
+        const cachedAll = await Store.getMatches();
+        const snap = { docs: cachedAll.map(m => ({ id: m.id, data: () => m })), empty: cachedAll.length === 0 };
         if (snap.empty) {
             el.innerHTML = '<div class="empty-state"><div class="icon">📋</div><p>Nenhuma partida encontrada.</p></div>';
             return;
@@ -178,8 +179,8 @@ async function loadDashboard() {
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
 
     try {
-        const snap = await db.collection('matches').where('status', 'in', ['closed', 'finished']).orderBy('createdAt', 'desc').get();
-        let allMatches = snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(m => m.gcStats && m.gcStats.length > 0);
+        const cached = await Store.getMatches();
+        let allMatches = cached.filter(m => ['closed', 'finished'].includes(m.status) && m.gcStats && m.gcStats.length > 0);
 
         // ── Populate month dropdown ──
         const monthSet = new Map();
