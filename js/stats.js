@@ -1,6 +1,8 @@
 // ╔══════════════════════════════════╗
 // ║       MATCHES PAGE (Public)     ║
 // ╚══════════════════════════════════╝
+let _matchesPageLimit = 10;      // paginação: quantas partidas renderizar na aba pública
+
 async function loadMatchesPage() {
     const el = document.getElementById('matchesList');
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
@@ -13,14 +15,19 @@ async function loadMatchesPage() {
             return;
         }
 
-        // Assign display names for duplicate match names
+        // Assign display names for duplicate match names (sobre TODAS, pra detectar
+        // nomes repetidos mesmo além do que está sendo renderizado)
         const allMatchesPage = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         assignDisplayNames(allMatchesPage);
         const pageNameMap = {};
         allMatchesPage.forEach(m => { pageNameMap[m.id] = m.displayName; });
 
+        // Renderiza só as N mais recentes (o Store já tem tudo em memória; isto
+        // corta só o custo de montar o HTML). Botão "Carregar mais" sobe o limite.
+        const visibleDocs = snap.docs.slice(0, _matchesPageLimit);
+
         let html = '';
-        for (const doc of snap.docs) {
+        for (const doc of visibleDocs) {
             const m = doc.data();
             m.displayName = pageNameMap[doc.id];
             const matchId = doc.id;
@@ -141,6 +148,15 @@ async function loadMatchesPage() {
                 </div>
             `;
         }
+
+        const remaining = snap.docs.length - visibleDocs.length;
+        if (remaining > 0) {
+            html += `
+                <div style="text-align:center;margin-top:14px;">
+                    <button class="btn btn-secondary btn-small" onclick="_matchesPageLimit += 10; loadMatchesPage();">⬇️ Carregar mais (${remaining} restantes)</button>
+                </div>`;
+        }
+
         el.innerHTML = html;
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
