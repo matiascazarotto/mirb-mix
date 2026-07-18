@@ -71,6 +71,12 @@ async function drawNextMap(matchId) {
         const md = matchDoc.exists ? matchDoc.data() : {};
         const currentChosen = md.chosenMap;
 
+        // Não permite re-sortear: se o mapa atual já veio de sorteio, exige remover antes (🗑️)
+        if (currentChosen && md.mapSource === 'rotation') {
+            toast('Mapa já sorteado. Remova (🗑️) antes de sortear de novo.', 'error');
+            return;
+        }
+
         let played = (await loadMapRotation()).filter(id => active.some(m => m.id === id));
         let remaining = active.filter(m => !played.includes(m.id));
         if (remaining.length === 0) {
@@ -411,9 +417,15 @@ function mapControlsHtml(m, matchId) {
         </div>`;
     }
 
+    const isDrawn = chosen && m.mapSource === 'rotation';
     const status = chosen
-        ? `<span style="font-size:13px;color:var(--text);font-weight:600;">${chosen.emoji || ''} ${chosen.name} <span style="font-size:10px;color:var(--text-dim);font-weight:400;">(${m.mapSource === 'rotation' ? 'sorteado' : 'votado'})</span></span>`
+        ? `<span style="font-size:13px;color:var(--text);font-weight:600;">${chosen.emoji || ''} ${chosen.name} <span style="font-size:10px;color:var(--text-dim);font-weight:400;">(${isDrawn ? 'sorteado' : 'votado'})</span></span>`
         : `<span style="font-size:12px;color:var(--text-dim);">nenhum definido</span>`;
+
+    // Mapa já sorteado não pode ser re-sorteado (evita re-roll): esconde o 🎲, staff remove no 🗑️ antes
+    const drawBtn = isDrawn
+        ? ''
+        : `<button class="btn btn-secondary btn-small" onclick="drawNextMap('${matchId}')" title="Sortear um mapa automaticamente (rotação sem repetir até todos serem jogados)">🎲 Sorteio automático</button>`;
 
     return `<div class="map-admin-row">
         ${heading}
@@ -421,8 +433,8 @@ function mapControlsHtml(m, matchId) {
         ${sep}
         <span style="font-size:11px;color:var(--text-dim);">${chosen ? 'Trocar por:' : 'Definir por:'}</span>
         <button class="btn btn-secondary btn-small" onclick="openMapVote('${matchId}')" title="Abrir votação de mapa: quem votou nos níveis escolhe seu Top 3 e o mais votado vence">🗳️ Votação da galera</button>
-        <button class="btn btn-secondary btn-small" onclick="drawNextMap('${matchId}')" title="Sortear um mapa automaticamente (rotação sem repetir até todos serem jogados)">🎲 Sorteio automático</button>
-        ${chosen ? `<button class="btn btn-secondary btn-small" onclick="clearChosenMap('${matchId}')" title="Remover o mapa definido">🗑️</button>` : ''}
+        ${drawBtn}
+        ${chosen ? `<button class="btn btn-secondary btn-small" onclick="clearChosenMap('${matchId}')" title="${isDrawn ? 'Remover o mapa sorteado (libera novo sorteio)' : 'Remover o mapa definido'}">🗑️</button>` : ''}
     </div>`;
 }
 
