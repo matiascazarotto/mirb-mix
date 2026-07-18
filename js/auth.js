@@ -1,13 +1,6 @@
 // ╔══════════════════════════════════╗
 // ║         ADMIN AUTH              ║
 // ╚══════════════════════════════════╝
-async function hashPassword(pw) {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(pw);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
 async function adminLogin() {
     const pw = document.getElementById('adminPassword').value;
     if (!pw) { toast('Digite a senha!', 'error'); return; }
@@ -15,7 +8,9 @@ async function adminLogin() {
     try {
         let loginType = null;
 
-        // 1. Tentar Firebase Auth (fluxo pós-migração)
+        // Login via Firebase Auth. O e-mail é fixo (STAFF_EMAIL/ADMIN_EMAIL) e o
+        // usuário digita só a senha. Sem fallback por hash: as contas já existem no
+        // Firebase Auth e o doc config/admin não é mais lido nem exposto publicamente.
         try {
             await auth.signInWithEmailAndPassword(STAFF_EMAIL, pw);
             loginType = 'staff';
@@ -26,36 +21,9 @@ async function adminLogin() {
             } catch (e2) {}
         }
 
-        // 2. Fallback: verificação por hash (migração automática)
-        if (!loginType) {
-            const hashedPw = await hashPassword(pw);
-            const doc = await db.collection('config').doc('admin').get();
-            if (!doc.exists) { toast('Senha incorreta!', 'error'); return; }
+        if (!loginType) { toast('Senha incorreta!', 'error'); return; }
 
-            const data = doc.data();
-            if (data.staffPassword && hashedPw === data.staffPassword) {
-                loginType = 'staff';
-            } else if (hashedPw === data.password) {
-                loginType = 'admin';
-            } else {
-                toast('Senha incorreta!', 'error');
-                return;
-            }
-
-            // Criar usuário Firebase Auth automaticamente
-            const email = loginType === 'staff' ? STAFF_EMAIL : ADMIN_EMAIL;
-            try {
-                await auth.createUserWithEmailAndPassword(email, pw);
-            } catch (createErr) {
-                if (createErr.code !== 'auth/email-already-in-use') {
-                    console.warn('Erro ao criar user Firebase Auth:', createErr.message);
-                }
-                // Tentar login mesmo assim
-                try { await auth.signInWithEmailAndPassword(email, pw); } catch(_){}
-            }
-        }
-
-        // 3. Sucesso
+        // Sucesso
         isAdmin = true;
         isStaff = (loginType === 'staff');
         sessionStorage.setItem('mirb_admin', 'true');
