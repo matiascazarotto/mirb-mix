@@ -117,9 +117,10 @@ async function loadMatchesPage() {
                     <div class="match-header">
                         <div>
                             <div class="match-title">${m.displayName || m.name}</div>
-                            <div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:12px;color:var(--text-dim);">
+                            <div style="display:flex;align-items:center;gap:8px;margin-top:2px;font-size:12px;color:var(--text-dim);flex-wrap:wrap;">
                                 ${date ? `<span>📅 ${date}</span>` : ''}
                                 <span>👥 ${playerCount} jogadores</span>
+                                ${m.chosenMap ? `<span>${m.chosenMap.emoji || '🗺️'} ${m.chosenMap.name}</span>` : ''}
                                 ${gcCount > 1 ? `<span>🎮 MD${gcCount}</span>` : ''}
                             </div>
                         </div>
