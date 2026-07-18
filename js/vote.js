@@ -540,8 +540,8 @@ async function checkTeamVoteThreshold(matchId) {
 // ╚══════════════════════════════════╝
 // Re-renderiza a página quando o ESTADO das partidas muda (abriu/encerrou votação,
 // re-sort, mapa escolhido, escalação editada). A assinatura ignora de propósito
-// campos como voteCount: votos de outras pessoas não podem re-renderizar a página
-// no meio do preenchimento dos sliders.
+// mudanças que não são de estado (ex.: votos de outras pessoas chegando na
+// subcoleção) pra não re-renderizar no meio do preenchimento dos sliders.
 let _votePageSig = null;
 let _votePageRefreshTimer = null;
 Store.subscribe('matches', async () => {

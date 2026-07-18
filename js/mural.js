@@ -470,13 +470,11 @@ async function submitVote(matchId) {
         };
 
         await db.collection('matches').doc(matchId).collection('votes').doc(voterId).set(voteRecord);
-        // Contador desnormalizado: a lista do admin lê voteCount direto do doc
-        // (sem varrer a subcoleção) e vê votos chegando ao vivo via onSnapshot.
-        // Só incrementa se o campo já existe — partida antiga sem voteCount tem
-        // votos não contados no campo; o admin usa o fallback count() pra ela.
-        if (typeof match.voteCount === 'number') {
-            try { await db.collection('matches').doc(matchId).update({ voteCount: firebase.firestore.FieldValue.increment(1) }); } catch (_) {}
-        }
+        // A lista do admin conta os votos reais da subcoleção via count() agregado
+        // (js/matches.js). Antes havia um voteCount desnormalizado incrementado aqui,
+        // mas o voter anônimo não tem permissão de escrever o doc da partida (só a
+        // subcoleção votes), então o increment falhava calado e o contador ficava
+        // abaixo do real. count() não baixa docs e é barato — sem contador espelho.
 
         // Mark as voted in localStorage
         localStorage.setItem(`voted_${matchId}`, 'true');

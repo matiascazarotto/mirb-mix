@@ -72,7 +72,6 @@ async function createMatch() {
             name,
             players: matchPlayers,
             status: 'open',
-            voteCount: 0,
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         toast('Partida criada! Edite os jogadores ou inicie a votação.', 'success');
@@ -89,7 +88,7 @@ async function createMatch() {
 // ║   ADMIN MATCHES MANAGEMENT      ║
 // ╚══════════════════════════════════╝
 let _adminMatchLimit = 15;       // paginação: quantas partidas renderizar
-const _legacyVoteCounts = {};    // cache de contagem p/ partidas antigas sem voteCount
+const _legacyVoteCounts = {};    // cache de contagem de votos p/ partidas não-em-votação (imutáveis)
 
 async function loadAdminMatches() {
     const el = document.getElementById('adminMatchesList');
@@ -113,11 +112,11 @@ async function loadAdminMatches() {
 
         const visible = allMatches.slice(0, _adminMatchLimit);
 
-        // Contagem de votos: campo desnormalizado voteCount (novo); pra partidas
-        // antigas sem o campo, aggregate count() (não baixa docs) em PARALELO —
-        // era 1 query sequencial por partida (N+1), o gargalo desta tela.
+        // Contagem de votos: aggregate count() (não baixa docs) em PARALELO — era 1
+        // query sequencial por partida (N+1), o gargalo desta tela. Conta os docs
+        // reais da subcoleção (fonte da verdade); partidas não-em-votação têm votos
+        // imutáveis → cacheia p/ não recontar a cada re-render.
         const voteCounts = await Promise.all(visible.map(async m => {
-            if (typeof m.voteCount === 'number') return m.voteCount;
             if (m.status !== 'voting' && _legacyVoteCounts[m.id] != null) return _legacyVoteCounts[m.id];
             let n = 0;
             try {
@@ -267,8 +266,10 @@ async function loadAdminMatches() {
 }
 
 // ── Tempo real: re-renderiza a lista do admin quando as partidas mudam ──
-// (inclui voteCount → admin vê os votos chegando ao vivo). Não re-renderiza com
-// modal aberto ou input de VOD em edição pra não engolir o que o admin digita.
+// (status, mapa, GC, VOD…). A contagem de votos é recalculada via count() a cada
+// render — não sobe voto-a-voto (os votos ficam na subcoleção, não no doc da
+// partida). Não re-renderiza com modal aberto ou input de VOD em edição pra não
+// engolir o que o admin digita.
 let _adminRefreshTimer = null;
 Store.subscribe('matches', () => {
     const listEl = document.getElementById('adminMatchesList');
@@ -458,7 +459,7 @@ async function saveEditMatchPlayers(matchId) {
                 votesSnap.docs.forEach(d => batch.delete(d.ref));
                 await batch.commit();
             }
-            await db.collection('matches').doc(matchId).update({ players: matchPlayers, voteCount: 0 });
+            await db.collection('matches').doc(matchId).update({ players: matchPlayers });
         } else {
             await db.collection('matches').doc(matchId).update({ players: matchPlayers });
         }
