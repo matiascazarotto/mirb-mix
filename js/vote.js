@@ -98,6 +98,7 @@ async function loadVotePage() {
                             </div>
                             <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${pCount >= 10 ? 'var(--green)' : 'var(--yellow)'};">${pCount}/10</div>
                         </div>
+                        ${m.chosenMap ? `<div style="text-align:center;margin:0 0 12px;font-size:13px;color:var(--text);">🗺️ Mapa: <strong style="color:var(--yellow);">${m.chosenMap.emoji || ''} ${m.chosenMap.name}</strong></div>` : (m.mapVote === 'open' ? `<div style="text-align:center;margin:0 0 12px;font-size:12px;color:var(--yellow);">🗳️ Votação do mapa aberta — vote abaixo</div>` : '')}
                         <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:center;">
                             ${avatarsHtml}
                         </div>
@@ -289,6 +290,9 @@ async function loadVotePage() {
             m.displayName = voteNameMap[doc.id];
             const matchId = doc.id;
             const hasVoted = localStorage.getItem(`voted_${matchId}`) || deviceVotedMap[matchId];
+            const mapLine = m.chosenMap
+                ? `<div style="text-align:center;margin:0 0 12px;font-size:13px;color:var(--text);">🗺️ Mapa: <strong style="color:var(--yellow);">${m.chosenMap.emoji || ''} ${m.chosenMap.name}</strong></div>`
+                : (m.mapVote === 'open' ? `<div style="text-align:center;margin:0 0 12px;font-size:12px;color:var(--yellow);">🗳️ Votação do mapa aberta — vote abaixo</div>` : '');
 
             if (hasVoted) {
                 html += `
@@ -297,6 +301,7 @@ async function loadVotePage() {
                             <div class="match-title">${m.displayName || m.name}</div>
                             <span class="match-status voting">🟢 Aberta</span>
                         </div>
+                        ${mapLine}
                         <div style="text-align:center;padding:20px;color:var(--green);">
                             ✅ Você já votou nesta partida!
                         </div>
@@ -309,6 +314,7 @@ async function loadVotePage() {
                             <div class="match-title">${m.displayName || m.name}</div>
                             <span class="match-status voting">🟢 Aberta</span>
                         </div>
+                        ${mapLine}
                         <p style="color:var(--text-dim);font-size:13px;margin-bottom:14px;">
                             Dê uma nota de 1 a 20 para cada jogador. Desmarque "Não sei" para votar. Você só pode votar 1 vez.
                         </p>

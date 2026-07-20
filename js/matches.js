@@ -235,7 +235,7 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Editar Confronto</button>
                     </div>
                     `}
-                    ${(!isOpen && !isFinished && mapSelectEnabled) ? mapControlsHtml(m, matchId) : ''}
+                    ${(!isFinished && mapSelectEnabled) ? mapControlsHtml(m, matchId) : ''}
                 </div>
             `;
         });

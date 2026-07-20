@@ -215,6 +215,7 @@ async function forceCloseMapVote(matchId) {
 async function checkMapVoteThreshold(matchId) {
     const matchDoc = await db.collection('matches').doc(matchId).get();
     if (!matchDoc.exists || matchDoc.data().mapVote !== 'open') return;
+    const match = matchDoc.data();
 
     const mvSnap = await db.collection('matches').doc(matchId).collection('mapVotes').get();
     const voters = new Set();
@@ -224,7 +225,11 @@ async function checkMapVoteThreshold(matchId) {
     const eligible = new Set();
     lvSnap.docs.forEach(d => { const meta = d.data()._meta; if (meta && meta.deviceId) eligible.add(meta.deviceId); });
 
-    if (eligible.size > 0 && voters.size >= eligible.size) {
+    // Eleitorado: quem votou nos níveis; se ainda não há níveis (votação pré-níveis),
+    // usa o tamanho da escala (jogadores da partida).
+    const electorate = eligible.size > 0 ? eligible.size : (match.players ? match.players.length : 0);
+
+    if (electorate > 0 && voters.size >= electorate) {
         await closeMapVote(matchId, true);
         toast('🗺️ Todos votaram! Mapa definido.', 'success');
     }
@@ -279,11 +284,14 @@ async function submitMapVote(matchId) {
         const voter = await getVoterDeviceId();
         if (await isIPBlocked(voter.ip, 'mapVote', voter.fingerprint)) { toast('Não foi possível votar. Tente novamente mais tarde.', 'error'); return; }
 
-        // Elegibilidade: precisa ter votado nos níveis desta partida
+        // Elegibilidade: antes dos níveis (status 'open') a votação do mapa é liberada pra
+        // todos; depois que os níveis começam, só quem votou nos níveis pode escolher o mapa.
         if (voter.deviceId !== 'unknown_') {
-            const levelVote = await db.collection('matches').doc(matchId)
-                .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
-            if (levelVote.empty) { toast('Você não votou nos níveis e não pode escolher o mapa!', 'error'); return; }
+            if (match.status !== 'open') {
+                const levelVote = await db.collection('matches').doc(matchId)
+                    .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
+                if (levelVote.empty) { toast('Você não votou nos níveis e não pode escolher o mapa!', 'error'); return; }
+            }
 
             const existing = await db.collection('matches').doc(matchId)
                 .collection('mapVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
@@ -324,8 +332,9 @@ async function buildMapVoteHtml(mapVoteDocs, voter, maps) {
         const m = doc.data();
         const matchId = doc.id;
 
-        let isEligible = false;
-        if (voter.deviceId !== 'unknown_') {
+        // Antes dos níveis (status 'open') todo mundo pode votar o mapa; depois, só quem votou.
+        let isEligible = m.status === 'open';
+        if (!isEligible && voter.deviceId !== 'unknown_') {
             const lv = await db.collection('matches').doc(matchId)
                 .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
             isEligible = !lv.empty;
