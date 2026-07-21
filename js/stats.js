@@ -2,6 +2,38 @@
 // ║       MATCHES PAGE (Public)     ║
 // ╚══════════════════════════════════╝
 let _matchesPageLimit = 10;      // paginação: quantas partidas renderizar na aba pública
+const MVP_MIN_MIXES = 10;        // mínimo de mixes p/ exibir a taxa MVP%/Pior% (amostra; em mixes, não em mapas como o Afundômetro)
+
+// Determina o MVP (maior ADR do time vencedor) e o Pior (menor ADR do perdedor) de UMA partida.
+// Fonte única da regra: reusado nos cards de Partidas e na contagem MVP/Pior do dashboard,
+// pra a contagem bater exatamente com o que aparece nos cards. Key = mesma do dashboard (playerId||gcName||playerName).
+function computeMatchAwards(gcStats) {
+    if (!gcStats || gcStats.length === 0) return { mvp: null, worst: null };
+    const agg = {};
+    gcStats.forEach(s => {
+        const key = s.playerId || s.gcName || s.playerName;
+        if (!agg[key]) {
+            agg[key] = { key, name: s.playerName, avatar: s.avatar || '', kills: 0, deaths: 0, adrSum: 0, matches: 0, wins: 0 };
+        }
+        agg[key].kills += s.k;
+        agg[key].deaths += s.d;
+        agg[key].adrSum += s.adr;
+        agg[key].wins += (s.win != null ? s.win : (s.rp >= 0)) ? 1 : 0;
+        agg[key].matches++;
+    });
+    const entries = Object.values(agg);
+    // MVP sempre do time vencedor / Pior do perdedor (venceu a maioria dos jogos)
+    const isWinner = e => e.wins * 2 > e.matches;
+    let winners = entries.filter(isWinner);
+    let losers = entries.filter(e => !isWinner(e));
+    // Fallback: sem dado de win/time (registros v3 antigos) → não dá pra saber o vencedor, usa todos
+    if (winners.length === 0) { winners = entries; losers = entries; }
+    const adrAvg = e => e.adrSum / e.matches;
+    const mvp = [...winners].sort((a, b) => adrAvg(b) - adrAvg(a))[0] || null;        // maior ADR do vencedor
+    let worst = [...losers].sort((a, b) => adrAvg(a) - adrAvg(b))[0] || null;          // menor ADR do perdedor
+    if (worst && mvp && worst.key === mvp.key) worst = null; // fallback de 1 jogador: mesma pessoa → sem Pior
+    return { mvp, worst };
+}
 
 async function loadMatchesPage() {
     const el = document.getElementById('matchesList');
@@ -73,31 +105,12 @@ async function loadMatchesPage() {
                 }
             }
 
-            // ── Compute MVP and worst player from gcStats ──
+            // ── MVP e Pior da partida (regra compartilhada — ver computeMatchAwards) ──
             let mvpHtml = '';
-            if (m.gcStats && m.gcStats.length > 0) {
-                const agg = {};
-                m.gcStats.forEach(s => {
-                    const key = s.playerId || s.gcName;
-                    if (!agg[key]) {
-                        agg[key] = { name: s.playerName, avatar: s.avatar || '', kills: 0, deaths: 0, adrSum: 0, matches: 0, wins: 0 };
-                    }
-                    agg[key].kills += s.k;
-                    agg[key].deaths += s.d;
-                    agg[key].adrSum += s.adr;
-                    agg[key].wins += (s.win != null ? s.win : (s.rp >= 0)) ? 1 : 0;
-                    agg[key].matches++;
-                });
-                const entries = Object.values(agg);
-                // MVP sempre do time vencedor / Pior do perdedor (venceu a maioria dos jogos)
-                const isWinner = e => e.wins * 2 > e.matches;
-                let winners = entries.filter(isWinner);
-                let losers = entries.filter(e => !isWinner(e));
-                // Fallback: sem dado de win/time (registros v3 antigos) → não dá pra saber o vencedor, usa todos
-                if (winners.length === 0) { winners = entries; losers = entries; }
-                const adrAvg = e => e.adrSum / e.matches;
-                const mvp = [...winners].sort((a, b) => adrAvg(b) - adrAvg(a))[0];        // maior ADR do vencedor
-                const worst = [...losers].sort((a, b) => adrAvg(a) - adrAvg(b))[0] || null; // menor ADR do perdedor
+            const _awards = computeMatchAwards(m.gcStats);
+            if (_awards.mvp) {
+                const mvp = _awards.mvp;
+                const worst = _awards.worst;
                 const mvpAdr = (mvp.adrSum / mvp.matches).toFixed(1);
                 const mvpKdr = (mvp.deaths > 0 ? mvp.kills / mvp.deaths : mvp.kills).toFixed(2);
 
@@ -335,10 +348,12 @@ async function loadDashboard() {
 
         matches.forEach(m => {
             const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
+            const seenKeys = new Set();
             m.gcStats.forEach(g => {
                 const key = g.playerId || g.gcName || g.playerName;
+                seenKeys.add(key);
                 if (!ps[key]) {
-                    ps[key] = { name: g.playerName, avatar: g.avatar || '', gcId: g.gcId || '', matches: 0, kills: 0, deaths: 0, assists: 0, diff: 0, adrSum: 0, kdrSum: 0, kastSum: 0, fk: 0, rpTotal: 0, rpPositive: 0, rpNegative: 0, wins: 0, losses: 0, bestKills: 0, worstDeaths: 0, matchList: [] };
+                    ps[key] = { name: g.playerName, avatar: g.avatar || '', gcId: g.gcId || '', matches: 0, kills: 0, deaths: 0, assists: 0, diff: 0, adrSum: 0, kdrSum: 0, kastSum: 0, fk: 0, rpTotal: 0, rpPositive: 0, rpNegative: 0, wins: 0, losses: 0, bestKills: 0, worstDeaths: 0, mvpCount: 0, piorCount: 0, mixCount: 0, matchList: [] };
                 }
                 const p = ps[key];
                 p.matches++;
@@ -373,6 +388,13 @@ async function loadDashboard() {
                 if (!records.worstKast || g.kast < records.worstKast.val) records.worstKast = { val: g.kast, name: g.playerName, match: m.name, date };
                 if (g.fk === 0 && (!records.worstFk || true)) records.worstFk = { val: 0, name: g.playerName, match: m.name, date };
             });
+
+            // nº de mixes (partida-documento) que o jogador participou — denominador das taxas MVP%/Pior%
+            seenKeys.forEach(k => { if (ps[k]) ps[k].mixCount++; });
+            // Contagem de MVP / Pior por jogador (mesma regra dos cards de Partidas)
+            const awards = computeMatchAwards(m.gcStats);
+            if (awards.mvp && ps[awards.mvp.key]) ps[awards.mvp.key].mvpCount++;
+            if (awards.worst && ps[awards.worst.key]) ps[awards.worst.key].piorCount++;
         });
 
         // Populate player filter dropdown
@@ -465,6 +487,8 @@ function renderDashModules() {
         const rpColor = p.rpTotal >= 0 ? 'var(--green)' : 'var(--red)';
         const avgFk = (p.fk / p.matches).toFixed(1);
         const diffPerMatch = (p.diff / p.matches).toFixed(1);
+        const mvpPct = p.mixCount >= MVP_MIN_MIXES ? ((p.mvpCount / p.mixCount) * 100).toFixed(1) + '%' : '—';
+        const piorPct = p.mixCount >= MVP_MIN_MIXES ? ((p.piorCount / p.mixCount) * 100).toFixed(1) + '%' : '—';
 
         const _profileBadges = (typeof getBadgesByPlayerName === 'function') ? getBadgesByPlayerName(p.name) : [];
         const _profileBadgesInline = _profileBadges.length ? renderBadgesInline(_profileBadges, { size: 22 }) : '';
@@ -491,6 +515,8 @@ function renderDashModules() {
                 ${dashStatBox('🚪', 'FK/Partida', avgFk, 'var(--yellow)')}
                 ${dashStatBox('➕', 'Diff Total', (p.diff > 0 ? '+' : '') + p.diff, p.diff >= 0 ? 'var(--green)' : 'var(--red)')}
                 ${dashStatBox('📈', 'RP Total', (p.rpTotal > 0 ? '+' : '') + p.rpTotal, rpColor)}
+                ${dashStatBox('⭐', 'MVP (' + p.mvpCount + 'x)', mvpPct, p.mvpCount > 0 ? 'var(--green)' : '')}
+                ${dashStatBox('🗑️', 'Pior (' + p.piorCount + 'x)', piorPct, p.piorCount > 0 ? 'var(--red)' : '')}
             </div>
         </div>
         ${(typeof renderBadgesShowcase === 'function') ? renderBadgesShowcase(_profileBadges) : ''}`;
@@ -536,6 +562,8 @@ function renderDashModules() {
             p._avgKdr  = p.deaths > 0 ? p.kills / p.deaths : p.kills;
             p._avgFk   = p.matches > 0 ? p.fk / p.matches : 0;
             p._winPct  = p.matches > 0 ? (p.wins / p.matches) * 100 : 0;
+            p._mvpPct  = p.mixCount >= MVP_MIN_MIXES ? (p.mvpCount / p.mixCount) * 100 : null;   // % dos mixes como MVP (null = poucos mixes)
+            p._piorPct = p.mixCount >= MVP_MIN_MIXES ? (p.piorCount / p.mixCount) * 100 : null;  // % dos mixes como Pior
         });
 
         // Máximos para normalização
@@ -587,6 +615,7 @@ function renderDashModules() {
         const AFUNDA_MIN_GAMES = 10;
         const _reg = entries.filter(p => p.matches >= AFUNDA_MIN_GAMES);
         const _showImpacto = _reg.length >= 2; // coluna só aparece com ≥2 regulares (precisa de régua pra comparar)
+        const _showMvp = entries.some(p => p.mixCount >= MVP_MIN_MIXES); // colunas MVP%/Pior% só aparecem se alguém atingiu o piso de mixes no período
         let _afAvg = 0, _afStd = 1;
         if (_reg.length >= 2) {
             _afAvg = _reg.reduce((s, p) => s + p._skill, 0) / _reg.length;
@@ -620,10 +649,19 @@ function renderDashModules() {
                 case 'deaths': va = a.deaths; vb = b.deaths; break;
                 case 'kd': va = a.deaths ? a.kills/a.deaths : a.kills; vb = b.deaths ? b.kills/b.deaths : b.kills; break;
                 case 'adr': va = a.adrSum/a.matches; vb = b.adrSum/b.matches; break;
-                case 'fk': va = a.fk; vb = b.fk; break;
                 case 'fkpm': va = a._avgFk; vb = b._avgFk; break;
                 case 'kast': va = a.kastSum/a.matches; vb = b.kastSum/b.matches; break;
                 case 'rp': va = a.rpTotal; vb = b.rpTotal; break;
+                case 'mvp':
+                    if (a._mvpPct == null && b._mvpPct == null) return 0;
+                    if (a._mvpPct == null) return 1;   // abaixo do piso vai pro fim
+                    if (b._mvpPct == null) return -1;
+                    va = a._mvpPct; vb = b._mvpPct; break;
+                case 'pior':
+                    if (a._piorPct == null && b._piorPct == null) return 0;
+                    if (a._piorPct == null) return 1;
+                    if (b._piorPct == null) return -1;
+                    va = a._piorPct; vb = b._piorPct; break;
                 default: va = a._ratingMiRB; vb = b._ratingMiRB;
             }
             return dir === 'desc' ? vb - va : va - vb;
@@ -706,10 +744,11 @@ function renderDashModules() {
                         <th style="${thStyle}${activeStyle('deaths')}" onclick="dashSort('deaths')">Deaths${arrow('deaths')}</th>
                         <th style="${thStyle}${activeStyle('kd')}" onclick="dashSort('kd')">K/D${arrow('kd')}</th>
                         <th style="${thStyle}${activeStyle('adr')}" onclick="dashSort('adr')">ADR${arrow('adr')}</th>
-                        <th style="${thStyle}${activeStyle('fk')}" onclick="dashSort('fk')">FK${arrow('fk')}</th>
                         <th style="${thStyle}${activeStyle('fkpm')}" onclick="dashSort('fkpm')" title="First Kills por partida (média)">FK/P${arrow('fkpm')}</th>
                         <th style="${thStyle}${activeStyle('kast')}" onclick="dashSort('kast')">KAST${arrow('kast')}</th>
                         <th style="${thStyle}${activeStyle('rp')}" onclick="dashSort('rp')">RP${arrow('rp')}</th>
+                        ${_showMvp ? `<th style="${thStyle}${activeStyle('mvp')}" onclick="dashSort('mvp')" title="% dos mixes em que foi MVP (maior ADR do time vencedor)">MVP%${arrow('mvp')}</th>
+                        <th style="${thStyle}${activeStyle('pior')}" onclick="dashSort('pior')" title="% dos mixes em que foi o Pior (menor ADR do time perdedor)">Pior%${arrow('pior')}</th>` : ''}
                     </tr>
                 </thead>
                 <tbody>`;
@@ -744,10 +783,11 @@ function renderDashModules() {
                     <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.deaths}</td>
                     <td style="padding:10px 6px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
                     <td style="padding:10px 6px;text-align:center;">${avgAdr}</td>
-                    <td style="padding:10px 6px;text-align:center;">${p.fk}</td>
                     <td style="padding:10px 6px;text-align:center;">${p._avgFk.toFixed(1)}</td>
                     <td style="padding:10px 6px;text-align:center;">${avgKast}%</td>
                     <td style="padding:10px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
+                    ${_showMvp ? `<td style="padding:10px 6px;text-align:center;font-weight:700;color:${p._mvpPct != null && p.mvpCount > 0 ? 'var(--green)' : 'var(--text-dim)'};" title="${p.mvpCount}x em ${p.mixCount} mix${p._mvpPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._mvpPct == null ? '—' : p._mvpPct.toFixed(1) + '%'}</td>
+                    <td style="padding:10px 6px;text-align:center;font-weight:700;color:${p._piorPct != null && p.piorCount > 0 ? 'var(--red)' : 'var(--text-dim)'};" title="${p.piorCount}x em ${p.mixCount} mix${p._piorPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._piorPct == null ? '—' : p._piorPct.toFixed(1) + '%'}</td>` : ''}
                 </tr>`;
         });
         html += '</tbody></table>';
