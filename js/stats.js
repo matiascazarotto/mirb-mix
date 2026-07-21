@@ -386,11 +386,13 @@ async function loadDashboard() {
         // ── Buscar badges do jornal mais recente ──
         const _badgeMap = {};
         let _jornalEdition = null;
+        let _jornalWeekStart = null;   // domingo (YYYY-MM-DD) da última edição do Jornal — base das setas de posição
         try {
             const jornalSnap = await db.collection('jornal').orderBy('weekStart','desc').get();
             if (!jornalSnap.empty) {
                 const latestDoc = jornalSnap.docs[0].data();
                 const totalEditions = jornalSnap.size;
+                if (latestDoc.weekStart) _jornalWeekStart = latestDoc.weekStart;
                 (latestDoc.badges || []).forEach(b => {
                     if (!_badgeMap[b.player]) _badgeMap[b.player] = [];
                     _badgeMap[b.player].push({ emoji: b.emoji, label: b.label });
@@ -403,12 +405,34 @@ async function loadDashboard() {
             }
         } catch(e) {}
 
-        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet, _badgeMap, _jornalEdition };
+        dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet, _badgeMap, _jornalEdition, _jornalWeekStart };
         renderDashModules();
         populateH2HDropdowns();
     } catch (e) {
         el.innerHTML = `<p style="color:var(--red);text-align:center;">Erro: ${e.message}</p>`;
     }
+}
+
+// Posições no Ranking Geral (Rating MiRB) para um subconjunto de partidas.
+// Reaproveita calcWeeklyRatings() (js/jornal.js) — MESMA fórmula do ranking do dashboard.
+// Retorna mapa { nome: posição 0-based } ou null.
+function mirbRankOrderByName(matchesSubset) {
+    if (typeof calcWeeklyRatings !== 'function') return null;
+    const ps = {};
+    matchesSubset.forEach(m => (m.gcStats || []).forEach(g => {
+        const key = g.playerId || g.gcName || g.playerName;
+        if (!ps[key]) ps[key] = { name: g.playerName, matches: 0, kills: 0, deaths: 0, adrSum: 0, kastSum: 0, fk: 0, wins: 0 };
+        const p = ps[key];
+        p.matches++; p.kills += g.k; p.deaths += g.d; p.adrSum += g.adr; p.kastSum += g.kast; p.fk += g.fk;
+        if (g.win != null ? g.win : (g.rp >= 0)) p.wins++;
+    }));
+    const entries = Object.values(ps);
+    if (!entries.length) return null;
+    calcWeeklyRatings(entries);                     // seta p.rating (mesma fórmula do ranking)
+    entries.sort((a, b) => b.rating - a.rating);
+    const pos = {};
+    entries.forEach((p, i) => { pos[p.name] = i; }); // 0-based
+    return pos;
 }
 
 function renderDashModules() {
@@ -603,6 +627,29 @@ function renderDashModules() {
             return dir === 'desc' ? vb - va : va - vb;
         });
 
+        // ── Setas de variação de posição (▲/▼) ──
+        // Só no Ranking Geral all-time (sem filtro), ordenado por Rating, comparando
+        // com o fim da última edição publicada do Jornal.
+        let prevPos = null;
+        const _allTime = ['dashFilterMonth','dashFilterWeek','dashFilterDate','dashFilterMatch','dashFilterPlayer']
+            .every(id => { const e = document.getElementById(id); return !e || !e.value; });
+        if (_allTime && col === 'rating' && dashData._jornalWeekStart) {
+            const [wy, wm, wd] = dashData._jornalWeekStart.split('-').map(Number);
+            const cutoff = new Date(wy, wm - 1, wd + 6, 23, 59, 59, 999); // sábado 23:59 da última edição
+            const prevMatches = matches.filter(m => m.createdAt && m.createdAt.toDate() <= cutoff);
+            if (prevMatches.length) prevPos = mirbRankOrderByName(prevMatches);
+        }
+        const posArrowFor = (name, i) => {
+            if (!prevPos) return '';
+            const pv = prevPos[name];
+            if (pv == null) return '';                 // novo desde o Jornal → sem seta
+            const d = pv - i;                          // >0 subiu · <0 caiu
+            const st = "font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;margin-left:4px;vertical-align:middle;";
+            if (d > 0) return `<span style="color:var(--green);${st}" title="Subiu ${d} desde o último Jornal">▲${d}</span>`;
+            if (d < 0) return `<span style="color:var(--red);${st}" title="Caiu ${-d} desde o último Jornal">▼${-d}</span>`;
+            return '';                                 // sem mudança → sem seta
+        };
+
         // ── Badges do jornal ──
         const badgeMap = dashData._badgeMap || {};
         const getDashBadgeHtml = (name) => {
@@ -677,7 +724,7 @@ function renderDashModules() {
 
             html += `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${i < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
-                    <td style="padding:10px 6px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);">${i < 3 ? ['🥇','🥈','🥉'][i] : i+1}</td>
+                    <td style="padding:10px 6px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);white-space:nowrap;">${i < 3 ? ['🥇','🥈','🥉'][i] : i+1}${posArrowFor(p.name, i)}</td>
                     <td style="padding:10px 6px;">
                         <div style="display:flex;align-items:center;gap:6px;">
                             ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
