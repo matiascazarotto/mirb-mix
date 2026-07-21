@@ -488,6 +488,7 @@ function renderDashModules() {
                 ${dashStatBox('💥', 'ADR Média', avgAdr, 'var(--yellow)')}
                 ${dashStatBox('🛡️', 'KAST Médio', avgKast + '%', 'var(--blue)')}
                 ${dashStatBox('⚡', 'First Kills', p.fk, 'var(--yellow)')}
+                ${dashStatBox('🚪', 'FK/Partida', avgFk, 'var(--yellow)')}
                 ${dashStatBox('➕', 'Diff Total', (p.diff > 0 ? '+' : '') + p.diff, p.diff >= 0 ? 'var(--green)' : 'var(--red)')}
                 ${dashStatBox('📈', 'RP Total', (p.rpTotal > 0 ? '+' : '') + p.rpTotal, rpColor)}
             </div>
@@ -620,6 +621,7 @@ function renderDashModules() {
                 case 'kd': va = a.deaths ? a.kills/a.deaths : a.kills; vb = b.deaths ? b.kills/b.deaths : b.kills; break;
                 case 'adr': va = a.adrSum/a.matches; vb = b.adrSum/b.matches; break;
                 case 'fk': va = a.fk; vb = b.fk; break;
+                case 'fkpm': va = a._avgFk; vb = b._avgFk; break;
                 case 'kast': va = a.kastSum/a.matches; vb = b.kastSum/b.matches; break;
                 case 'rp': va = a.rpTotal; vb = b.rpTotal; break;
                 default: va = a._ratingMiRB; vb = b._ratingMiRB;
@@ -705,6 +707,7 @@ function renderDashModules() {
                         <th style="${thStyle}${activeStyle('kd')}" onclick="dashSort('kd')">K/D${arrow('kd')}</th>
                         <th style="${thStyle}${activeStyle('adr')}" onclick="dashSort('adr')">ADR${arrow('adr')}</th>
                         <th style="${thStyle}${activeStyle('fk')}" onclick="dashSort('fk')">FK${arrow('fk')}</th>
+                        <th style="${thStyle}${activeStyle('fkpm')}" onclick="dashSort('fkpm')" title="First Kills por partida (média)">FK/P${arrow('fkpm')}</th>
                         <th style="${thStyle}${activeStyle('kast')}" onclick="dashSort('kast')">KAST${arrow('kast')}</th>
                         <th style="${thStyle}${activeStyle('rp')}" onclick="dashSort('rp')">RP${arrow('rp')}</th>
                     </tr>
@@ -742,6 +745,7 @@ function renderDashModules() {
                     <td style="padding:10px 6px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
                     <td style="padding:10px 6px;text-align:center;">${avgAdr}</td>
                     <td style="padding:10px 6px;text-align:center;">${p.fk}</td>
+                    <td style="padding:10px 6px;text-align:center;">${p._avgFk.toFixed(1)}</td>
                     <td style="padding:10px 6px;text-align:center;">${avgKast}%</td>
                     <td style="padding:10px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
                 </tr>`;
