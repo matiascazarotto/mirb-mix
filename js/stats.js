@@ -80,17 +80,24 @@ async function loadMatchesPage() {
                 m.gcStats.forEach(s => {
                     const key = s.playerId || s.gcName;
                     if (!agg[key]) {
-                        agg[key] = { name: s.playerName, avatar: s.avatar || '', kills: 0, deaths: 0, adrSum: 0, matches: 0 };
+                        agg[key] = { name: s.playerName, avatar: s.avatar || '', kills: 0, deaths: 0, adrSum: 0, matches: 0, wins: 0 };
                     }
                     agg[key].kills += s.k;
                     agg[key].deaths += s.d;
                     agg[key].adrSum += s.adr;
+                    agg[key].wins += (s.win != null ? s.win : (s.rp >= 0)) ? 1 : 0;
                     agg[key].matches++;
                 });
                 const entries = Object.values(agg);
-                const byAdr = [...entries].sort((a, b) => (b.adrSum / b.matches) - (a.adrSum / a.matches));
-                const mvp = byAdr[0];
-                const worst = byAdr.length > 1 ? byAdr[byAdr.length - 1] : null;
+                // MVP sempre do time vencedor / Pior do perdedor (venceu a maioria dos jogos)
+                const isWinner = e => e.wins * 2 > e.matches;
+                let winners = entries.filter(isWinner);
+                let losers = entries.filter(e => !isWinner(e));
+                // Fallback: sem dado de win/time (registros v3 antigos) → não dá pra saber o vencedor, usa todos
+                if (winners.length === 0) { winners = entries; losers = entries; }
+                const adrAvg = e => e.adrSum / e.matches;
+                const mvp = [...winners].sort((a, b) => adrAvg(b) - adrAvg(a))[0];        // maior ADR do vencedor
+                const worst = [...losers].sort((a, b) => adrAvg(a) - adrAvg(b))[0] || null; // menor ADR do perdedor
                 const mvpAdr = (mvp.adrSum / mvp.matches).toFixed(1);
                 const mvpKdr = (mvp.deaths > 0 ? mvp.kills / mvp.deaths : mvp.kills).toFixed(2);
 
@@ -950,7 +957,9 @@ function renderDashModules() {
 
         matches.forEach(m => {
             const date = m.createdAt ? m.createdAt.toDate().toLocaleDateString('pt-BR') : '?';
-            const top = [...m.gcStats].sort((a, b) => b.k - a.k)[0];
+            const winRecs = m.gcStats.filter(s => (s.win != null ? s.win : (s.rp >= 0)));
+            const pool = winRecs.length > 0 ? winRecs : m.gcStats;   // fallback: sem win → todos
+            const top = [...pool].sort((a, b) => b.k - a.k)[0];      // MVP = mais kills do time vencedor
             html += `
                 <div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:8px;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
