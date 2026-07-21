@@ -554,6 +554,7 @@ async function staffSearchIP() {
         const pollSnap = await db.collection('polls').get();
         for (const pDoc of pollSnap.docs) {
             const pData = pDoc.data();
+            const pollOpts = getPollOptions(pData);
             const respSnap = await pDoc.ref.collection('responses').get();
             respSnap.docs.forEach(r => {
                 const d = r.data();
@@ -564,7 +565,8 @@ async function staffSearchIP() {
                     if (matchesSearch(dIp, dFp)) {
                         if (dIp) foundIPs.add(dIp);
                         if (dFp) foundFPs.add(dFp);
-                        results.push({ type: '📊 Enquete', detail: `"${pData.question}"`, sub: `Voto: ${d.vote === 'sim' ? '✅ Sim' : '❌ Não'}${d.playerName ? ' (' + d.playerName + ')' : ''}` });
+                        const optLabel = (pollOpts.find(o => o.id === d.vote) || {}).label || d.vote;
+                        results.push({ type: '📊 Enquete', detail: `"${pData.question}"`, sub: `Voto: ${optLabel}${d.playerName ? ' (' + d.playerName + ')' : ''}` });
                     }
                 }
             });
