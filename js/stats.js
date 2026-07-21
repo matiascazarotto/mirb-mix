@@ -189,6 +189,21 @@ async function loadMatchesPage() {
 let dashData = { matches: [], playerStats: {}, matchCount: 0 };
 let dashSortCol = 'rating';
 let dashSortDir = 'desc';
+// Ranking Geral (all-time): vista padrão separa "Em calibração" (<10 jogos, não disputa posição);
+// 'all' = todo mundo junto (comportamento antigo). Escolha lembrada em localStorage.
+let dashRankView = localStorage.getItem('mirb_rankView') === 'all' ? 'all' : 'calib';
+let dashCalibOpen = true; // seção "Em calibração" começa expandida (recolhível por sessão)
+
+function setDashRankView(v) {
+    dashRankView = v;
+    localStorage.setItem('mirb_rankView', v);
+    renderDashModules();
+}
+
+function toggleDashCalib() {
+    dashCalibOpen = !dashCalibOpen;
+    renderDashModules();
+}
 
 function dashSort(col) {
     if (dashSortCol === col) {
@@ -476,8 +491,10 @@ async function loadDashboard() {
 
 // Posições no Ranking Geral (Rating MiRB) para um subconjunto de partidas.
 // Reaproveita calcWeeklyRatings() (js/jornal.js) — MESMA fórmula do ranking do dashboard.
+// minGames > 0: rating calculado sobre TODOS (mesma régua do ranking), mas posições
+// atribuídas só entre quem tem >= minGames jogos (vista "Em calibração" separa os demais).
 // Retorna mapa { nome: posição 0-based } ou null.
-function mirbRankOrderByName(matchesSubset) {
+function mirbRankOrderByName(matchesSubset, minGames = 0) {
     if (typeof calcWeeklyRatings !== 'function') return null;
     const ps = {};
     matchesSubset.forEach(m => (m.gcStats || []).forEach(g => {
@@ -491,8 +508,9 @@ function mirbRankOrderByName(matchesSubset) {
     if (!entries.length) return null;
     calcWeeklyRatings(entries);                     // seta p.rating (mesma fórmula do ranking)
     entries.sort((a, b) => b.rating - a.rating);
+    const ranked = minGames > 0 ? entries.filter(p => p.matches >= minGames) : entries;
     const pos = {};
-    entries.forEach((p, i) => { pos[p.name] = i; }); // 0-based
+    ranked.forEach((p, i) => { pos[p.name] = i; }); // 0-based
     return pos;
 }
 
@@ -687,17 +705,28 @@ function renderDashModules() {
             return dir === 'desc' ? vb - va : va - vb;
         });
 
+        const _allTime = ['dashFilterMonth','dashFilterWeek','dashFilterDate','dashFilterMatch','dashFilterPlayer']
+            .every(id => { const e = document.getElementById(id); return !e || !e.value; });
+
+        // ── Seção "Em calibração" (Opção C) ──
+        // Só no Ranking Geral all-time: quem tem < AFUNDA_MIN_GAMES jogos não disputa posição —
+        // vai pra uma seção própria no fim da tabela (esmaecida, com progresso X/10).
+        // Toggle "Mostrar todos" volta pro ranking antigo (todo mundo junto). Semanal/filtros: sempre todos.
+        const _calibAvailable = _allTime && _reg.length >= 1 && entries.some(p => p.matches < AFUNDA_MIN_GAMES);
+        const _calibMode = _calibAvailable && dashRankView !== 'all';
+        const rankedRows = _calibMode ? sorted.filter(p => p.matches >= AFUNDA_MIN_GAMES) : sorted;
+        const calibRows  = _calibMode ? sorted.filter(p => p.matches <  AFUNDA_MIN_GAMES) : [];
+
         // ── Setas de variação de posição (▲/▼) ──
         // Só no Ranking Geral all-time (sem filtro), ordenado por Rating, comparando
         // com o fim da última edição publicada do Jornal.
         let prevPos = null;
-        const _allTime = ['dashFilterMonth','dashFilterWeek','dashFilterDate','dashFilterMatch','dashFilterPlayer']
-            .every(id => { const e = document.getElementById(id); return !e || !e.value; });
         if (_allTime && col === 'rating' && dashData._jornalWeekStart) {
             const [wy, wm, wd] = dashData._jornalWeekStart.split('-').map(Number);
             const cutoff = new Date(wy, wm - 1, wd + 6, 23, 59, 59, 999); // sábado 23:59 da última edição
             const prevMatches = matches.filter(m => m.createdAt && m.createdAt.toDate() <= cutoff);
-            if (prevMatches.length) prevPos = mirbRankOrderByName(prevMatches);
+            // Em modo calibração, a posição anterior também só conta qualificados (senão a seta mentiria)
+            if (prevMatches.length) prevPos = mirbRankOrderByName(prevMatches, _calibMode ? AFUNDA_MIN_GAMES : 0);
         }
         const posArrowFor = (name, i) => {
             if (!prevPos) return '';
@@ -744,10 +773,23 @@ function renderDashModules() {
                  + `</div>`;
         };
 
+        // Toggle 🌱 Padrão / Mostrar todos (só aparece quando a separação se aplica: Geral all-time com alguém abaixo do piso)
+        let _rankToggleHtml = '';
+        if (_calibAvailable) {
+            const _tBase = "padding:5px 12px;border:none;font-size:12px;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.3px;";
+            const _tOn  = 'background:rgba(255,214,0,0.12);color:var(--yellow);font-weight:700;';
+            const _tOff = 'background:rgba(255,255,255,0.03);color:var(--text-dim);font-weight:600;';
+            _rankToggleHtml = `<span style="margin-left:auto;display:inline-flex;border:1px solid rgba(255,255,255,0.12);border-radius:8px;overflow:hidden;">`
+                + `<button onclick="setDashRankView('calib')" style="${_tBase}${_calibMode ? _tOn : _tOff}" title="Quem tem menos de ${AFUNDA_MIN_GAMES} jogos fica na seção Em calibração">Cadeira Cativa</button>`
+                + `<button onclick="setDashRankView('all')" style="${_tBase}border-left:1px solid rgba(255,255,255,0.12);${!_calibMode ? _tOn : _tOff}" title="Ranking sem separação (todos juntos)">Todos</button>`
+                + `</span>`;
+        }
+
         html += `
         <div class="card" style="overflow-x:auto;">
-            <div class="card-title" style="display:flex;align-items:center;gap:10px;">🏆 Ranking Geral
+            <div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">🏆 Ranking Geral
                 <span onclick="document.getElementById('ratingInfoModal').style.display='flex'" style="cursor:pointer;font-size:14px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-weight:700;" title="Como o Rating é calculado?">?</span>
+                ${_rankToggleHtml}
             </div>
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
                 <thead>
@@ -773,7 +815,9 @@ function renderDashModules() {
                 </thead>
                 <tbody>`;
 
-        sorted.forEach((p, i) => {
+        // Linha do ranking. posCell = conteúdo da 1ª célula (posição/medalha ou progresso X/10).
+        // opts.top3 = fundo destacado · opts.dim = linha esmaecida (seção Em calibração)
+        const rankRowHtml = (p, posCell, opts = {}) => {
             const wr = p.matches > 0 ? ((p.wins / p.matches) * 100).toFixed(0) : 0;
             const wrColor = wr >= 60 ? 'var(--green)' : wr >= 40 ? 'var(--yellow)' : 'var(--red)';
             const avgAdr = (p.adrSum / p.matches).toFixed(1);
@@ -783,14 +827,15 @@ function renderDashModules() {
             const avgKast = p.matches > 0 ? (p.kastSum / p.matches).toFixed(0) : 0;
             const ratingVal = p._ratingMiRB.toFixed(1);
             const ratingColor = p._ratingMiRB >= 70 ? 'var(--green)' : p._ratingMiRB >= 50 ? 'var(--yellow)' : 'var(--red)';
+            const nameColor = opts.dim ? 'var(--text)' : 'var(--yellow)';
 
-            html += `
-                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${i < 3 ? 'background:rgba(255,255,255,0.03);' : ''}">
-                    <td style="padding:10px 6px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);white-space:nowrap;">${i < 3 ? ['🥇','🥈','🥉'][i] : i+1}${posArrowFor(p.name, i)}</td>
+            return `
+                <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${opts.top3 ? 'background:rgba(255,255,255,0.03);' : ''}${opts.dim ? 'opacity:0.55;' : ''}">
+                    <td style="padding:10px 6px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);white-space:nowrap;">${posCell}</td>
                     <td style="padding:10px 6px;">
                         <div style="display:flex;align-items:center;gap:6px;">
                             ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
-                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:var(--yellow);">${p.name}</span>${getDashBadgeHtml(p.name)}${(typeof renderBadgesInline === 'function') ? renderBadgesInline(getBadgesByPlayerName(p.name), { size: 16 }) : ''}
+                            <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:${nameColor};">${p.name}</span>${getDashBadgeHtml(p.name)}${(typeof renderBadgesInline === 'function') ? renderBadgesInline(getBadgesByPlayerName(p.name), { size: 16 }) : ''}
                         </div>
                     </td>
                     <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>
@@ -809,8 +854,36 @@ function renderDashModules() {
                     ${_showMvp ? `<td style="padding:10px 6px;text-align:center;font-weight:700;color:${p._mvpPct != null && p.mvpCount > 0 ? 'var(--green)' : 'var(--text-dim)'};" title="${p.mvpCount}x em ${p.mixCount} mix${p._mvpPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._mvpPct == null ? '—' : p._mvpPct.toFixed(1) + '%'}</td>
                     <td style="padding:10px 6px;text-align:center;font-weight:700;color:${p._piorPct != null && p.piorCount > 0 ? 'var(--red)' : 'var(--text-dim)'};" title="${p.piorCount}x em ${p.mixCount} mix${p._piorPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._piorPct == null ? '—' : p._piorPct.toFixed(1) + '%'}</td>` : ''}
                 </tr>`;
+        };
+
+        // Bloco principal: qualificados disputam posições e medalhas
+        rankedRows.forEach((p, i) => {
+            html += rankRowHtml(p, (i < 3 ? ['🥇','🥈','🥉'][i] : i + 1) + posArrowFor(p.name, i), { top3: i < 3 });
         });
+
+        // Bloco "Em calibração": < AFUNDA_MIN_GAMES jogos, sem posição, com progresso X/10
+        if (_calibMode && calibRows.length > 0) {
+            const colCount = 14 + (_showImpacto ? 1 : 0) + (_showMvp ? 2 : 0);
+            html += `
+                <tr><td colspan="${colCount}" style="padding:0;border-bottom:none;">
+                    <div onclick="toggleDashCalib()" style="margin-top:10px;display:flex;align-items:center;gap:10px;padding:9px 10px;cursor:pointer;user-select:none;background:rgba(79,195,247,0.05);border:1px dashed rgba(79,195,247,0.30);border-radius:8px;color:var(--ct-blue);font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:0.8px;text-transform:uppercase;">
+                        <span style="font-size:11px;">${dashCalibOpen ? '▼' : '▶'}</span> 🌱 Em calibração — menos de ${AFUNDA_MIN_GAMES} jogos (${calibRows.length} jogador${calibRows.length !== 1 ? 'es' : ''})
+                        <span style="margin-left:auto;font-family:'Outfit',sans-serif;font-weight:400;font-size:11px;letter-spacing:0.2px;text-transform:none;color:var(--text-dim);">não disputam posição · rating ainda estabilizando</span>
+                    </div>
+                </td></tr>`;
+            if (dashCalibOpen) calibRows.forEach(p => {
+                const pct = Math.min(100, Math.round(p.matches / AFUNDA_MIN_GAMES * 100));
+                const prog = `<span title="${p.matches} de ${AFUNDA_MIN_GAMES} jogos para entrar no ranking" style="display:inline-flex;flex-direction:column;align-items:flex-start;gap:3px;">`
+                    + `<span style="font-size:10px;color:var(--ct-blue);font-weight:700;letter-spacing:0.3px;line-height:1;">${p.matches}/${AFUNDA_MIN_GAMES}</span>`
+                    + `<span style="display:block;width:44px;height:4px;border-radius:3px;background:rgba(255,255,255,0.10);overflow:hidden;"><span style="display:block;height:100%;width:${pct}%;background:var(--ct-blue);"></span></span>`
+                    + `</span>`;
+                html += rankRowHtml(p, prog, { dim: true });
+            });
+        }
         html += '</tbody></table>';
+        if (_calibMode && calibRows.length > 0) {
+            html += `<div style="font-size:11px;color:var(--text-dim);text-align:center;padding:10px 8px 4px;border-top:1px solid rgba(255,255,255,0.05);">🌱 Jogadores com menos de ${AFUNDA_MIN_GAMES} jogos entram no ranking ao atingir o piso.</div>`;
+        }
         // Legenda das badges do jornal
         const badgeEntries = Object.values(badgeMap);
         if (badgeEntries.length > 0) {
