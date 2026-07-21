@@ -211,6 +211,38 @@ function clearDashFilters() {
     loadDashboard();
 }
 
+// ── Atalho de visão: alterna Semana atual ↔ Geral (padrão prático; filtros detalhados continuam disponíveis) ──
+const _DASH_VIEW_BTN_BASE = "padding:7px 16px;border:none;font-size:13px;cursor:pointer;font-family:'Rajdhani',sans-serif;letter-spacing:0.3px;";
+function _dashCurrentWeekKey(weekSet, weekEntries) {
+    // Semana atual (domingo) se tiver partidas; senão a última semana com partidas
+    const now = new Date();
+    const sun = new Date(now);
+    sun.setDate(sun.getDate() - now.getDay());
+    sun.setHours(0, 0, 0, 0);
+    const k = `${sun.getFullYear()}-${String(sun.getMonth()+1).padStart(2,'0')}-${String(sun.getDate()).padStart(2,'0')}`;
+    return weekSet.has(k) ? k : (weekEntries.length > 0 ? weekEntries[0][0] : '');
+}
+function _setDashViewActive(mode) {
+    const bW = document.getElementById('dashViewWeek');
+    const bG = document.getElementById('dashViewGeral');
+    if (!bW || !bG) return;
+    const on = 'background:var(--green);color:#04110a;font-weight:700;';
+    const off = 'background:rgba(255,255,255,0.03);color:var(--text-dim);font-weight:600;';
+    bW.style.cssText = _DASH_VIEW_BTN_BASE + (mode === 'week' ? on : off);
+    bG.style.cssText = _DASH_VIEW_BTN_BASE + 'border-left:1px solid rgba(255,255,255,0.12);' + (mode === 'geral' ? on : off);
+}
+function setDashView(mode) {
+    localStorage.setItem('mirb_dashView', mode);
+    // O atalho é sobre o PERÍODO: zera filtros estreitos (mês/data/confronto), preserva o Jogador selecionado.
+    document.getElementById('dashFilterMonth').value = '';
+    document.getElementById('dashFilterDate').value = '';
+    document.getElementById('dashFilterMatch').value = '';
+    document.getElementById('dashFilterWeek').value = '';
+    dashData._initialMonthSet = true;
+    dashData._initialWeekSet = (mode === 'geral'); // geral: trava em "Todas"; week: destrava p/ auto-selecionar a semana atual
+    loadDashboard();
+}
+
 async function loadDashboard() {
     const el = document.getElementById('dashContent');
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
@@ -263,20 +295,27 @@ async function loadDashboard() {
         weekSel.innerHTML = '<option value="">Todas</option>' +
             weekEntries.map(([k, v]) => `<option value="${k}" ${k === currentWeekVal ? 'selected' : ''}>${fmtD(v.sun)} — ${fmtD(v.sat)}</option>`).join('');
 
-        // Auto-select current jornal week on first load
+        // 1º load: aplica a visão salva (semana atual/última ou geral). Toggle usa o mesmo caminho.
         if (!currentWeekVal && !dashData._initialWeekSet) {
-            const now = new Date();
-            const day = now.getDay();
-            const sun = new Date(now);
-            sun.setDate(sun.getDate() - day);
-            sun.setHours(0, 0, 0, 0);
-            const wk = `${sun.getFullYear()}-${String(sun.getMonth()+1).padStart(2,'0')}-${String(sun.getDate()).padStart(2,'0')}`;
-            if (weekSet.has(wk)) {
-                weekSel.value = wk;
-            } else if (weekEntries.length > 0) {
-                weekSel.value = weekEntries[0][0];
-            }
+            const savedView = localStorage.getItem('mirb_dashView') || 'week';
+            if (savedView !== 'geral') {
+                weekSel.value = _dashCurrentWeekKey(weekSet, weekEntries);
+            } // 'geral' → mantém "Todas" (vazio)
             dashData._initialWeekSet = true;
+        }
+
+        // Estado do toggle de visão (Semana atual / Geral) — nenhum aceso se houver filtro estreito
+        {
+            const _vwk = weekSel.value;
+            const _vmo = monthSel.value;
+            const _vdt = document.getElementById('dashFilterDate').value.trim();
+            const _vmt = document.getElementById('dashFilterMatch').value;
+            let _vActive = 'custom';
+            if (!_vmo && !_vdt && !_vmt) {
+                if (!_vwk) _vActive = 'geral';
+                else if (_vwk === _dashCurrentWeekKey(weekSet, weekEntries)) _vActive = 'week';
+            }
+            _setDashViewActive(_vActive);
         }
 
         // ── Populate match/confronto dropdown (most recent first) ──
@@ -462,7 +501,13 @@ function renderDashModules() {
     const { matches, playerStats: ps, matchCount, records, playerFilter } = dashData;
     if (!matchCount) return;
 
-    const modules = [...document.querySelectorAll('.dashModule')].filter(c => c.checked).map(c => c.value);
+    // Todos os módulos sempre ligados (seletor "Mostrar" removido da UI)
+    const modules = ['overview', 'ranking', 'highlights', 'shame', 'worstStats', 'records', 'worstRecords', 'history'];
+    // Modo "Geral" = sem recorte de período (semana/mês/data/confronto). No Geral o Histórico multi-jogador não carrega (partida demais).
+    const _isGeral = !document.getElementById('dashFilterWeek').value
+        && !document.getElementById('dashFilterMonth').value
+        && !document.getElementById('dashFilterDate').value.trim()
+        && !document.getElementById('dashFilterMatch').value;
     let entries = Object.values(ps);
 
     // Apply player filter
@@ -520,33 +565,8 @@ function renderDashModules() {
             </div>
         </div>
         ${(typeof renderBadgesShowcase === 'function') ? renderBadgesShowcase(_profileBadges) : ''}`;
-      } else {
-        // ── Global overview (multiple players) ──
-        const totalKills = entries.reduce((s, p) => s + p.kills, 0);
-        const uniquePlayers = entries.length;
-        const totalGCMatches = matches.reduce((s, m) => s + (m.gcMatchCount || 1), 0);
-        const totalConfrontos = matchCount;
-
-        const totalAdrWeighted = entries.reduce((s, p) => s + p.adrSum, 0);
-        const totalMatchesPlayed = entries.reduce((s, p) => s + p.matches, 0);
-        const avgAdrGeral = totalMatchesPlayed > 0 ? (totalAdrWeighted / totalMatchesPlayed).toFixed(1) : '0';
-
-        const totalKastWeighted = entries.reduce((s, p) => s + p.kastSum, 0);
-        const avgKastGeral = totalMatchesPlayed > 0 ? (totalKastWeighted / totalMatchesPlayed).toFixed(0) : '0';
-
-        html += `
-        <div class="card">
-            <div class="card-title">📈 Resumo Geral</div>
-            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;">
-                ${dashStatBox('⚔️', 'Confrontos', totalConfrontos, '')}
-                ${dashStatBox('🎮', 'Partidas GC', totalGCMatches, 'var(--ct-blue)')}
-                ${dashStatBox('👥', 'Jogadores', uniquePlayers, '')}
-                ${dashStatBox('🔫', 'Total Kills', totalKills, 'var(--green)')}
-                ${dashStatBox('💥', 'ADR Média', avgAdrGeral, 'var(--yellow)')}
-                ${dashStatBox('🎯', 'KAST Médio', avgKastGeral + '%', 'var(--blue)')}
-            </div>
-        </div>`;
       }
+      // (Resumo Geral multi-jogador removido — pouco útil; perfil individual acima permanece)
     }
 
     // ═══ RANKING ═══ (hidden for single player)
@@ -1039,8 +1059,8 @@ function renderDashModules() {
                 </tr>`;
         });
         html += '</tbody></table></div></div>';
-      } else {
-        // ── Global history ──
+      } else if (!_isGeral) {
+        // ── Global history (não carrega no modo Geral: muita partida) ──
         html += `
         <div class="card">
             <div class="card-title">📋 Histórico de Partidas</div>
