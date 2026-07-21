@@ -26,6 +26,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     Store.start();
+    // Pré-aquece dados do dashboard (badges + jornal) em segundo plano, com folga, pra 1ª
+    // abertura do dashboard não pagar as idas à rede. Deferido: quem entra e sai rápido nem
+    // dispara; memoizado: no máx. 1 busca de cada por sessão.
+    if (typeof warmDashboardData === 'function') setTimeout(warmDashboardData, 1500);
     loadVotePage();
     // Apply nav visibility from settings (cache for next reload to avoid flicker)
     Store.getSettings().then(data => {

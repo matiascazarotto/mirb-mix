@@ -413,6 +413,7 @@ async function generateJornal(targetSunday) {
     };
 
     await db.collection('jornal').doc(weekId).set(jornalData);
+    if (typeof clearDashJornalCache === 'function') clearDashJornalCache();  // dashboard reflete a nova edição sem F5
     return jornalData;
 }
 

@@ -15,14 +15,17 @@ const BADGE_DISPLAY_ORDER = ['campeao', 'mvp', 'pior-jogador'];
 let _allBadges = [];
 let _badgesByPlayerId = {};
 let _badgesByName = {};
+let _badgesLoaded = false;   // true após 1ª carga bem-sucedida (evita re-fetch em toda abertura)
 
 async function loadAllBadges() {
+    let ok = true;
     try {
         const snap = await db.collection('playerBadges').get();
         _allBadges = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch (e) {
         console.warn('Erro ao carregar badges:', e.message);
         _allBadges = [];
+        ok = false;
     }
     _badgesByPlayerId = {};
     _badgesByName = {};
@@ -35,7 +38,15 @@ async function loadAllBadges() {
             (_badgesByName[key] = _badgesByName[key] || []).push(b);
         }
     });
+    if (ok) _badgesLoaded = true;
     return _allBadges;
+}
+
+// Carrega badges 1x por sessão e reusa. Chamadas explícitas a loadAllBadges() continuam
+// forçando refresh (ex.: admin após premiar); esta só busca se ainda não temos em memória.
+async function ensureBadgesLoaded() {
+    if (_badgesLoaded) return _allBadges;
+    return loadAllBadges();
 }
 
 function getBadgesByPlayerName(name) {

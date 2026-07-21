@@ -258,12 +258,54 @@ function setDashView(mode) {
     loadDashboard();
 }
 
+// Jornal (badges da última edição + base das setas de posição): não muda ao trocar
+// filtro, então busca 1x por sessão e reusa. clearDashJornalCache() invalida (novo jornal).
+let _dashJornalCache = null;
+async function getDashJornalMeta() {
+    if (_dashJornalCache) return _dashJornalCache;
+    const meta = { badgeMap: {}, jornalEdition: null, jornalWeekStart: null };
+    try {
+        const jornalSnap = await db.collection('jornal').orderBy('weekStart', 'desc').get();
+        if (!jornalSnap.empty) {
+            const latestDoc = jornalSnap.docs[0].data();
+            const totalEditions = jornalSnap.size;
+            if (latestDoc.weekStart) meta.jornalWeekStart = latestDoc.weekStart;
+            (latestDoc.badges || []).forEach(b => {
+                if (!meta.badgeMap[b.player]) meta.badgeMap[b.player] = [];
+                meta.badgeMap[b.player].push({ emoji: b.emoji, label: b.label });
+            });
+            if (latestDoc.weekStart && latestDoc.weekEnd) {
+                const ws = latestDoc.weekStart.split('-');
+                const we = latestDoc.weekEnd.split('-');
+                meta.jornalEdition = { num: totalEditions, weekLabel: `${ws[2]}/${ws[1]} a ${we[2]}/${we[1]}` };
+            }
+        }
+        _dashJornalCache = meta;   // memoiza só em caso de sucesso (erro de rede → tenta de novo)
+    } catch (e) { /* não memoiza: próxima abertura tenta de novo */ }
+    return meta;
+}
+function clearDashJornalCache() { _dashJornalCache = null; }
+
+// Pré-aquece badges + jornal em background (chamado no boot, deferido). Fire-and-forget:
+// quando o dashboard abrir, os dados já estão em memória → 1ª abertura fica tão rápida
+// quanto as seguintes. Memoizado → no máximo 1 busca de cada por sessão.
+function warmDashboardData() {
+    if (typeof ensureBadgesLoaded === 'function') ensureBadgesLoaded().catch(() => {});
+    getDashJornalMeta().catch(() => {});
+}
+
 async function loadDashboard() {
     const el = document.getElementById('dashContent');
     el.innerHTML = '<div class="loading-spinner">Carregando</div>';
 
     try {
         const cached = await Store.getMatches();
+        // Dispara badges + jornal em paralelo já no início (não dependem das matches);
+        // ficam prontos enquanto a agregação roda. Await só na hora de montar o dashData.
+        const _metaPromise = Promise.all([
+            (typeof ensureBadgesLoaded === 'function' ? ensureBadgesLoaded() : Promise.resolve()).catch(() => {}),
+            getDashJornalMeta()
+        ]);
         let allMatches = cached.filter(m => ['closed', 'finished'].includes(m.status) && m.gcStats && m.gcStats.length > 0);
 
         // ── Populate month dropdown ──
@@ -456,30 +498,13 @@ async function loadDashboard() {
         const currentVal = sel.value;
         sel.innerHTML = '<option value="">Todos</option>' + Object.values(ps).sort((a,b) => a.name.localeCompare(b.name)).map(p => `<option value="${p.name}" ${p.name === currentVal ? 'selected' : ''}>${p.name}</option>`).join('');
 
-        // ── Carregar trofeus persistentes (LAN/MVP/Pior) ──
-        try { await loadAllBadges(); } catch(_) {}
-
-        // ── Buscar badges do jornal mais recente ──
-        const _badgeMap = {};
-        let _jornalEdition = null;
-        let _jornalWeekStart = null;   // domingo (YYYY-MM-DD) da última edição do Jornal — base das setas de posição
-        try {
-            const jornalSnap = await db.collection('jornal').orderBy('weekStart','desc').get();
-            if (!jornalSnap.empty) {
-                const latestDoc = jornalSnap.docs[0].data();
-                const totalEditions = jornalSnap.size;
-                if (latestDoc.weekStart) _jornalWeekStart = latestDoc.weekStart;
-                (latestDoc.badges || []).forEach(b => {
-                    if (!_badgeMap[b.player]) _badgeMap[b.player] = [];
-                    _badgeMap[b.player].push({ emoji: b.emoji, label: b.label });
-                });
-                if (latestDoc.weekStart && latestDoc.weekEnd) {
-                    const ws = latestDoc.weekStart.split('-');
-                    const we = latestDoc.weekEnd.split('-');
-                    _jornalEdition = { num: totalEditions, weekLabel: `${ws[2]}/${ws[1]} a ${we[2]}/${we[1]}` };
-                }
-            }
-        } catch(e) {}
+        // ── Badges + jornal (disparados em paralelo no início; aqui só aguardamos) ──
+        // ensureBadgesLoaded já deixou os troféus (LAN/MVP/Pior) em memória; getDashJornalMeta
+        // traz badges da última edição + base das setas de posição. Ambos memoizados por sessão.
+        const [, _jm] = await _metaPromise;
+        const _badgeMap = _jm.badgeMap;
+        const _jornalEdition = _jm.jornalEdition;
+        const _jornalWeekStart = _jm.jornalWeekStart;   // domingo (YYYY-MM-DD) da última edição — base das setas de posição
 
         dashData = { matches, playerStats: ps, matchCount: matches.length, records, playerFilter, _initialMonthSet: dashData._initialMonthSet, _initialWeekSet: dashData._initialWeekSet, _badgeMap, _jornalEdition, _jornalWeekStart };
         renderDashModules();
@@ -786,13 +811,14 @@ function renderDashModules() {
         }
 
         html += `
-        <div class="card" style="overflow-x:auto;">
+        <div class="card">
             <div class="card-title" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">🏆 Ranking Geral
                 <span onclick="document.getElementById('ratingInfoModal').style.display='flex'" style="cursor:pointer;font-size:14px;width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border-radius:50%;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);color:var(--text-dim);font-family:'Rajdhani',sans-serif;font-weight:700;" title="Como o Rating é calculado?">?</span>
                 ${_rankToggleHtml}
             </div>
-            <table style="width:100%;border-collapse:collapse;font-size:13px;">
-                <thead>
+            <div id="rankHWrap" style="overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;">
+            <table id="rankTable" style="width:100%;border-collapse:collapse;font-size:13px;">
+                <thead id="rankThead">
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
                         <th style="padding:10px 6px;text-align:left;">#</th>
                         <th style="padding:10px 6px;text-align:left;">Jogador</th>
@@ -880,7 +906,7 @@ function renderDashModules() {
                 html += rankRowHtml(p, prog, { dim: true });
             });
         }
-        html += '</tbody></table>';
+        html += '</tbody></table></div>';   // fecha #rankHWrap
         if (_calibMode && calibRows.length > 0) {
             html += `<div style="font-size:11px;color:var(--text-dim);text-align:center;padding:10px 8px 4px;border-top:1px solid rgba(255,255,255,0.05);">🌱 Jogadores com menos de ${AFUNDA_MIN_GAMES} jogos entram no ranking ao atingir o piso.</div>`;
         }
@@ -1166,6 +1192,79 @@ function renderDashModules() {
     }
 
     el.innerHTML = html;
+    if (typeof setupRankStickyHeader === 'function') setupRankStickyHeader();
+}
+
+// ── Header flutuante do ranking (fixo abaixo do menu ao rolar a página) ──
+// CSS puro não resolve: a tabela precisa de scroll horizontal (muitas colunas) e um container
+// com scroll-x também é scroll-y — um sticky grudaria no container, não na página. Solução:
+// clonamos a linha de cabeçalho numa barra position:fixed abaixo do menu, sincronizando a
+// largura das colunas e o scroll lateral. Clicar na barra também ordena (onclick preservado).
+let _rankStickyInit = false;
+let _rankRaf = 0;
+let _updateRankSticky = () => {};
+function _rankNavBottom() {
+    const nav = document.querySelector('.nav');
+    return nav ? Math.max(0, nav.getBoundingClientRect().bottom) : 0;
+}
+function setupRankStickyHeader() {
+    const hwrap = document.getElementById('rankHWrap');
+    const thead = document.getElementById('rankThead');
+    const table = document.getElementById('rankTable');
+    let bar = document.getElementById('rankStickyBar');
+    if (!hwrap || !thead || !table) { if (bar) bar.style.display = 'none'; return; }
+
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'rankStickyBar';
+        bar.style.cssText = 'position:fixed;top:0;left:0;overflow:hidden;z-index:90;display:none;background:#0c121e;box-shadow:0 3px 8px rgba(0,0,0,0.45);';
+        bar.innerHTML = '<table style="border-collapse:collapse;font-size:13px;table-layout:fixed;"><colgroup></colgroup><thead></thead></table>';
+        document.body.appendChild(bar);
+    }
+    const cloneTable = bar.querySelector('table');
+    const cloneColgroup = cloneTable.querySelector('colgroup');
+    const cloneThead = cloneTable.querySelector('thead');
+    cloneThead.innerHTML = thead.innerHTML;   // mantém onclick=dashSort → ordenar pela barra funciona
+
+    function syncWidths() {
+        const ths = thead.querySelectorAll('tr > th');
+        let cols = '', total = 0;
+        ths.forEach(th => { const w = th.getBoundingClientRect().width; total += w; cols += `<col style="width:${w}px">`; });
+        cloneColgroup.innerHTML = cols;
+        cloneTable.style.width = total + 'px';
+    }
+    function update() {
+        const top = _rankNavBottom();
+        const rect = hwrap.getBoundingClientRect();
+        const theadBottom = thead.getBoundingClientRect().bottom;
+        // mostra quando o cabeçalho real passou por baixo do menu e a tabela ainda está na tela
+        const show = theadBottom <= top && rect.bottom > top + 4;
+        if (!show) { bar.style.display = 'none'; return; }
+        syncWidths();
+        bar.style.top = top + 'px';
+        bar.style.left = rect.left + 'px';
+        bar.style.width = hwrap.clientWidth + 'px';
+        cloneTable.style.transform = `translateX(${-hwrap.scrollLeft}px)`;
+        bar.style.display = 'block';
+    }
+    _updateRankSticky = update;
+
+    // scroll lateral da tabela → a barra acompanha (o listener morre com o hwrap no próximo render, sem leak)
+    hwrap.addEventListener('scroll', () => {
+        if (bar.style.display !== 'none') cloneTable.style.transform = `translateX(${-hwrap.scrollLeft}px)`;
+    }, { passive: true });
+
+    // listeners globais só 1x (re-consultam o estado atual via _updateRankSticky)
+    if (!_rankStickyInit) {
+        _rankStickyInit = true;
+        const onScrollResize = () => {
+            if (_rankRaf) return;
+            _rankRaf = requestAnimationFrame(() => { _rankRaf = 0; if (document.getElementById('rankHWrap')) _updateRankSticky(); });
+        };
+        window.addEventListener('scroll', onScrollResize, { passive: true });
+        window.addEventListener('resize', onScrollResize, { passive: true });
+    }
+    update();
 }
 
 function dashStatBox(icon, label, value, color) {
