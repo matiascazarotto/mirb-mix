@@ -137,35 +137,34 @@
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:12px;align-items:end;">
                     <div class="df-field">
                         <label>Mês</label>
-                        <select id="dashFilterMonth" onchange="if(this.value)document.getElementById('dashFilterWeek').value=''">
+                        <select id="dashFilterMonth" onchange="if(this.value)document.getElementById('dashFilterWeek').value='';loadDashboard()">
                             <option value="">Todos os meses</option>
                         </select>
                     </div>
                     <div class="df-field">
                         <label>Semana</label>
-                        <select id="dashFilterWeek" onchange="if(this.value){document.getElementById('dashFilterMonth').value='';document.getElementById('dashFilterDate').value='';}">
+                        <select id="dashFilterWeek" onchange="if(this.value){document.getElementById('dashFilterMonth').value='';document.getElementById('dashFilterDate').value='';}loadDashboard()">
                             <option value="">Todas</option>
                         </select>
                     </div>
                     <div class="df-field">
                         <label>Confronto</label>
-                        <select id="dashFilterMatch">
+                        <select id="dashFilterMatch" onchange="loadDashboard()">
                             <option value="">Todos os confrontos</option>
                         </select>
                     </div>
                     <div class="df-field">
                         <label>Jogador</label>
-                        <select id="dashFilterPlayer">
+                        <select id="dashFilterPlayer" onchange="loadDashboard()">
                             <option value="">Todos</option>
                         </select>
                     </div>
                     <div class="df-field">
                         <label>Data exata</label>
-                        <input type="text" id="dashFilterDate" placeholder="dd/mm/aaaa" maxlength="10" oninput="dashDateMask(this)">
+                        <input type="text" id="dashFilterDate" placeholder="dd/mm/aaaa" maxlength="10" oninput="dashDateMask(this)" onchange="loadDashboard()">
                     </div>
                 </div>
                 <div class="df-actions" style="display:flex;gap:10px;margin-top:16px;">
-                    <button class="btn btn-primary btn-small" onclick="loadDashboard()">Filtrar</button>
                     <button class="btn btn-secondary btn-small" onclick="clearDashFilters()">Limpar</button>
                 </div>
             </div>
