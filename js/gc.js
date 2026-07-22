@@ -4,6 +4,25 @@
 let gcImportMatchId = null;
 let gcImportSlotCount = 0;
 
+// ── Vínculo multi-conta GC ──────────────────────────────────────────────
+// Um jogador pode ter várias contas GC: `gcId` = principal (retrocompat) e
+// `gcIds` = lista completa de todas as contas vinculadas.
+function playerHasGc(p, gcId) {
+    if (!gcId || !p) return false;
+    if (p.gcId === gcId) return true;
+    return Array.isArray(p.gcIds) && p.gcIds.includes(gcId);
+}
+function findPlayerByGc(playerList, gcId) {
+    return gcId ? playerList.find(p => playerHasGc(p, gcId)) : null;
+}
+// Update Firestore que ADICIONA uma conta GC sem apagar a principal.
+function gcLinkUpdate(player, gcId) {
+    const ids = player.gcId && player.gcId !== gcId ? [player.gcId, gcId] : [gcId];
+    const upd = { gcIds: firebase.firestore.FieldValue.arrayUnion(...ids) };
+    if (!player.gcId) upd.gcId = gcId; // define principal se ainda não tem
+    return upd;
+}
+
 function openGCImport(matchId) {
     gcImportMatchId = matchId;
     gcImportSlotCount = 0;
@@ -180,7 +199,7 @@ async function processAllGCImports() {
     const unmatchedUnique = [];
 
     Object.values(uniqueGC).forEach(gc => {
-        const byGcId = gc.gcId ? players.find(p => p.gcId === gc.gcId) : null;
+        const byGcId = findPlayerByGc(players, gc.gcId);
         if (byGcId) {
             matchedUnique.push({ gc, player: byGcId });
         } else {
@@ -314,10 +333,10 @@ async function saveGCImport() {
 
         const batch = db.batch();
 
-        // Link gcIds on players that need it
+        // Link gcIds on players that need it (adiciona conta sem apagar a principal)
         for (const entry of allUniqueLinked) {
             if (entry.needsLink && entry.gc.gcId) {
-                batch.update(db.collection('players').doc(entry.player.id), { gcId: entry.gc.gcId });
+                batch.update(db.collection('players').doc(entry.player.id), gcLinkUpdate(entry.player, entry.gc.gcId));
             }
         }
 
@@ -899,9 +918,8 @@ async function loadPendingGCImports() {
             const gcTeamSets = {};
             gcPlayers.forEach(gcp => {
                 if (!gcp.teamName) return;
-                const sysP = gcp.gcId
-                    ? systemPlayers.find(sp => sp.gcId === gcp.gcId)
-                    : systemPlayers.find(sp => sp.name.toLowerCase() === gcp.name.toLowerCase());
+                const sysP = findPlayerByGc(systemPlayers, gcp.gcId)
+                    || systemPlayers.find(sp => sp.name.toLowerCase() === gcp.name.toLowerCase());
                 if (sysP) {
                     if (!gcTeamSets[gcp.teamName]) gcTeamSets[gcp.teamName] = new Set();
                     gcTeamSets[gcp.teamName].add(sysP.id);
@@ -911,9 +929,8 @@ async function loadPendingGCImports() {
             const scored = closedMatches.map(m => {
                 let matchCount = 0;
                 gcPlayers.forEach(gcp => {
-                    const sysPlayer = gcp.gcId
-                        ? systemPlayers.find(sp => sp.gcId === gcp.gcId)
-                        : systemPlayers.find(sp => sp.name.toLowerCase() === gcp.name.toLowerCase());
+                    const sysPlayer = findPlayerByGc(systemPlayers, gcp.gcId)
+                        || systemPlayers.find(sp => sp.name.toLowerCase() === gcp.name.toLowerCase());
                     if (sysPlayer && m.players.some(mp => mp.id === sysPlayer.id)) {
                         matchCount++;
                     }
@@ -1037,7 +1054,7 @@ async function linkGCImportToMatch(importDocId) {
         const unmatched = [];
 
         gcPlayers.forEach(gc => {
-            const byGcId = gc.gcId ? players.find(p => p.gcId === gc.gcId) : null;
+            const byGcId = findPlayerByGc(players, gc.gcId);
             if (byGcId) {
                 matched.push({ gc, player: byGcId });
             } else {
@@ -1175,10 +1192,10 @@ async function saveLinkToMatch(importDocId, matchId, allMatched, gcPlayers, impo
 
         const batch = db.batch();
 
-        // Link gcIds on players that need it
+        // Link gcIds on players that need it (adiciona conta sem apagar a principal)
         for (const entry of allMatched) {
             if (entry.needsLink && entry.gc.gcId) {
-                batch.update(db.collection('players').doc(entry.player.id), { gcId: entry.gc.gcId });
+                batch.update(db.collection('players').doc(entry.player.id), gcLinkUpdate(entry.player, entry.gc.gcId));
             }
         }
 

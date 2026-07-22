@@ -25,7 +25,9 @@ function renderAdminPlayersList() {
         el.innerHTML = '<div class="empty-state"><p>Nenhum jogador cadastrado.</p></div>';
         return;
     }
-    el.innerHTML = players.map(p => `
+    el.innerHTML = players.map(p => {
+        const gcCount = gcAccountCount(p);
+        return `
         <div class="player-selector" onclick="openEditPlayer('${p.id}')" data-name="${p.name.toLowerCase()}" style="cursor:pointer;position:relative;">
             <div class="player-name" style="color:var(--yellow);">${p.name}</div>
             <div class="player-meta">
@@ -34,10 +36,11 @@ function renderAdminPlayersList() {
             </div>
             <div style="display:flex;gap:4px;font-size:10px;margin-top:2px;">
                 ${p.duo ? `<span class="badge badge-duo" style="font-size:9px;padding:1px 5px;">Duo: ${getPlayerName(p.duo)}</span>` : ''}
-                ${p.gcId ? `<span style="color:var(--green);font-size:10px;">🔗 GC</span>` : `<span style="color:var(--red);font-size:10px;">Sem GC</span>`}
+                ${gcCount ? `<span style="color:var(--green);font-size:10px;">🔗 GC</span>` : `<span style="color:var(--red);font-size:10px;">Sem GC</span>`}
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function filterAdminPlayersList() {
@@ -53,11 +56,63 @@ function getPlayerName(id) {
     return p ? p.name : '?';
 }
 
+// ── Chips de contas GC (modal de editar) ────────────────────────────────
+let editGcIds = [];
+
+function renderEditGcChips() {
+    const el = document.getElementById('editGcChips');
+    if (!el) return;
+    if (!editGcIds.length) {
+        el.innerHTML = '<span style="color:var(--text-dim);font-size:12px;">Nenhuma conta vinculada.</span>';
+        return;
+    }
+    el.innerHTML = editGcIds.map((id, i) => `
+        <span style="display:inline-flex;align-items:center;gap:5px;padding:3px 4px 3px 8px;background:${i === 0 ? 'rgba(255,214,0,0.12)' : 'rgba(255,255,255,0.06)'};border:1px solid ${i === 0 ? 'rgba(255,214,0,0.35)' : 'rgba(255,255,255,0.15)'};border-radius:14px;font-size:12px;">
+            ${i === 0
+                ? '<span style="color:var(--yellow);font-size:9px;text-transform:uppercase;letter-spacing:0.5px;">principal</span>'
+                : `<button type="button" title="Tornar principal" onclick="promoteEditGcId('${id}')" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:0;line-height:1;">★</button>`}
+            <span style="color:var(--text);">${id}</span>
+            <button type="button" title="Remover" onclick="removeEditGcId('${id}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;padding:0 2px;line-height:1;">×</button>
+        </span>
+    `).join('');
+}
+
+function addEditGcId() {
+    const inp = document.getElementById('editGcIdInput');
+    if (!inp) return;
+    const val = (inp.value || '').trim();
+    if (!val) return;
+    if (editGcIds.includes(val)) { toast('Essa conta GC já está vinculada.', 'error'); inp.value = ''; return; }
+    editGcIds.push(val);
+    inp.value = '';
+    renderEditGcChips();
+}
+
+function removeEditGcId(id) {
+    editGcIds = editGcIds.filter(x => x !== id);
+    renderEditGcChips();
+}
+
+function promoteEditGcId(id) {
+    editGcIds = [id, ...editGcIds.filter(x => x !== id)];
+    renderEditGcChips();
+}
+
+// Nº de contas GC vinculadas (principal `gcId` + extras em `gcIds`).
+function gcAccountCount(p) {
+    const set = new Set();
+    if (p.gcId) set.add(p.gcId);
+    (p.gcIds || []).forEach(id => { if (id) set.add(id); });
+    return set.size;
+}
+
 async function addPlayer(e) {
     e.preventDefault();
+    const gcId = document.getElementById('newPlayerGcId').value.trim();
     const data = {
         name: document.getElementById('newPlayerName').value.trim(),
-        gcId: document.getElementById('newPlayerGcId').value.trim(),
+        gcId: gcId,
+        gcIds: gcId ? [gcId] : [],
         role: document.getElementById('newPlayerRole').value,
         duo: document.getElementById('newPlayerDuo').value,
         playstyle: document.getElementById('newPlayerPlaystyle').value,
@@ -89,8 +144,15 @@ function openEditPlayer(id) {
     if (!p) return;
     document.getElementById('editPlayerId').value = id;
     document.getElementById('editName').value = p.name;
-    document.getElementById('editGcId').value = p.gcId || '';
     document.getElementById('editRole').value = p.role;
+
+    // Contas GC vinculadas (principal primeiro, depois extras — sem duplicar)
+    editGcIds = [];
+    if (p.gcId) editGcIds.push(p.gcId);
+    (p.gcIds || []).forEach(gid => { if (gid && !editGcIds.includes(gid)) editGcIds.push(gid); });
+    renderEditGcChips();
+    const gcInput = document.getElementById('editGcIdInput');
+    if (gcInput) gcInput.value = '';
 
     // Populate duo select
     const duoSelect = document.getElementById('editDuo');
@@ -118,10 +180,12 @@ function closeEditModal() {
 async function savePlayerEdit(e) {
     e.preventDefault();
     const id = document.getElementById('editPlayerId').value;
+    const gcIds = editGcIds.slice();
     try {
         await db.collection('players').doc(id).update({
             name: document.getElementById('editName').value.trim(),
-            gcId: document.getElementById('editGcId').value.trim(),
+            gcId: gcIds[0] || '',   // principal = 1ª conta
+            gcIds: gcIds,
             role: document.getElementById('editRole').value,
             duo: document.getElementById('editDuo').value,
             playstyle: document.getElementById('editPlaystyle').value
