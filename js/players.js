@@ -35,7 +35,7 @@ function renderAdminPlayersList() {
                 ${p.playstyle && p.playstyle !== 'Normal' ? `<span class="badge badge-style-${p.playstyle}">${p.playstyle === 'Agressivo' ? '⚡' : '🐢'}</span>` : ''}
             </div>
             <div style="display:flex;gap:4px;font-size:10px;margin-top:2px;">
-                ${p.duo ? `<span class="badge badge-duo" style="font-size:9px;padding:1px 5px;">Duo: ${getPlayerName(p.duo)}</span>` : ''}
+                ${isStaff && p.duo ? `<span class="badge badge-duo" style="font-size:9px;padding:1px 5px;">Duo: ${getPlayerName(p.duo)}</span>` : ''}
                 ${gcCount ? `<span style="color:var(--green);font-size:10px;">🔗 GC</span>` : `<span style="color:var(--red);font-size:10px;">Sem GC</span>`}
             </div>
         </div>
@@ -114,7 +114,7 @@ async function addPlayer(e) {
         gcId: gcId,
         gcIds: gcId ? [gcId] : [],
         role: document.getElementById('newPlayerRole').value,
-        duo: document.getElementById('newPlayerDuo').value,
+        duo: document.getElementById('newPlayerDuo')?.value || '',   // dupla: só staff tem o campo
         playstyle: document.getElementById('newPlayerPlaystyle').value,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
     };
@@ -154,12 +154,16 @@ function openEditPlayer(id) {
     const gcInput = document.getElementById('editGcIdInput');
     if (gcInput) gcInput.value = '';
 
-    // Populate duo select
-    const duoSelect = document.getElementById('editDuo');
-    duoSelect.innerHTML = '<option value="">Nenhuma</option>' +
-        players.filter(pl => pl.id !== id).map(pl =>
-            `<option value="${pl.id}" ${p.duo === pl.id ? 'selected' : ''}>${pl.name}</option>`
-        ).join('');
+    // Dupla: só o staff pode ver/definir (admin não). Esconde o campo p/ não-staff.
+    const duoGroup = document.getElementById('editDuoGroup');
+    if (duoGroup) duoGroup.style.display = isStaff ? '' : 'none';
+    if (isStaff) {
+        const duoSelect = document.getElementById('editDuo');
+        duoSelect.innerHTML = '<option value="">Nenhuma</option>' +
+            players.filter(pl => pl.id !== id).map(pl =>
+                `<option value="${pl.id}" ${p.duo === pl.id ? 'selected' : ''}>${pl.name}</option>`
+            ).join('');
+    }
 
     // Populate playstyle
     document.getElementById('editPlaystyle').value = p.playstyle || 'Normal';
@@ -182,14 +186,16 @@ async function savePlayerEdit(e) {
     const id = document.getElementById('editPlayerId').value;
     const gcIds = editGcIds.slice();
     try {
-        await db.collection('players').doc(id).update({
+        const update = {
             name: document.getElementById('editName').value.trim(),
             gcId: gcIds[0] || '',   // principal = 1ª conta
             gcIds: gcIds,
             role: document.getElementById('editRole').value,
-            duo: document.getElementById('editDuo').value,
             playstyle: document.getElementById('editPlaystyle').value
-        });
+        };
+        // Dupla: só o staff altera (admin não vê o campo — preserva o valor existente).
+        if (isStaff) update.duo = document.getElementById('editDuo').value;
+        await db.collection('players').doc(id).update(update);
         closeEditModal();
         toast('Jogador atualizado!', 'success');
         await loadAdminPlayers();

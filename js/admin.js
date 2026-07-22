@@ -49,12 +49,13 @@ async function renderAdminPanel() {
                                 <option value="IGL">IGL/Capitão</option>
                             </select>
                         </div>
+                        ${isStaff ? `
                         <div class="form-group">
                             <label>Dupla</label>
                             <select id="newPlayerDuo">
                                 <option value="">Nenhuma</option>
                             </select>
-                        </div>
+                        </div>` : '<div></div>'}
                     </div>
                     <div class="form-row">
                         <div class="form-group">
