@@ -411,6 +411,7 @@ function mapControlsHtml(m, matchId) {
             ${sep}
             <button class="btn btn-primary btn-small" onclick="forceCloseMapVote('${matchId}')" title="Encerra a votação agora e define o mapa mais votado">⏹️ Encerrar &amp; Definir</button>
             <button class="btn btn-secondary btn-small" onclick="cancelMapVote('${matchId}')" title="Cancela a votação sem definir mapa">✖️ Cancelar</button>
+            ${isStaff ? `<button class="btn btn-secondary btn-small" onclick="viewMapVoteLog('${matchId}')" title="Ver quem votou em quais mapas (IP + horário)">📜 Log</button>` : ''}
         </div>`;
     }
 
@@ -432,7 +433,91 @@ function mapControlsHtml(m, matchId) {
         <button class="btn btn-secondary btn-small" onclick="openMapVote('${matchId}')" title="Abrir votação de mapa: a galera escolhe seu Top 3 e o mais votado vence">🗳️ Votação da galera</button>
         ${drawBtn}
         ${chosen ? `<button class="btn btn-secondary btn-small" onclick="clearChosenMap('${matchId}')" title="${isDrawn ? 'Remover o mapa sorteado (libera novo sorteio)' : 'Remover o mapa definido'}">🗑️</button>` : ''}
+        ${(isStaff && m.mapSource === 'vote') ? `<button class="btn btn-secondary btn-small" onclick="viewMapVoteLog('${matchId}')" title="Ver quem votou em quais mapas (IP + horário)">📜 Log</button>` : ''}
     </div>`;
+}
+
+// ── Log de votos de mapa (staff) — espelha viewVoteLog dos níveis (js/matches.js) ──
+// Mostra um card por votante com IP + horário e o Top 3 ranqueado (1º/2º/3º + pontos).
+// Os votos ficam em matches/{id}/mapVotes e persistem depois do fechamento por voto,
+// até abrir nova votação ou sortear (que limpam a subcoleção).
+async function viewMapVoteLog(matchId) {
+    try {
+        const matchDoc = await db.collection('matches').doc(matchId).get();
+        const match = matchDoc.exists ? matchDoc.data() : {};
+        const votesSnap = await db.collection('matches').doc(matchId).collection('mapVotes').get();
+
+        if (votesSnap.empty) {
+            toast('Nenhum voto de mapa ainda.', 'error');
+            return;
+        }
+
+        const maps = await loadMapPool();
+        const mapById = {};
+        maps.forEach(m => { mapById[m.id] = m; });
+
+        // Ordena pelo horário do voto (mais antigo primeiro), como o log de níveis
+        const docs = votesSnap.docs.slice().sort((a, b) => {
+            const ta = (a.data()._meta || {}).timestamp || '';
+            const tb = (b.data()._meta || {}).timestamp || '';
+            return ta < tb ? -1 : ta > tb ? 1 : 0;
+        });
+
+        const rankColors = ['var(--yellow)', 'var(--ct-blue)', '#ff9d3d']; // 1º/2º/3º
+
+        let html = `<div style="max-height:70vh;overflow-y:auto;">`;
+
+        docs.forEach((doc, idx) => {
+            const data = doc.data();
+            const meta = data._meta || {};
+            const ip = meta.ip || 'sem registro';
+            const time = meta.timestamp ? new Date(meta.timestamp).toLocaleString('pt-BR') : 'sem registro';
+            const top3 = data.top3 || [];
+
+            let picksHtml = '';
+            top3.forEach((id, i) => {
+                const mp = mapById[id];
+                const label = mp ? `${mp.emoji || '🗺️'} ${mp.name}` : id;
+                const color = rankColors[i] || 'var(--text)';
+                const pts = 3 - i;
+                picksHtml += `
+                    <div style="display:flex;align-items:center;gap:8px;padding:4px 8px;background:rgba(255,255,255,0.03);border-radius:4px;margin-bottom:2px;">
+                        <span style="width:22px;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:14px;color:${color};">${i + 1}º</span>
+                        <span style="color:var(--text);font-size:13px;">${label}</span>
+                        <span style="margin-left:auto;color:var(--text-dim);font-size:11px;">${pts} pt${pts > 1 ? 's' : ''}</span>
+                    </div>`;
+            });
+            if (!picksHtml) picksHtml = `<div style="padding:4px 8px;color:var(--text-dim);font-size:12px;font-style:italic;">sem escolhas</div>`;
+
+            html += `
+                <div style="background:rgba(0,0,0,0.3);border:1px solid rgba(255,255,255,0.06);border-radius:8px;padding:14px;margin-bottom:10px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px;">
+                        <span style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;color:var(--text);">Voto #${idx + 1}</span>
+                        <span style="font-size:11px;color:var(--text-dim);">${top3.length} mapa${top3.length !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;">
+                        <span style="color:var(--text-dim);">🌐 <span style="color:var(--text);font-family:monospace;">${ip}</span></span>
+                        <span style="color:var(--text-dim);">🕐 ${time}</span>
+                    </div>
+                    ${picksHtml}
+                </div>
+            `;
+        });
+
+        html += '</div>';
+
+        const overlay = document.getElementById('editModal');
+        overlay.querySelector('.modal-box').innerHTML = `
+            <div class="card-title">
+                <span>📜 Log de Votos de Mapa — ${match.name || ''} (${votesSnap.size} voto${votesSnap.size > 1 ? 's' : ''})</span>
+                <button class="modal-close" onclick="closeEditModal()">&times;</button>
+            </div>
+            ${html}
+        `;
+        overlay.classList.add('active');
+    } catch (e) {
+        toast('Erro: ' + e.message, 'error');
+    }
 }
 
 // ── Editor da lista de mapas (Admin › Outros) ──
