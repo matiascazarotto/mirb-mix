@@ -772,7 +772,7 @@ function renderDashModules() {
         };
 
         const arrow = (c) => col === c ? (dir === 'desc' ? ' ▼' : ' ▲') : '';
-        const thStyle = 'padding:10px 6px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;';
+        const thStyle = 'padding:10px 4px;text-align:center;cursor:pointer;user-select:none;white-space:nowrap;';
         const activeStyle = (c) => col === c ? 'color:var(--yellow);' : '';
 
         // Cor do Afundômetro: <50 carrega = verde sólido · 50 = amarelo (na média) · 50→100 afunda = amarelo→vermelho (intensidade = quanto afunda).
@@ -820,8 +820,8 @@ function renderDashModules() {
             <table id="rankTable" style="width:100%;border-collapse:collapse;font-size:13px;">
                 <thead id="rankThead">
                     <tr style="border-bottom:1px solid rgba(255,255,255,0.1);color:var(--text-dim);font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">
-                        <th style="padding:10px 6px;text-align:left;">#</th>
-                        <th style="padding:10px 6px;text-align:left;">Jogador</th>
+                        <th style="padding:10px 4px;text-align:left;">#</th>
+                        <th style="padding:10px 4px;text-align:left;">Jogador</th>
                         <th style="${thStyle}${activeStyle('rating')}" onclick="dashSort('rating')">Rating${arrow('rating')}</th>
                         ${_showImpacto ? `<th style="${thStyle}${activeStyle('afunda')}" onclick="dashSort('afunda')" title="0–100 · 50 = na média · quanto MAIOR, mais afunda o time (verde carrega → vermelho afunda) — desempenho puro vs. a média, ${AFUNDA_MIN_GAMES}+ jogos">Afundômetro${arrow('afunda')}</th>` : ''}
                         <th style="${thStyle}${activeStyle('p')}" onclick="dashSort('p')">P${arrow('p')}</th>
@@ -857,28 +857,28 @@ function renderDashModules() {
 
             return `
                 <tr style="border-bottom:1px solid rgba(255,255,255,0.04);${opts.top3 ? 'background:rgba(255,255,255,0.03);' : ''}${opts.dim ? 'opacity:0.55;' : ''}">
-                    <td style="padding:10px 6px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);white-space:nowrap;">${posCell}</td>
-                    <td style="padding:10px 6px;">
+                    <td style="padding:10px 4px;font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);white-space:nowrap;">${posCell}</td>
+                    <td style="padding:10px 4px;">
                         <div style="display:flex;align-items:center;gap:6px;">
                             ${p.avatar ? `<img src="${p.avatar}" style="width:24px;height:24px;border-radius:50%;object-fit:cover;">` : ''}
                             <span style="font-family:'Rajdhani',sans-serif;font-weight:600;font-size:15px;color:${nameColor};">${p.name}</span>${getDashBadgeHtml(p.name)}${(typeof renderBadgesInline === 'function') ? renderBadgesInline(getBadgesByPlayerName(p.name), { size: 16 }) : ''}
                         </div>
                     </td>
-                    <td style="padding:10px 6px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>
-                    ${_showImpacto ? `<td style="padding:10px 6px;text-align:center;">${afundaCellHtml(p)}</td>` : ''}
-                    <td style="padding:10px 6px;text-align:center;color:var(--text-dim);">${p.matches}</td>
-                    <td style="padding:10px 6px;text-align:center;color:var(--green);">${p.wins}</td>
-                    <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.losses}</td>
-                    <td style="padding:10px 6px;text-align:center;font-weight:700;color:${wrColor};">${wr}%</td>
-                    <td style="padding:10px 6px;text-align:center;color:var(--green);font-weight:700;">${p.kills}</td>
-                    <td style="padding:10px 6px;text-align:center;color:var(--red);">${p.deaths}</td>
-                    <td style="padding:10px 6px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
-                    <td style="padding:10px 6px;text-align:center;">${avgAdr}</td>
-                    <td style="padding:10px 6px;text-align:center;">${p._avgFk.toFixed(1)}</td>
-                    <td style="padding:10px 6px;text-align:center;">${avgKast}%</td>
-                    <td style="padding:10px 6px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
-                    ${_showMvp ? `<td style="padding:10px 6px;text-align:center;font-weight:700;color:${p._mvpPct != null && p.mvpCount > 0 ? 'var(--green)' : 'var(--text-dim)'};" title="${p.mvpCount}x em ${p.mixCount} mix${p._mvpPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._mvpPct == null ? '—' : p._mvpPct.toFixed(1) + '%'}</td>
-                    <td style="padding:10px 6px;text-align:center;font-weight:700;color:${p._piorPct != null && p.piorCount > 0 ? 'var(--red)' : 'var(--text-dim)'};" title="${p.piorCount}x em ${p.mixCount} mix${p._piorPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._piorPct == null ? '—' : p._piorPct.toFixed(1) + '%'}</td>` : ''}
+                    <td style="padding:10px 4px;text-align:center;font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;color:${ratingColor};">${ratingVal}</td>
+                    ${_showImpacto ? `<td style="padding:10px 4px;text-align:center;">${afundaCellHtml(p)}</td>` : ''}
+                    <td style="padding:10px 4px;text-align:center;color:var(--text-dim);">${p.matches}</td>
+                    <td style="padding:10px 4px;text-align:center;color:var(--green);">${p.wins}</td>
+                    <td style="padding:10px 4px;text-align:center;color:var(--red);">${p.losses}</td>
+                    <td style="padding:10px 4px;text-align:center;font-weight:700;color:${wrColor};">${wr}%</td>
+                    <td style="padding:10px 4px;text-align:center;color:var(--green);font-weight:700;">${p.kills}</td>
+                    <td style="padding:10px 4px;text-align:center;color:var(--red);">${p.deaths}</td>
+                    <td style="padding:10px 4px;text-align:center;color:${kdrColor};font-weight:600;">${avgKdr}</td>
+                    <td style="padding:10px 4px;text-align:center;">${avgAdr}</td>
+                    <td style="padding:10px 4px;text-align:center;">${p._avgFk.toFixed(1)}</td>
+                    <td style="padding:10px 4px;text-align:center;">${avgKast}%</td>
+                    <td style="padding:10px 4px;text-align:center;color:${rpColor};font-weight:700;font-family:'Rajdhani',sans-serif;font-size:15px;">${p.rpTotal > 0 ? '+' : ''}${p.rpTotal}</td>
+                    ${_showMvp ? `<td style="padding:10px 4px;text-align:center;font-weight:700;color:${p._mvpPct != null && p.mvpCount > 0 ? 'var(--green)' : 'var(--text-dim)'};" title="${p.mvpCount}x em ${p.mixCount} mix${p._mvpPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._mvpPct == null ? '—' : p._mvpPct.toFixed(1) + '%'}</td>
+                    <td style="padding:10px 4px;text-align:center;font-weight:700;color:${p._piorPct != null && p.piorCount > 0 ? 'var(--red)' : 'var(--text-dim)'};" title="${p.piorCount}x em ${p.mixCount} mix${p._piorPct == null ? ' — precisa de ' + MVP_MIN_MIXES + '+ mixes' : ''}">${p._piorPct == null ? '—' : p._piorPct.toFixed(1) + '%'}</td>` : ''}
                 </tr>`;
         };
 
