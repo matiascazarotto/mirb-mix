@@ -569,3 +569,25 @@ Store.subscribe('matches', async () => {
     clearTimeout(_votePageRefreshTimer);
     _votePageRefreshTimer = setTimeout(() => loadVotePage(), 400);
 });
+
+// Também re-renderiza quando um toggle da staff que afeta esta página muda
+// (Ouvidoria, re-sort, escolha de mapa). Sem isto, o settings velho vindo do
+// cache offline do Firestore (getSettings é cache-first) + o default LIGADO
+// (`!== false`) deixavam o mural aparecendo pra quem tinha cache antigo, até
+// navegar de novo — a página só ouvia 'matches', nunca 'settings'.
+let _voteSettingsSig = null;
+Store.subscribe('settings', async () => {
+    const s = await Store.getSettings();
+    const sig = [
+        s.ouvidoriaEnabled !== false,
+        s.resortEnabled !== false,
+        s.mapSelectEnabled !== false
+    ].join('|');
+    const isFirst = _voteSettingsSig === null;
+    if (_voteSettingsSig === sig) return;
+    _voteSettingsSig = sig;
+    if (isFirst) return; // 1º snapshot (cache): baseline; o do servidor dispara o refresh
+    if (!document.getElementById('page-vote')?.classList.contains('active')) return;
+    clearTimeout(_votePageRefreshTimer);
+    _votePageRefreshTimer = setTimeout(() => loadVotePage(), 400);
+});
