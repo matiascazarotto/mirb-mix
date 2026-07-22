@@ -2,7 +2,7 @@
 // ║   MAPAS — Votação (Top 3) + Rotação automática            ║
 // ╚══════════════════════════════════════════════════════════╝
 // Dois jeitos de decidir o mapa de uma partida, controlados pela staff:
-//   1. Votação "Top 3" — quem votou nos níveis escolhe 3 favoritos (3/2/1 pts).
+//   1. Votação "Top 3" — a galera na página escolhe 3 favoritos (3/2/1 pts).
 //   2. Rotação — sorteio sem repetir até esgotar o pool, aí reseta.
 // Config em config/mapPool ({maps:[{id,name,emoji,active}]}) e config/mapRotation ({played:[]}).
 // Campos na partida: chosenMap {id,name,emoji}, mapSource 'vote'|'rotation', mapVote 'open'.
@@ -284,15 +284,10 @@ async function submitMapVote(matchId) {
         const voter = await getVoterDeviceId();
         if (await isIPBlocked(voter.ip, 'mapVote', voter.fingerprint)) { toast('Não foi possível votar. Tente novamente mais tarde.', 'error'); return; }
 
-        // Elegibilidade: antes dos níveis (status 'open') a votação do mapa é liberada pra
-        // todos; depois que os níveis começam, só quem votou nos níveis pode escolher o mapa.
+        // Votação de mapa é aberta a qualquer um na página, em qualquer ordem (Mapa→Level,
+        // Level→Mapa ou juntos) — não depende do voto de nível. Anti-abuso: 1 voto por
+        // dispositivo (dedup abaixo) + limite por IP (isIPBlocked acima).
         if (voter.deviceId !== 'unknown_') {
-            if (match.status !== 'open') {
-                const levelVote = await db.collection('matches').doc(matchId)
-                    .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
-                if (levelVote.empty) { toast('Você não votou nos níveis e não pode escolher o mapa!', 'error'); return; }
-            }
-
             const existing = await db.collection('matches').doc(matchId)
                 .collection('mapVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
             if (!existing.empty) {
@@ -332,15 +327,10 @@ async function buildMapVoteHtml(mapVoteDocs, voter, maps) {
         const m = doc.data();
         const matchId = doc.id;
 
-        // Antes dos níveis (status 'open') todo mundo pode votar o mapa; depois, só quem votou.
-        let isEligible = m.status === 'open';
-        if (!isEligible && voter.deviceId !== 'unknown_') {
-            const lv = await db.collection('matches').doc(matchId)
-                .collection('votes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
-            isEligible = !lv.empty;
-        }
+        // Votação de mapa é aberta a quem estiver na página, em qualquer fase/ordem
+        // (Mapa→Level, Level→Mapa ou juntos). Anti-abuso: 1 voto por dispositivo + limite por IP.
         let alreadyVoted = !!localStorage.getItem(`mapVoted_${matchId}`);
-        if (!alreadyVoted && isEligible && voter.deviceId !== 'unknown_') {
+        if (!alreadyVoted && voter.deviceId !== 'unknown_') {
             const ex = await db.collection('matches').doc(matchId)
                 .collection('mapVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
             if (!ex.empty) { alreadyVoted = true; localStorage.setItem(`mapVoted_${matchId}`, 'true'); }
@@ -357,8 +347,6 @@ async function buildMapVoteHtml(mapVoteDocs, voter, maps) {
         let body;
         if (activeMaps.length === 0) {
             body = `<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:13px;">Nenhum mapa ativo na lista.</div>`;
-        } else if (!isEligible) {
-            body = `<div style="text-align:center;padding:16px;color:var(--text-dim);font-size:13px;">⚠️ Você não votou nos níveis desta partida.</div>`;
         } else if (alreadyVoted) {
             body = `<div style="text-align:center;padding:16px;color:var(--green);">✅ Você já votou no mapa!</div>`;
         } else {
@@ -441,7 +429,7 @@ function mapControlsHtml(m, matchId) {
         ${status}
         ${sep}
         <span style="font-size:11px;color:var(--text-dim);">${chosen ? 'Trocar por:' : 'Definir por:'}</span>
-        <button class="btn btn-secondary btn-small" onclick="openMapVote('${matchId}')" title="Abrir votação de mapa: quem votou nos níveis escolhe seu Top 3 e o mais votado vence">🗳️ Votação da galera</button>
+        <button class="btn btn-secondary btn-small" onclick="openMapVote('${matchId}')" title="Abrir votação de mapa: a galera escolhe seu Top 3 e o mais votado vence">🗳️ Votação da galera</button>
         ${drawBtn}
         ${chosen ? `<button class="btn btn-secondary btn-small" onclick="clearChosenMap('${matchId}')" title="${isDrawn ? 'Remover o mapa sorteado (libera novo sorteio)' : 'Remover o mapa definido'}">🗑️</button>` : ''}
     </div>`;
