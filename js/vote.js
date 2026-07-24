@@ -185,6 +185,7 @@ async function loadVotePage() {
             const matchId = doc.id;
             const { isEligible, alreadyVoted, round } = _tvChecks[_ti];
             const diff = m.result ? Math.abs(m.result.sumA - m.result.sumB) : 0;
+            const byPerf = m.result && m.result.teamA && m.result.teamA.some(p => p.balanceLevel != null); // ajuste por desempenho ligado
 
             teamVoteHtml += `
                 <div class="match-card team_vote">
@@ -196,9 +197,9 @@ async function loadVotePage() {
 
                     <div style="text-align:center;margin:12px 0;padding:10px;border-radius:8px;background:rgba(0,0,0,0.3);">
                         <span style="color:var(--text-dim);font-size:13px;">Diferença: </span>
-                        <span style="font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;color:${diff <= 2 ? 'var(--green)' : 'var(--yellow)'};">${diff}</span>
+                        <span style="font-family:'Rajdhani',sans-serif;font-size:24px;font-weight:700;color:${(byPerf || diff <= 2) ? 'var(--green)' : 'var(--yellow)'};">${diff}</span>
                         <span style="color:var(--text-dim);font-size:13px;"> ponto(s)</span>
-                        ${diff <= 2 ? '<br><span style="color:var(--green);font-size:12px;">✅ Times Balanceados!</span>' : ''}
+                        ${byPerf ? '<br><span style="color:var(--green);font-size:12px;">⚖️ Equilibrado por desempenho</span>' : (diff <= 2 ? '<br><span style="color:var(--green);font-size:12px;">✅ Times Balanceados!</span>' : '')}
                     </div>
 
                     <div class="teams-grid">

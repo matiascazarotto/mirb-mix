@@ -821,11 +821,20 @@ async function closeVotingAndBalance(matchId, btn) {
 
         const averages = computeAverages(match.players, votesSnap.docs);
 
-        // Build players with averaged levels
-        const playersWithLevels = match.players.map(p => ({
-            ...p,
-            currentLevel: averages[p.id] ? Math.round(averages[p.id].avg) : 10
-        }));
+        // Ajuste por desempenho (win%) — só quando a staff liga a flag (default OFF).
+        let winRates = null;
+        try {
+            const s = await Store.getSettings();
+            if (s.winImpactEnabled === true) winRates = await getWinRatesByPlayer();
+        } catch (e) {}
+
+        // Build players with averaged levels (+ balanceLevel escondido quando o ajuste está ligado)
+        const playersWithLevels = match.players.map(p => {
+            const votedAvg = averages[p.id] ? averages[p.id].avg : 10;
+            const out = { ...p, currentLevel: Math.round(votedAvg) };
+            if (winRates) out.balanceLevel = winImpactLevel(votedAvg, winRates[p.id]);
+            return out;
+        });
 
         // Balance teams
         const teams = balanceTeams(playersWithLevels);
@@ -906,6 +915,37 @@ function computeAverages(matchPlayers, voteDocs) {
     return result;
 }
 
+// ── Ajuste por desempenho (win-impact) — opcional, atrás da flag winImpactEnabled ──
+const WIN_IMPACT_K = 4;       // força do empurrão (validado em back-test de 73 partidas)
+const WIN_IMPACT_PRIOR = 10;  // "jogos-fantasma" a 50% — encolhe amostra pequena p/ o meio
+
+// Agrega {games, wins} por jogador a partir dos gcStats de todas as partidas (cache do Store).
+async function getWinRatesByPlayer() {
+    const all = await Store.getMatches();
+    const ps = {};
+    all.forEach(m => (m.gcStats || []).forEach(g => {
+        if (!g.playerId) return;
+        const p = ps[g.playerId] || (ps[g.playerId] = { games: 0, wins: 0 });
+        p.games++;
+        if (g.win != null ? g.win : (g.rp >= 0)) p.wins++;
+    }));
+    return ps;
+}
+
+// Nível de balanceamento = nível votado empurrado na direção do win% (encolhido p/ amostra pequena).
+function winImpactLevel(votedAvg, wr) {
+    const games = wr ? wr.games : 0;
+    const wins = wr ? wr.wins : 0;
+    const shrunkWin = (wins + WIN_IMPACT_PRIOR * 0.5) / (games + WIN_IMPACT_PRIOR);
+    return votedAvg + WIN_IMPACT_K * (shrunkWin - 0.5);
+}
+
+// Valor usado p/ OTIMIZAR a divisão: o nível de balanceamento (voto + ajuste) quando existe;
+// senão cai no nível votado (currentLevel) — mantém o comportamento antigo 100% intacto.
+function balanceValue(p) {
+    return p.balanceLevel != null ? p.balanceLevel : p.currentLevel;
+}
+
 function balanceTeams(players) {
     let bestTeams = null;
     let bestDiff = Infinity;
@@ -915,9 +955,11 @@ function balanceTeams(players) {
         const teamA = shuffled.slice(0, 5);
         const teamB = shuffled.slice(5);
 
-        const sumA = teamA.reduce((s, p) => s + p.currentLevel, 0);
-        const sumB = teamB.reduce((s, p) => s + p.currentLevel, 0);
-        const diff = Math.abs(sumA - sumB);
+        // Otimiza pela diferença dos níveis DE BALANCEAMENTO (voto + ajuste por desempenho quando
+        // ligado; sem balanceLevel cai no nível votado — retrocompatível).
+        const diff = Math.abs(
+            teamA.reduce((s, p) => s + balanceValue(p), 0) - teamB.reduce((s, p) => s + balanceValue(p), 0)
+        );
 
         // Duo bonus (keeps duos together)
         let bonus = 0;
@@ -943,6 +985,9 @@ function balanceTeams(players) {
 
         if (score < bestDiff) {
             bestDiff = score;
+            // Total/Diferença exibidos seguem SEMPRE o nível votado (currentLevel).
+            const sumA = teamA.reduce((s, p) => s + p.currentLevel, 0);
+            const sumB = teamB.reduce((s, p) => s + p.currentLevel, 0);
             bestTeams = { teamA, teamB, sumA, sumB };
         }
     }
@@ -974,6 +1019,7 @@ async function viewMatchResult(matchId) {
 
 function showResultModal(title, teams, chosenMap) {
     const diff = Math.abs(teams.sumA - teams.sumB);
+    const byPerf = teams.teamA && teams.teamA.some(p => p.balanceLevel != null); // ajuste por desempenho ligado
     const overlay = document.getElementById('editModal');
     overlay.querySelector('.modal-box').innerHTML = `
         <div class="card-title">
@@ -981,9 +1027,9 @@ function showResultModal(title, teams, chosenMap) {
             <button class="modal-close" onclick="closeEditModal()">&times;</button>
         </div>
         ${chosenMap ? `<div style="text-align:center;margin-bottom:10px;font-size:14px;color:var(--text);">🗺️ Mapa: <strong style="color:var(--yellow);">${chosenMap.emoji || ''} ${chosenMap.name}</strong></div>` : ''}
-        <div class="diff-display ${diff <= 2 ? 'balanced' : 'unbalanced'}">
+        <div class="diff-display ${(byPerf || diff <= 2) ? 'balanced' : 'unbalanced'}">
             Diferença: <span class="diff-value">${diff}</span> ponto(s)
-            ${diff <= 2 ? '<br><span style="color:var(--green);font-size:14px;">✅ Times Balanceados!</span>' : ''}
+            ${byPerf ? '<br><span style="color:var(--green);font-size:14px;">⚖️ Equilibrado por desempenho</span>' : (diff <= 2 ? '<br><span style="color:var(--green);font-size:14px;">✅ Times Balanceados!</span>' : '')}
         </div>
         <div class="teams-grid">
             <div class="team-card ct">

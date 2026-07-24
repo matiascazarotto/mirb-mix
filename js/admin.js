@@ -247,12 +247,21 @@ async function renderAdminPanel() {
                         <div class="loading-spinner" style="transform:scale(0.5);"></div>
                     </div>
                 </div>
-                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.06);">
                     <div>
                         <div style="font-weight:600;color:var(--text);font-size:14px;">🗺️ Escolha de Mapa</div>
                         <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Habilitar votação de mapa (Top 3) e sorteio por rotação na página de votação</div>
                     </div>
                     <div id="mapSelectToggleContainer">
+                        <div class="loading-spinner" style="transform:scale(0.5);"></div>
+                    </div>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;">
+                    <div>
+                        <div style="font-weight:600;color:var(--text);font-size:14px;">⚖️ Ajuste por Desempenho</div>
+                        <div style="font-size:12px;color:var(--text-dim);margin-top:2px;">Equilibrar os times também pelo histórico de vitórias (win%), não só pelo nível votado. Afeta só o sorteio — o nível exibido continua o votado.</div>
+                    </div>
+                    <div id="winImpactToggleContainer">
                         <div class="loading-spinner" style="transform:scale(0.5);"></div>
                     </div>
                 </div>
@@ -330,10 +339,11 @@ async function loadStaffSettings() {
         renderNavToggle('jornalToggleContainer', data.jornalEnabled !== false, 'jornalEnabled');
         renderNavToggle('pollToggleContainer', data.pollEnabled !== false, 'pollEnabled');
         renderNavToggle('mapSelectToggleContainer', data.mapSelectEnabled !== false, 'mapSelectEnabled');
+        renderNavToggle('winImpactToggleContainer', data.winImpactEnabled === true, 'winImpactEnabled'); // default OFF
         loadMapPoolEditor();
         loadBlockedDevices();
     } catch (e) {
-        ['ouvidoriaToggleContainer', 'resortToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer', 'mapSelectToggleContainer'].forEach(id => {
+        ['ouvidoriaToggleContainer', 'resortToggleContainer', 'h2hToggleContainer', 'jornalToggleContainer', 'pollToggleContainer', 'mapSelectToggleContainer', 'winImpactToggleContainer'].forEach(id => {
             const c = document.getElementById(id);
             if (c) c.innerHTML = '<span style="color:var(--red);font-size:12px;">Erro ao carregar</span>';
         });
@@ -379,13 +389,15 @@ async function toggleNavFeature(featureKey) {
         h2hEnabled: { nav: 'navH2h', container: 'h2hToggleContainer', label: '1 vs 1' },
         jornalEnabled: { nav: 'navJornal', container: 'jornalToggleContainer', label: 'Jornal' },
         pollEnabled: { nav: null, container: 'pollToggleContainer', label: 'Enquetes' },
-        mapSelectEnabled: { nav: null, container: 'mapSelectToggleContainer', label: 'Escolha de Mapa' }
+        mapSelectEnabled: { nav: null, container: 'mapSelectToggleContainer', label: 'Escolha de Mapa' },
+        winImpactEnabled: { nav: null, container: 'winImpactToggleContainer', label: 'Ajuste por Desempenho', defaultOn: false }
     };
     const cfg = map[featureKey];
     if (!cfg) return;
     try {
         const data = await Store.getSettings();
-        const current = data[featureKey] !== false;
+        // defaultOn:false → considera ligado só quando gravado === true (as demais flags são default ON)
+        const current = (cfg.defaultOn === false) ? (data[featureKey] === true) : (data[featureKey] !== false);
         const newVal = !current;
         await db.collection('config').doc('settings').set({ [featureKey]: newVal }, { merge: true });
         renderNavToggle(cfg.container, newVal, featureKey);
