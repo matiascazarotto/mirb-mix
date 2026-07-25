@@ -129,9 +129,15 @@ async function resetMapRotation() {
 // ── Votação Top 3: staff abre/cancela/força encerramento ──
 async function openMapVote(matchId) {
     try {
+        // Cada abertura é uma rodada nova (espelha teamVoteRound): _clearMapVotes apaga os
+        // votos no Firestore, mas o "já votei" mora no localStorage de cada um — sem o round
+        // quem votou na rodada anterior ficava travado em "✅ Você já votou no mapa!".
+        const doc = await db.collection('matches').doc(matchId).get();
+        const round = ((doc.exists && doc.data().mapVoteRound) || 0) + 1;
         await _clearMapVotes(matchId);
         await db.collection('matches').doc(matchId).update({
             mapVote: 'open',
+            mapVoteRound: round,
             mapSource: firebase.firestore.FieldValue.delete()
         });
         toast('🗺️ Votação de mapa aberta!', 'success');
@@ -211,7 +217,13 @@ async function forceCloseMapVote(matchId) {
     } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
 
-// Fecha automaticamente quando todos os elegíveis (quem votou nos níveis) já escolheram o mapa
+// Eleitorado mínimo do fechamento automático: a mix é de 10 jogadores.
+const MAP_VOTE_FULL_ROSTER = 10;
+
+// Fecha automaticamente só quando a galera TODA votou (nº de jogadores da escalação).
+// Antes o eleitorado era "quem votou nos níveis", número que começa em 0 e cresce —
+// com o gate de nível removido (quem vota mapa não precisa ter votado nível), bastava
+// 1 nível + 1 mapa do mesmo dispositivo pra fechar a votação com um voto só.
 async function checkMapVoteThreshold(matchId) {
     const matchDoc = await db.collection('matches').doc(matchId).get();
     if (!matchDoc.exists || matchDoc.data().mapVote !== 'open') return;
@@ -221,15 +233,11 @@ async function checkMapVoteThreshold(matchId) {
     const voters = new Set();
     mvSnap.docs.forEach(d => { const meta = d.data()._meta; if (meta && meta.deviceId) voters.add(meta.deviceId); });
 
-    const lvSnap = await db.collection('matches').doc(matchId).collection('votes').get();
-    const eligible = new Set();
-    lvSnap.docs.forEach(d => { const meta = d.data()._meta; if (meta && meta.deviceId) eligible.add(meta.deviceId); });
+    // Eleitorado fixo: a escalação cheia (nunca menos que 10, mesmo com a escala enchendo).
+    // Abaixo disso a staff encerra no botão ⏹️ — auto-close é só a conveniência do "todos votaram".
+    const electorate = Math.max(MAP_VOTE_FULL_ROSTER, (match.players || []).length);
 
-    // Eleitorado: quem votou nos níveis; se ainda não há níveis (votação pré-níveis),
-    // usa o tamanho da escala (jogadores da partida).
-    const electorate = eligible.size > 0 ? eligible.size : (match.players ? match.players.length : 0);
-
-    if (electorate > 0 && voters.size >= electorate) {
+    if (voters.size >= electorate) {
         await closeMapVote(matchId, true);
         toast('🗺️ Todos votaram! Mapa definido.', 'success');
     }
@@ -275,11 +283,14 @@ function updateMapPickUI(matchId) {
 async function submitMapVote(matchId) {
     const sel = (_mapVoteSelection[matchId] || []).slice(0, 3);
     if (sel.length < 1) { toast('Escolha pelo menos 1 mapa!', 'error'); return; }
-    if (localStorage.getItem(`mapVoted_${matchId}`)) { toast('Você já votou no mapa!', 'error'); return; }
     try {
         const matchDoc = await db.collection('matches').doc(matchId).get();
         const match = matchDoc.data();
         if (!match || match.mapVote !== 'open') { toast('Votação de mapa encerrada!', 'error'); loadVotePage(); return; }
+
+        // "Já votou" é por RODADA: se a staff reabriu a votação, o voto antigo foi apagado
+        const round = match.mapVoteRound || 1;
+        if (localStorage.getItem(`mapVoted_${matchId}`) == round) { toast('Você já votou no mapa!', 'error'); return; }
 
         const voter = await getVoterDeviceId();
         if (await isIPBlocked(voter.ip, 'mapVote', voter.fingerprint)) { toast('Não foi possível votar. Tente novamente mais tarde.', 'error'); return; }
@@ -291,7 +302,7 @@ async function submitMapVote(matchId) {
             const existing = await db.collection('matches').doc(matchId)
                 .collection('mapVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
             if (!existing.empty) {
-                localStorage.setItem(`mapVoted_${matchId}`, 'true');
+                localStorage.setItem(`mapVoted_${matchId}`, String(round));
                 toast('Você já votou no mapa!', 'error');
                 loadVotePage();
                 return;
@@ -304,7 +315,7 @@ async function submitMapVote(matchId) {
             _meta: { ip: voter.ip, fingerprint: voter.fingerprint, deviceId: voter.deviceId, timestamp: new Date().toISOString() }
         });
 
-        localStorage.setItem(`mapVoted_${matchId}`, 'true');
+        localStorage.setItem(`mapVoted_${matchId}`, String(round));
         delete _mapVoteSelection[matchId];
         toast('🗺️ Voto de mapa registrado!', 'success');
 
@@ -329,11 +340,13 @@ async function buildMapVoteHtml(mapVoteDocs, voter, maps) {
 
         // Votação de mapa é aberta a quem estiver na página, em qualquer fase/ordem
         // (Mapa→Level, Level→Mapa ou juntos). Anti-abuso: 1 voto por dispositivo + limite por IP.
-        let alreadyVoted = !!localStorage.getItem(`mapVoted_${matchId}`);
+        // "Já votou" é por rodada — reabrir a votação (openMapVote) libera todo mundo de novo.
+        const round = m.mapVoteRound || 1;
+        let alreadyVoted = localStorage.getItem(`mapVoted_${matchId}`) == round;
         if (!alreadyVoted && voter.deviceId !== 'unknown_') {
             const ex = await db.collection('matches').doc(matchId)
                 .collection('mapVotes').where('_meta.deviceId', '==', voter.deviceId).limit(1).get();
-            if (!ex.empty) { alreadyVoted = true; localStorage.setItem(`mapVoted_${matchId}`, 'true'); }
+            if (!ex.empty) { alreadyVoted = true; localStorage.setItem(`mapVoted_${matchId}`, String(round)); }
         }
 
         const tiles = activeMaps.map(mp => `

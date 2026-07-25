@@ -45,7 +45,9 @@ async function loadVotePage() {
         const openSnap = _snap(allMatches.filter(m => m.status === 'open'));
         const votingSnap = _snap(allMatches.filter(m => m.status === 'voting'));
         const teamVoteSnap = _snap(allMatches.filter(m => m.status === 'team_vote'));
-        const mapVoteSnap = _snap(mapSelectEnabled ? allMatches.filter(m => m.mapVote === 'open') : []);
+        // Partida finalizada nunca mostra votação de mapa (o card do admin some ao finalizar,
+        // então um mapVote:'open' esquecido viraria card fantasma permanente aqui)
+        const mapVoteSnap = _snap(mapSelectEnabled ? allMatches.filter(m => m.mapVote === 'open' && m.status !== 'finished') : []);
 
         // Build badge map: playerName → array of emoji strings
         const badgeMap = {};
@@ -556,7 +558,7 @@ Store.subscribe('matches', async () => {
     const sig = all
         .filter(m => ['open', 'voting', 'team_vote'].includes(m.status) || m.mapVote === 'open')
         .map(m => [
-            m.id, m.status, m.teamVoteRound || 0, m.mapVote || '',
+            m.id, m.status, m.teamVoteRound || 0, m.mapVote || '', m.mapVoteRound || 0,
             (m.chosenMap && m.chosenMap.id) || '',
             (m.players || []).map(p => p.id).join(','),
             m.result ? m.result.sumA + '-' + m.result.sumB : ''

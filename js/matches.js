@@ -235,7 +235,7 @@ async function loadAdminMatches() {
                         <button class="btn btn-secondary btn-small" onclick="reopenMatch('${matchId}')">🔓 Editar Confronto</button>
                     </div>
                     `}
-                    ${(!isFinished && mapSelectEnabled) ? mapControlsHtml(m, matchId) : ''}
+                    ${((!isFinished || m.mapVote === 'open') && mapSelectEnabled) ? mapControlsHtml(m, matchId) : ''}
                 </div>
             `;
         });
@@ -336,6 +336,13 @@ async function reopenVoting(matchId) {
 async function finishMatch(matchId) {
     if (!confirm('Finalizar esta partida? Ela ficará travada (pode reabrir depois se precisar).')) return;
     try {
+        // Votação de mapa aberta precisa fechar aqui: o card do admin some quando finaliza,
+        // e a página Votar lista qualquer partida com mapVote:'open' — senão fica um card
+        // fantasma pra sempre ("você já votou") de uma partida que já acabou.
+        const pending = await db.collection('matches').doc(matchId).get();
+        if (pending.exists && pending.data().mapVote === 'open') {
+            try { await closeMapVote(matchId, true); } catch (_) {}
+        }
         await db.collection('matches').doc(matchId).update({ status: 'finished', wasFinished: true });
         await markMapPlayed(matchId);
         toast('✅ Partida finalizada!', 'success');
