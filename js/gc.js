@@ -1509,9 +1509,9 @@ function renderGCStats() {
     const entries = Object.values(gcAggregated);
     if (!entries.length) { el.innerHTML = ''; return; }
 
-    // ── Rating MiRB 1.1 ──
-    // Pesos: ADR 25%, KAST 25%, K/D 20%, FK 10%, WIN 5%, Partidas 15%
-    const W_ADR = 0.25, W_KAST = 0.25, W_KD = 0.20, W_FK = 0.10, W_WIN = 0.05, W_MATCHES = 0.15;
+    // ── Rating MiRB 1.2 ──
+    // Pesos: ADR 28%, KAST 28%, K/D 22%, FK 12%, WIN 5%, Partidas 5%
+    const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.12, W_WIN = 0.05, W_MATCHES = 0.05;
 
     // Calcular stats médias de cada jogador (FK média por partida)
     entries.forEach(p => {

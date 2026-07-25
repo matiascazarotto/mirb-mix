@@ -614,9 +614,10 @@ function renderDashModules() {
 
     // ═══ RANKING ═══ (hidden for single player)
     if (modules.includes('ranking') && !isSinglePlayer) {
-        // ── Rating MiRB 1.1 ──
-        // Pesos: ADR 25%, KAST 25%, K/D 20%, FK 10%, WIN 5%, Partidas 15%
-        const W_ADR = 0.25, W_KAST = 0.25, W_KD = 0.20, W_FK = 0.10, W_WIN = 0.05, W_MATCHES = 0.15;
+        // ── Rating MiRB 1.2 ──
+        // Pesos: ADR 28%, KAST 28%, K/D 22%, FK 12%, WIN 5%, Partidas 5%
+        // (1.2: Partidas caiu de 15% → 5%; os 10% foram redistribuídos nas métricas de skill)
+        const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.12, W_WIN = 0.05, W_MATCHES = 0.05;
 
         // Calcular stats médias (FK agora é média por partida)
         entries.forEach(p => {
@@ -659,7 +660,9 @@ function renderDashModules() {
         });
 
         // ── Afunda / Carrega: desempenho PURO (sem WIN% e sem volume) ──
-        // Pesos MiRB renormalizados só com as métricas de skill: ADR/KAST/K-D/FK.
+        // Só as métricas de skill: ADR/KAST/K-D/FK. Pesos CONGELADOS (renormalização do 1.1)
+        // de propósito — a régua do Afundômetro foi validada em back-test com eles; mexer aqui
+        // move o medidor de todo mundo. Não seguem os W_* do rating.
         const SW_ADR = 0.3125, SW_KAST = 0.3125, SW_KD = 0.25, SW_FK = 0.125;
         entries.forEach(p => {
             const nAdr  = _maxAdr  > 0 ? (p._avgAdr  / _maxAdr)  * 100 : 0;

@@ -159,10 +159,10 @@ function jornalWeekRange(weekStartStr) {
     return `${fmtDM(new Date(y, mo - 1, d))} a ${fmtDM(new Date(y, mo - 1, d + 6))}`;
 }
 
-// Calculate weekly rating using MiRB v1.1 formula
+// Calculate weekly rating using MiRB v1.2 formula
 function calcWeeklyRatings(entries) {
     if (!entries.length) return;
-    const W_ADR = 0.25, W_KAST = 0.25, W_KD = 0.20, W_FK = 0.10, W_WIN = 0.05, W_MATCHES = 0.15;
+    const W_ADR = 0.28, W_KAST = 0.28, W_KD = 0.22, W_FK = 0.12, W_WIN = 0.05, W_MATCHES = 0.05;
 
     entries.forEach(p => {
         p.avgAdr  = p.adrSum / p.matches;
@@ -753,7 +753,7 @@ function buildMatchImageHtml(match, allStats, badgeMap, avatarB64Cache) {
             ${date ? `<div style="font-size:13px;color:#8892a4;margin-top:4px;">📅 ${date}</div>` : ''}
         </div>
         ${playersHtml}
-        <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:#8892a4;">mirbcs.com · Rating MiRB v1.1</div>
+        <div style="text-align:center;margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.06);font-size:11px;color:#8892a4;">mirbcs.com · Rating MiRB v1.2</div>
     </div>`;
 }
 

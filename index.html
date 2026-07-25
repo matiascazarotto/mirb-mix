@@ -225,40 +225,43 @@
 <div id="ratingInfoModal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.7);backdrop-filter:blur(6px);align-items:center;justify-content:center;padding:20px;" onclick="if(event.target===this)this.style.display='none'">
     <div style="background:#0e1420;border:1px solid rgba(255,255,255,0.1);border-radius:14px;max-width:520px;width:100%;padding:28px;position:relative;max-height:90vh;overflow-y:auto;">
         <div onclick="document.getElementById('ratingInfoModal').style.display='none'" style="position:absolute;top:12px;right:16px;cursor:pointer;font-size:20px;color:var(--text-dim);line-height:1;">&times;</div>
-        <div style="font-family:'Rajdhani',sans-serif;font-size:1.4em;font-weight:700;color:var(--yellow);margin-bottom:16px;letter-spacing:1px;">📊 RATING MiRB 1.1</div>
+        <div style="font-family:'Rajdhani',sans-serif;font-size:1.4em;font-weight:700;color:var(--yellow);margin-bottom:16px;letter-spacing:1px;">📊 RATING MiRB 1.2</div>
         <p style="color:var(--text-dim);font-size:13px;line-height:1.6;margin-bottom:16px;">
             O Rating MiRB combina seis métricas individuais com pesos definidos e aplica regressão à média para justiça entre jogadores com diferentes quantidades de partidas.
         </p>
         <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Pesos</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:18px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px;">
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">ADR</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">25%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">28%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">KAST</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">25%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--green);font-size:16px;">28%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">K/D</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">20%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">22%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">FK/Partida</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);font-size:16px;">10%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--yellow);font-size:16px;">12%</span>
             </div>
             <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">WIN%</span>
                 <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--text-dim);font-size:16px;">5%</span>
             </div>
-            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;grid-column:span 2;">
+            <div style="padding:10px;background:rgba(255,255,255,0.04);border-radius:8px;display:flex;justify-content:space-between;align-items:center;">
                 <span style="color:var(--text-dim);font-size:13px;">Partidas</span>
-                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--ct-blue);font-size:16px;">15%</span>
+                <span style="font-family:'Rajdhani',sans-serif;font-weight:700;color:var(--ct-blue);font-size:16px;">5%</span>
             </div>
         </div>
+        <p style="color:var(--text-dim);font-size:12px;line-height:1.6;margin-bottom:18px;padding:9px 10px;background:rgba(79,195,247,0.05);border:1px dashed rgba(79,195,247,0.25);border-radius:8px;">
+            <b style="color:var(--ct-blue);">Novo na 1.2:</b> o peso de <b>Partidas</b> caiu de 15% para 5% e os 10% foram redistribuídos no desempenho (ADR +3, KAST +3, K/D +2, FK +2). Jogar muito pesa menos; jogar bem pesa mais.
+        </p>
         <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Fórmula</div>
         <div style="padding:12px;background:rgba(0,200,83,0.06);border:1px solid rgba(0,200,83,0.15);border-radius:8px;margin-bottom:18px;">
-            <code style="font-size:11px;color:var(--green);line-height:1.6;">RawRating = ADR×0.25 + KAST×0.25 + K/D×0.20 + FK×0.10 + WIN%×0.05 + Partidas×0.15
+            <code style="font-size:11px;color:var(--green);line-height:1.6;">RawRating = ADR×0.28 + KAST×0.28 + K/D×0.22 + FK×0.12 + WIN%×0.05 + Partidas×0.05
 Rating = Confiança × RawRating + (1 - Confiança) × MédiaGeral</code>
         </div>
         <div style="font-family:'Rajdhani',sans-serif;font-size:14px;font-weight:700;color:var(--text);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">Normalização</div>
@@ -359,9 +362,9 @@ Rating = Confiança × RawRating + (1 - Confiança) × MédiaGeral</code>
 <script src="js/vote.js?v=11"></script>
 <script src="js/mural.js?v=6"></script>
 <script src="js/poll.js?v=6"></script>
-<script src="js/stats.js?v=30"></script>
-<script src="js/jornal.js?v=6"></script>
-<script src="js/gc.js?v=4"></script>
+<script src="js/stats.js?v=31"></script>
+<script src="js/jornal.js?v=7"></script>
+<script src="js/gc.js?v=5"></script>
 <script src="js/maps.js?v=12"></script>
 <script src="js/init.js?v=5"></script>
 
