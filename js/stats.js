@@ -514,11 +514,11 @@ async function loadDashboard() {
     }
 }
 
-// Posições no Ranking Geral (Rating MiRB) para um subconjunto de partidas.
+// Ordem do Ranking Geral (Rating MiRB) para um subconjunto de partidas.
 // Reaproveita calcWeeklyRatings() (js/jornal.js) — MESMA fórmula do ranking do dashboard.
-// minGames > 0: rating calculado sobre TODOS (mesma régua do ranking), mas posições
-// atribuídas só entre quem tem >= minGames jogos (vista "Em calibração" separa os demais).
-// Retorna mapa { nome: posição 0-based } ou null.
+// minGames > 0: rating calculado sobre TODOS (mesma régua do ranking), mas só entram na
+// ordem os que têm >= minGames jogos (vista "Em calibração" separa os demais).
+// Retorna array de nomes do 1º ao último, ou null.
 function mirbRankOrderByName(matchesSubset, minGames = 0) {
     if (typeof calcWeeklyRatings !== 'function') return null;
     const ps = {};
@@ -533,10 +533,7 @@ function mirbRankOrderByName(matchesSubset, minGames = 0) {
     if (!entries.length) return null;
     calcWeeklyRatings(entries);                     // seta p.rating (mesma fórmula do ranking)
     entries.sort((a, b) => b.rating - a.rating);
-    const ranked = minGames > 0 ? entries.filter(p => p.matches >= minGames) : entries;
-    const pos = {};
-    ranked.forEach((p, i) => { pos[p.name] = i; }); // 0-based
-    return pos;
+    return (minGames > 0 ? entries.filter(p => p.matches >= minGames) : entries).map(p => p.name);
 }
 
 function renderDashModules() {
@@ -746,24 +743,39 @@ function renderDashModules() {
         const calibRows  = _calibMode ? sorted.filter(p => p.matches <  AFUNDA_MIN_GAMES) : [];
 
         // ── Setas de variação de posição (▲/▼) ──
-        // Só no Ranking Geral all-time (sem filtro), ordenado por Rating, comparando
-        // com o fim da última edição publicada do Jornal.
-        let prevPos = null;
+        // Só no Ranking Geral all-time (sem filtro), ordenado por Rating.
+        // A "foto antiga" é o ranking ANTES da semana do último Jornal (sábado anterior 23:59),
+        // não o fim dela: assim a seta mostra o que a semana publicada mexeu no ranking e já
+        // aparece no dia em que o Jornal sai. (Usar o fim da edição deixava tudo zerado enquanto
+        // não rolasse mix novo — que é justo quando o pessoal abre pra ver quem subiu.)
+        // Quem ENTROU no ranking entre as duas fotos (saiu da calibração) não empurra ninguém
+        // pra baixo: as posições são comparadas só entre os jogadores presentes nas DUAS
+        // fotos. Sem isso, 2 estreantes faziam 9 jogadores exibirem ▼ sem ninguém ter sido
+        // ultrapassado de fato. Estreante fica sem seta (não caiu de lugar nenhum).
+        let prevPos = null, curPos = null;   // { nome: posição 0-based } entre os comuns às duas fotos
         if (_allTime && col === 'rating' && dashData._jornalWeekStart) {
             const [wy, wm, wd] = dashData._jornalWeekStart.split('-').map(Number);
-            const cutoff = new Date(wy, wm - 1, wd + 6, 23, 59, 59, 999); // sábado 23:59 da última edição
+            const cutoff = new Date(wy, wm - 1, wd - 1, 23, 59, 59, 999); // sábado 23:59 ANTES da última edição
             const prevMatches = matches.filter(m => m.createdAt && m.createdAt.toDate() <= cutoff);
-            // Em modo calibração, a posição anterior também só conta qualificados (senão a seta mentiria)
-            if (prevMatches.length) prevPos = mirbRankOrderByName(prevMatches, _calibMode ? AFUNDA_MIN_GAMES : 0);
+            // Em modo calibração, a ordem anterior também só conta qualificados (senão a seta mentiria)
+            const prevOrder = prevMatches.length ? mirbRankOrderByName(prevMatches, _calibMode ? AFUNDA_MIN_GAMES : 0) : null;
+            if (prevOrder) {
+                const prevSet = new Set(prevOrder);
+                const nowOrder = rankedRows.map(p => p.name);
+                const nowSet = new Set(nowOrder);
+                prevPos = {}; curPos = {};
+                prevOrder.filter(n => nowSet.has(n)).forEach((n, i) => { prevPos[n] = i; });
+                nowOrder.filter(n => prevSet.has(n)).forEach((n, i) => { curPos[n] = i; });
+            }
         }
-        const posArrowFor = (name, i) => {
+        const _jornalPeriodo = dashData._jornalEdition ? ` (${dashData._jornalEdition.weekLabel})` : '';
+        const posArrowFor = (name) => {
             if (!prevPos) return '';
-            const pv = prevPos[name];
-            if (pv == null) return '';                 // novo desde o Jornal → sem seta
-            const d = pv - i;                          // >0 subiu · <0 caiu
+            if (curPos[name] == null) return '';        // não estava na foto antiga → estreante, sem seta
             const st = "font-size:10px;font-family:'Rajdhani',sans-serif;font-weight:700;margin-left:4px;vertical-align:middle;";
-            if (d > 0) return `<span style="color:var(--green);${st}" title="Subiu ${d} desde o último Jornal">▲${d}</span>`;
-            if (d < 0) return `<span style="color:var(--red);${st}" title="Caiu ${-d} desde o último Jornal">▼${-d}</span>`;
+            const d = prevPos[name] - curPos[name];    // >0 subiu · <0 caiu
+            if (d > 0) return `<span style="color:var(--green);${st}" title="Subiu ${d} posiç${d > 1 ? 'ões' : 'ão'} desde o Jornal${_jornalPeriodo}">▲${d}</span>`;
+            if (d < 0) return `<span style="color:var(--red);${st}" title="Caiu ${-d} posiç${-d > 1 ? 'ões' : 'ão'} desde o Jornal${_jornalPeriodo}">▼${-d}</span>`;
             return '';                                 // sem mudança → sem seta
         };
 
@@ -887,7 +899,7 @@ function renderDashModules() {
 
         // Bloco principal: qualificados disputam posições e medalhas
         rankedRows.forEach((p, i) => {
-            html += rankRowHtml(p, (i < 3 ? ['🥇','🥈','🥉'][i] : i + 1) + posArrowFor(p.name, i), { top3: i < 3 });
+            html += rankRowHtml(p, (i < 3 ? ['🥇','🥈','🥉'][i] : i + 1) + posArrowFor(p.name), { top3: i < 3 });
         });
 
         // Bloco "Em calibração": < AFUNDA_MIN_GAMES jogos, sem posição, com progresso X/10
