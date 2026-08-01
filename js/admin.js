@@ -17,7 +17,6 @@ async function renderAdminPanel() {
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabManage')">⚙️ Gerenciar</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLink')">⚡ Vincular GC</button>
             <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabBadges')">🏆 Badges</button>
-            <button class="admin-sub-tab" onclick="switchAdminTab(this, 'adminTabLive')">📡 Live</button>
             ${pollEnabled ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabPoll\')">🗳️ Enquete</button>' : ''}
             ${isStaff ? '<button class="admin-sub-tab" onclick="switchAdminTab(this, \'adminTabOthers\')">🛠️ Outros</button>' : ''}
         </div>
@@ -163,26 +162,6 @@ async function renderAdminPanel() {
             </div>
         </div>
 
-        <!-- TAB: Transmissão -->
-        <div class="admin-tab-content" id="adminTabLive">
-            <div class="card" style="border:1px solid rgba(255,61,61,0.15);">
-                <div class="card-title">🔴 Transmissão Ao Vivo</div>
-                <div id="adminLiveStatus" style="margin-bottom:12px;"></div>
-                <div class="form-group">
-                    <label>Link do YouTube (live ou vídeo)</label>
-                    <input type="text" id="adminLiveUrl" placeholder="https://www.youtube.com/watch?v=... ou https://youtu.be/...">
-                </div>
-                <div class="form-group">
-                    <label>Título (opcional)</label>
-                    <input type="text" id="adminLiveTitle" placeholder="Ex: MIRB MIX — MD3">
-                </div>
-                <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                    <button class="btn btn-primary btn-small" onclick="toggleLive(true)" id="btnGoLive" style="background:var(--red);">🔴 Iniciar Live</button>
-                    <button class="btn btn-secondary btn-small" onclick="toggleLive(false)" id="btnStopLive" style="display:none;">⬛ Encerrar Live</button>
-                </div>
-            </div>
-        </div>
-
         <!-- TAB: Enquete (Admin) -->
         <div class="admin-tab-content" id="adminTabPoll">
             <div id="pollAdminContent">
@@ -312,7 +291,6 @@ async function renderAdminPanel() {
 
     loadAdminPlayers();
     loadAdminMatches();
-    loadAdminLiveStatus();
     if (isStaff) loadStaffSettings();
 }
 

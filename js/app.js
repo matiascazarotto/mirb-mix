@@ -42,8 +42,10 @@ function showPage(name) {
     document.querySelector(`.nav-btn[onclick*="${name}"]`).classList.add('active');
 
     if (name !== 'vote') { destroyTeamVoteListener(); destroyMapVoteListener(); }
+    if (name !== 'live') unloadLivePage();
 
     if (name === 'vote') loadVotePage();
+    if (name === 'live') loadLivePage();
     if (name === 'matches') loadMatchesPage();
     if (name === 'admin' && isAdmin) renderAdminPanel();
     if (name === 'dashboard') loadDashboard();

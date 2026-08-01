@@ -1,121 +1,43 @@
 // ╔══════════════════════════════════╗
 // ║       LIVE STREAM               ║
 // ╚══════════════════════════════════╝
-let liveUnsubscribe = null;
+// Aba fixa apontando pro canal. Sem detecção: o próprio embed do YouTube resolve o que
+// está no ar (live_stream?channel=) e mostra "offline" quando não há transmissão.
+const LIVE_CHANNEL_ID = 'UCKkppwKabvs9URIXFgtOLbQ';           // youtube.com/@MadeInRodeioBonito
+const LIVE_CHANNEL_URL = 'https://www.youtube.com/@MadeInRodeioBonito/live';
 
-function initLiveListener() {
-    if (liveUnsubscribe) liveUnsubscribe();
-    liveUnsubscribe = db.collection('settings').doc('live').onSnapshot(doc => {
-        const data = doc.exists ? doc.data() : {};
-        const isLive = data.active === true;
-        const navBtn = document.getElementById('navLive');
-
-        if (isLive && data.url) {
-            navBtn.style.display = '';
-            // Update embed
-            const videoId = extractYouTubeId(data.url);
-            const embed = document.getElementById('liveEmbed');
-            const newSrc = videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : '';
-            if (embed.src !== newSrc && newSrc) embed.src = newSrc;
-            const titleEl = document.getElementById('liveTitle');
-            if (titleEl) titleEl.textContent = data.title || '';
-        } else {
-            navBtn.style.display = 'none';
-            // If user is on live page, redirect to vote
-            const livePage = document.getElementById('page-live');
-            if (livePage && livePage.classList.contains('active')) {
-                showPage('vote');
-            }
-            const embed = document.getElementById('liveEmbed');
-            if (embed) embed.src = '';
-        }
-
-        // Update admin UI if visible
-        updateAdminLiveUI(data);
-    }, err => {
-        console.error('Live listener error:', err);
-    });
+function loadLivePage() {
+    const embed = document.getElementById('liveEmbed');
+    if (!embed) return;
+    let saved = false;
+    try { saved = localStorage.getItem('mirb_liveTheater') === '1'; } catch (e) {}
+    applyLiveTheater(saved);
+    if (embed.src.includes('live_stream')) return;   // já carregado: não reinicia o player
+    embed.src = `https://www.youtube.com/embed/live_stream?channel=${LIVE_CHANNEL_ID}&autoplay=1&rel=0`;
 }
 
-function updateAdminLiveUI(data) {
-    const statusEl = document.getElementById('adminLiveStatus');
-    const urlInput = document.getElementById('adminLiveUrl');
-    const titleInput = document.getElementById('adminLiveTitle');
-    const btnGo = document.getElementById('btnGoLive');
-    const btnStop = document.getElementById('btnStopLive');
-    if (!statusEl) return;
-
-    const isLive = data && data.active === true;
-
-    if (isLive) {
-        statusEl.innerHTML = `
-            <div style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:rgba(255,61,61,0.1);border:1px solid rgba(255,61,61,0.2);border-radius:6px;">
-                <div style="width:10px;height:10px;border-radius:50%;background:var(--red);animation:livePulse 1.5s infinite;"></div>
-                <span style="color:var(--red);font-weight:600;font-size:13px;">TRANSMISSÃO ATIVA</span>
-                ${data.title ? `<span style="color:var(--text-dim);font-size:12px;">— ${data.title}</span>` : ''}
-            </div>`;
-        if (urlInput) urlInput.value = data.url || '';
-        if (titleInput) titleInput.value = data.title || '';
-        if (btnGo) btnGo.style.display = 'none';
-        if (btnStop) btnStop.style.display = '';
-    } else {
-        statusEl.innerHTML = `
-            <div style="padding:10px 14px;background:rgba(255,255,255,0.03);border-radius:6px;font-size:13px;color:var(--text-dim);">
-                ⬛ Nenhuma transmissão ativa
-            </div>`;
-        if (btnGo) btnGo.style.display = '';
-        if (btnStop) btnStop.style.display = 'none';
-    }
+function unloadLivePage() {
+    applyLiveTheater(false);   // o teatro esconde o topo do site: não pode vazar pras outras abas
+    // about:blank (e não src='') — com src vazio o iframe resolve pra própria URL do site
+    const embed = document.getElementById('liveEmbed');
+    if (embed && embed.src.includes('live_stream')) embed.src = 'about:blank';   // mata áudio ao sair da aba
 }
 
-function extractYouTubeId(url) {
-    if (!url) return null;
-    // Formats: youtube.com/watch?v=ID, youtu.be/ID, youtube.com/live/ID, youtube.com/embed/ID
-    let match = url.match(/(?:youtube\.com\/(?:watch\?.*v=|live\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
-    return match ? match[1] : null;
+function toggleLiveTheater() {
+    const page = document.getElementById('page-live');
+    if (!page) return;
+    const on = !page.classList.contains('theater');
+    applyLiveTheater(on);
+    try { localStorage.setItem('mirb_liveTheater', on ? '1' : '0'); } catch (e) {}   // lembra a preferência
 }
 
-async function toggleLive(activate) {
-    const urlInput = document.getElementById('adminLiveUrl');
-    const titleInput = document.getElementById('adminLiveTitle');
-
-    if (activate) {
-        const url = urlInput.value.trim();
-        if (!url) { toast('Cole o link do YouTube!', 'error'); return; }
-        const videoId = extractYouTubeId(url);
-        if (!videoId) { toast('Link do YouTube inválido!', 'error'); return; }
-
-        try {
-            await db.collection('settings').doc('live').set({
-                active: true,
-                url: url,
-                title: titleInput.value.trim(),
-                videoId: videoId,
-                startedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-            toast('🔴 Live ativada!', 'success');
-        } catch (e) {
-            toast('Erro: ' + e.message, 'error');
-        }
-    } else {
-        if (!confirm('Encerrar a transmissão ao vivo?')) return;
-        try {
-            await db.collection('settings').doc('live').set({ active: false });
-            toast('⬛ Live encerrada.', 'success');
-        } catch (e) {
-            toast('Erro: ' + e.message, 'error');
-        }
-    }
-}
-
-async function loadAdminLiveStatus() {
-    try {
-        const doc = await db.collection('settings').doc('live').get();
-        const data = doc.exists ? doc.data() : {};
-        updateAdminLiveUI(data);
-    } catch (e) {
-        console.error('Error loading live status:', e);
-    }
+function applyLiveTheater(on) {
+    const page = document.getElementById('page-live');
+    if (!page) return;
+    page.classList.toggle('theater', on);
+    document.body.classList.toggle('live-theater', on);
+    const btn = document.getElementById('liveTheaterBtn');
+    if (btn) btn.textContent = on ? '⤡ Reduzir' : '⛶ Teatro';
 }
 
 // ╔══════════════════════════════════╗

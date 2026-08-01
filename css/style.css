@@ -1026,16 +1026,66 @@
             flex-wrap: wrap;
             margin-top: 16px;
         }
-        @keyframes livePulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.85); }
+        /* ── Transmissão (aba do canal no YouTube) ── */
+        .live-card { padding: 0; overflow: hidden; border: 1px solid rgba(255,61,61,0.3); }
+        .live-head {
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(255,61,61,0.08);
         }
+        .live-play { color: var(--red); line-height: 1; }
+        .live-label {
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--red);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        #liveTitle { color: var(--text); font-size: 14px; }
+        #liveTheaterBtn { margin-left: auto; flex-shrink: 0; }
+        .live-frame { position: relative; width: 100%; padding-bottom: 56.25%; background: #000; }
+        .live-frame iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; }
+        .live-foot { padding: 12px 20px; color: var(--text-dim); font-size: 13px; }
+        .live-foot a { color: var(--red); text-decoration: none; font-weight: 600; }
+
+        /* Modo teatro: o card vaza a largura do .container e o topo do site sai da frente.
+           A nav fica — é por ela que se volta pro resto do site. */
+        body.live-theater { overflow-x: hidden; }
+        body.live-theater .header { display: none; }
+        #page-live.theater .live-card {
+            width: 100vw;
+            margin-left: calc(50% - 50vw);
+            border-radius: 0;
+            border-left: 0;
+            border-right: 0;
+        }
+        #page-live.theater .live-frame {
+            padding-bottom: 0;
+            height: min(56.25vw, calc(100vh - 200px));
+            min-height: 220px;
+        }
+
+        /* Aba do canal: a única vermelha numa nav toda verde — destaque estático.
+           Não pulsar: a animação dava a impressão de transmissão no ar mesmo offline. */
         #navLive {
             background: rgba(255,61,61,0.12) !important;
             border: 1px solid rgba(255,61,61,0.3) !important;
-            animation: livePulse 2s infinite;
+            color: #ff8a8a;
         }
-        #navLive:hover { background: rgba(255,61,61,0.25) !important; }
+        #navLive:hover {
+            background: rgba(255,61,61,0.25) !important;
+            border-color: rgba(255,61,61,0.5) !important;
+            color: var(--text);
+        }
+        #navLive.active {
+            background: rgba(255,61,61,0.18) !important;
+            border-color: var(--red) !important;
+            color: var(--red);
+            box-shadow: 0 0 20px rgba(255,61,61,0.12);
+        }
 
         /* ── Jornal MiRB — Newspaper Style ── */
         .jornal-paper {

@@ -49,8 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     // Init first GC match slot
     addGCMatchSlot();
-    // Init live stream listener
-    initLiveListener();
     // Migrate: mark existing finished matches with wasFinished flag
     Store.getMatches().then(all => {
         all.filter(m => m.status === 'finished' && !m.wasFinished)

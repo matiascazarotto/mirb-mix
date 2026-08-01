@@ -15,7 +15,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=UnifrakturMaguntia&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css?v=2">
     <script>
         // Apply cached nav visibility before paint to avoid flicker.
         // The injected <style> is removed by init.js once Firestore settings load,
@@ -46,8 +46,8 @@
     <button class="nav-btn active" onclick="showPage('vote')">
         <span class="icon">🗳️</span> Votar
     </button>
-    <button class="nav-btn" id="navLive" onclick="showPage('live')" style="display:none;">
-        <span class="icon">🔴</span> AO VIVO
+    <button class="nav-btn" id="navLive" onclick="showPage('live')">
+        <span class="icon"><svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor" aria-hidden="true" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></span> Transmissão
     </button>
     <button class="nav-btn" onclick="showPage('matches')">
         <span class="icon">📋</span> Partidas
@@ -69,14 +69,18 @@
 <div class="container">
     <!-- ════════════ PAGE: LIVE ════════════ -->
     <div id="page-live" class="page">
-        <div class="card" style="padding:0;overflow:hidden;border:1px solid rgba(255,61,61,0.3);">
-            <div style="padding:16px 20px;display:flex;align-items:center;gap:10px;background:rgba(255,61,61,0.08);">
-                <div style="width:12px;height:12px;border-radius:50%;background:var(--red);animation:livePulse 1.5s infinite;"></div>
-                <span style="font-family:'Rajdhani',sans-serif;font-size:18px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:2px;">AO VIVO</span>
-                <span id="liveTitle" style="color:var(--text);font-size:14px;margin-left:8px;"></span>
+        <div class="card live-card">
+            <div class="live-head">
+                <span class="live-play"><svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" aria-hidden="true" style="display:block;"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg></span>
+                <span class="live-label">Transmissão</span>
+                <span id="liveTitle">MiRB · YouTube</span>
+                <button class="btn btn-secondary btn-small" id="liveTheaterBtn" onclick="toggleLiveTheater()">⛶ Teatro</button>
             </div>
-            <div style="position:relative;width:100%;padding-bottom:56.25%;background:#000;">
-                <iframe id="liveEmbed" src="" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+            <div class="live-frame">
+                <iframe id="liveEmbed" src="" allow="accelerometer;autoplay;clipboard-write;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe>
+            </div>
+            <div class="live-foot">
+                Player vazio ou "vídeo não disponível"? É porque não tem transmissão rolando agora. <a href="https://www.youtube.com/@MadeInRodeioBonito/live" target="_blank" rel="noopener">Abrir o canal no YouTube ↗</a>
             </div>
         </div>
     </div>
@@ -352,21 +356,21 @@ Rating = Confiança × RawRating + (1 - Confiança) × MédiaGeral</code>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <!-- ════════════ APP JS ════════════ -->
-<script src="js/app.js?v=5"></script>
+<script src="js/app.js?v=6"></script>
 <script src="js/store.js?v=1"></script>
 <script src="js/auth.js?v=4"></script>
 <script src="js/badges.js?v=4"></script>
-<script src="js/admin.js?v=9"></script>
+<script src="js/admin.js?v=10"></script>
 <script src="js/players.js?v=5"></script>
 <script src="js/matches.js?v=10"></script>
 <script src="js/vote.js?v=11"></script>
 <script src="js/mural.js?v=6"></script>
 <script src="js/poll.js?v=6"></script>
 <script src="js/stats.js?v=32"></script>
-<script src="js/jornal.js?v=7"></script>
+<script src="js/jornal.js?v=10"></script>
 <script src="js/gc.js?v=5"></script>
 <script src="js/maps.js?v=12"></script>
-<script src="js/init.js?v=5"></script>
+<script src="js/init.js?v=6"></script>
 
 <!-- ════════════ PWA ════════════ -->
 <script>
